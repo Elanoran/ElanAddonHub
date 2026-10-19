@@ -9,6 +9,8 @@ namespace Lodge;
 // Server to client: badges.mine, badges.member, ladder.data, badges.state { enabled, locked } (sent to everybody when the owner flips the switch).
 // Computed on a timer (every 10 minutes) and when a member asks (at most every 30 seconds). Guests have no badges and are not on the ladder.
 // Feature off (LODGE_BADGES_ENABLED=0 or the owner's switch): not advertised, every request answers an error "disabled"; stored data stays on disk.
+// The messages are typed in shared/Elans.Shared/Lodge/BadgesMessages.cs; admin.badges' "on" is still read from the raw JSON (missing or
+// wrong-typed = on).
 public sealed class BadgesModule : IModule
 {
     readonly LodgeHub hub;
@@ -45,7 +47,9 @@ public sealed class BadgesModule : IModule
         return false;
     }
 
-    public JsonObject StateJson() => new() { ["t"] = LodgeMsg.BadgesState, ["enabled"] = Enabled, ["locked"] = Locked };
+    BadgesStateMsg State() => new() { Enabled = Enabled, Locked = Locked };
+    public JsonObject StateJson() => LodgeFieldsJson.Build(State().Write);
+    public JsonObject WelcomeView() => LodgeFieldsJson.Build(State().WriteState);      // welcome.badges
 
     // ---------------------------------------------------------------- the requests
 
@@ -61,9 +65,9 @@ public sealed class BadgesModule : IModule
     {
         if (!await Gate(me, true)) return;
         EnsureFresh();
-        JsonObject o;
-        lock (Store.Gate) o = MineJson(me);
-        await hub.Send(me, o);
+        BadgesMineMsg o;
+        lock (Store.Gate) o = MineView(me);
+        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
     }
 
     async Task Seen(Member me)
@@ -83,50 +87,48 @@ public sealed class BadgesModule : IModule
     {
         if (!await Gate(me, true)) return;
         EnsureFresh();
-        JsonObject o;
+        var hide = BadgesHideMsg.Read(new LodgeFieldsJson(m)).Hide;
+        BadgesMineMsg o;
         lock (Store.Gate)
         {
             var r = Store.Get(Key(me.Name));
             if (r == null) { o = null; }
-            else { r.Hide = J.Bool(m, "hide"); Store.Touch(); o = MineJson(me); }
+            else { r.Hide = hide; Store.Touch(); o = MineView(me); }
         }
         if (o == null) { await hub.Error(me, "Nothing to change yet - try again in a moment"); return; }
-        hub.Log.LogInformation("{Name} {Action} the ladder", me.Name, o["hide"]!.GetValue<bool>() ? "left" : "joined");
-        await hub.Send(me, o);
+        hub.Log.LogInformation("{Name} {Action} the ladder", me.Name, o.Hide ? "left" : "joined");
+        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
     }
 
     async Task MemberView(Member me, JsonObject m)
     {
         if (!await Gate(me, false)) return;
-        var name = J.Str(m, "name") ?? "";
+        var name = BadgesMemberGetMsg.Read(new LodgeFieldsJson(m)).Name ?? "";
         EnsureFresh();
-        var o = new JsonObject { ["t"] = LodgeMsg.BadgesMember, ["ok"] = true, ["name"] = Names.Cut(name, Names.Max) };
+        var o = new BadgesMemberMsg { Name = Names.Cut(name, Names.Max) };
         lock (Store.Gate)
         {
             var r = name.Length > 0 ? Store.Get(Key(name)) : null;
-            var arr = new JsonArray();
-            if (r != null) foreach (var id in Badges.TopIds(r.Earned, int.MaxValue)) arr.Add(EarnedJson(Badges.Find(id), r.Earned[id]));
-            o["badges"] = arr;
-            o["count"] = arr.Count;
+            if (r != null) foreach (var id in Badges.TopIds(r.Earned, int.MaxValue)) o.Badges.Add(EarnedView(Badges.Find(id), r.Earned[id]));
         }
-        await hub.Send(me, o);
+        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
     }
 
     async Task LadderGet(Member me, JsonObject m)
     {
         if (!await Gate(me, false)) return;
         EnsureFresh();
-        var season = J.Str(m, "season");
-        JsonObject o;
-        lock (Store.Gate) o = LadderJson(me, Badges.ValidSeason(season) ? season : Store.Season);
-        await hub.Send(me, o);
+        var season = LadderGetMsg.Read(new LodgeFieldsJson(m)).Season;
+        LadderDataMsg o;
+        lock (Store.Gate) o = LadderView(me, Badges.ValidSeason(season) ? season : Store.Season);
+        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
     }
 
     async Task Switch(Member me, JsonObject m)
     {
         if (!Roles.Can(me.Role, Perm.ManageMembers)) { await hub.Error(me, "Your rank can't do that"); return; }
         if (Locked) { await hub.Error(me, "Badges are switched off in the server settings", "locked"); return; }
-        bool on = J.Bool(m, "on", true);
+        bool on = J.Bool(m, "on", true);      // raw on purpose: missing or wrong-typed = on (AdminBadgesMsg.Read is the lenient reading)
         lock (Store.Gate) { Store.SetEnabled(on); Store.Save(); }
         hub.Log.LogInformation("{By} switched badges and the ladder {State}", me.Name, on ? "on" : "off");
         if (on) EnsureFresh();
@@ -135,44 +137,42 @@ public sealed class BadgesModule : IModule
 
     // ---------------------------------------------------------------- views (callers hold Store.Gate)
 
-    static JsonObject EarnedJson(Badges.Def d, long at) => new()
-    {
-        ["id"] = d.Id, ["family"] = d.Family, ["tier"] = d.Tier, ["name"] = d.Name, ["at"] = at,
-    };
+    // the short form of a badge (typed: BadgeView)
+    static BadgeView EarnedView(Badges.Def d, long at) => new() { Id = d.Id, Family = d.Family, Tier = d.Tier, Name = d.Name, At = at };
 
-    JsonObject MineJson(Member me)
+    BadgesMineMsg MineView(Member me)
     {
         var key = Key(me.Name);
         var r = Store.Get(key);
         var metrics = metricsOf.GetValueOrDefault(key) ?? new Dictionary<string, long>();
-        var badges = new JsonArray();
+        var badges = new List<BadgeView>();
         foreach (var d in Badges.Table.OrderBy(x => x.Family == "secret").ThenBy(x => Array.IndexOf(Badges.FamilyNames.Keys.ToArray(), x.Family)).ThenBy(x => x.Tier))
         {
             bool earned = r != null && r.Earned.ContainsKey(d.Id);
-            var b = new JsonObject { ["id"] = d.Id, ["family"] = d.Family, ["familyName"] = Badges.FamilyNames.GetValueOrDefault(d.Family, d.Family), ["tier"] = d.Tier, ["hidden"] = d.Hidden, ["earned"] = earned };
+            var b = new BadgeView { Id = d.Id, Family = d.Family, FamilyName = Badges.FamilyNames.GetValueOrDefault(d.Family, d.Family), Tier = d.Tier, Hidden = d.Hidden, Earned = earned };
             if (d.Hidden && !earned)
             {
-                b["name"] = "???"; b["flavour"] = ""; b["how"] = "???";
+                b.Name = "???"; b.Flavour = ""; b.How = "???";
             }
             else
             {
-                b["name"] = d.Name; b["flavour"] = d.Flavour; b["how"] = d.How;
-                if (earned) b["at"] = r.Earned[d.Id];
-                if (d.Special == null) { b["value"] = Math.Min(metrics.GetValueOrDefault(d.Metric), d.At); b["target"] = d.At; }
-                else { b["value"] = r == null ? 0 : FamiliesEarned(r); b["target"] = d.At; }
+                b.Name = d.Name; b.Flavour = d.Flavour; b.How = d.How;
+                if (earned) b.At = r.Earned[d.Id];
+                if (d.Special == null) { b.Value = Math.Min(metrics.GetValueOrDefault(d.Metric), d.At); b.Target = d.At; }
+                else { b.Value = r == null ? 0 : FamiliesEarned(r); b.Target = d.At; }
             }
             badges.Add(b);
         }
         var seasonRank = RankOf(key, true, key, out var seasonPts);
         var allRank = RankOf(key, false, key, out var allPts);
         long seenMs = r?.SeenMs ?? 0;
-        return new JsonObject
+        return new BadgesMineMsg
         {
-            ["t"] = LodgeMsg.BadgesMine, ["ok"] = true, ["you"] = me.Name, ["hide"] = r?.Hide ?? false,
-            ["new"] = r == null ? 0 : r.Earned.Count(kv => kv.Value * 1000 > seenMs),
-            ["points"] = allPts, ["rank"] = allRank, ["season"] = Store.Season, ["seasonPoints"] = seasonPts, ["seasonRank"] = seasonRank,
-            ["earned"] = r?.Earned.Count ?? 0, ["total"] = Badges.Table.Length,
-            ["badges"] = badges,
+            You = me.Name, Hide = r?.Hide ?? false,
+            New = r == null ? 0 : r.Earned.Count(kv => kv.Value * 1000 > seenMs),
+            Points = allPts, Rank = allRank, Season = Store.Season, SeasonPoints = seasonPts, SeasonRank = seasonRank,
+            Earned = r?.Earned.Count ?? 0, Total = Badges.Table.Length,
+            Badges = badges,
         };
     }
 
@@ -210,7 +210,7 @@ public sealed class BadgesModule : IModule
         return rows;
     }
 
-    JsonObject LadderJson(Member me, string season)
+    LadderDataMsg LadderView(Member me, string season)
     {
         var viewer = CanHave(me) ? Key(me.Name) : "";
         List<Row> rows;
@@ -225,24 +225,18 @@ public sealed class BadgesModule : IModule
                 .Select(x => (x.Key, x.Rec.Name, x.Pts, x.Rec.Hide, x.Rec));
             rows = Rank(list);
         }
-        var arr = new JsonArray();
+        var o = new LadderDataMsg { Season = season, Current = Store.Season };
         foreach (var row in rows.Take(100))
         {
-            var top = new JsonArray();
-            foreach (var id in Badges.TopIds(row.Rec.Earned, 3)) top.Add(EarnedJson(Badges.Find(id), row.Rec.Earned[id]));
-            var o = new JsonObject { ["rank"] = row.Rank, ["name"] = row.Name, ["points"] = row.Points, ["top"] = top };
-            if (row.Key == viewer) { o["you"] = true; if (row.Hidden) o["hidden"] = true; }
-            arr.Add(o);
+            var lr = new LadderRow { Rank = row.Rank, Name = row.Name, Points = row.Points, You = row.Key == viewer, Hidden = row.Key == viewer && row.Hidden };
+            foreach (var id in Badges.TopIds(row.Rec.Earned, 3)) lr.Top.Add(EarnedView(Badges.Find(id), row.Rec.Earned[id]));
+            o.Rows.Add(lr);
         }
-        var seasons = new JsonArray();
-        if (Store.Season.Length > 0) seasons.Add(Store.Season);
-        foreach (var s in Store.Seasons) if (s != Store.Season) seasons.Add(s);
+        if (Store.Season.Length > 0) o.Seasons.Add(Store.Season);
+        foreach (var s in Store.Seasons) if (s != Store.Season) o.Seasons.Add(s);
         var mine = rows.FirstOrDefault(x => x.Key == viewer);
-        return new JsonObject
-        {
-            ["t"] = LodgeMsg.LadderData, ["ok"] = true, ["season"] = season, ["current"] = Store.Season, ["seasons"] = seasons, ["rows"] = arr,
-            ["you"] = mine == null ? null : new JsonObject { ["rank"] = mine.Rank, ["points"] = mine.Points, ["hidden"] = mine.Hidden },
-        };
+        o.You = mine == null ? null : new LadderYou { Rank = mine.Rank, Points = mine.Points, Hidden = mine.Hidden };
+        return o;
     }
 
     // ---------------------------------------------------------------- computing

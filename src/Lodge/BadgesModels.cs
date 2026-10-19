@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -80,12 +81,12 @@ namespace ElansAddonHub.Lodge
         public string ProgressText => Target > 0 ? Value.ToString("N0", CultureInfo.CurrentCulture) + " / " + How : "";
         public Visibility FlavourVisibility => Flavour.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        public static BadgeVM Parse(Dictionary<string, object> b) => new BadgeVM
+        public static BadgeVM From(BadgeView b) => new BadgeVM
         {
-            Id = b.Str("id"), Family = b.Str("family"), FamilyName = b.Str("familyName") ?? b.Str("family"), Tier = b.Int("tier"), Name = b.Str("name") ?? "???",
-            Flavour = b.Str("flavour") ?? "", How = b.Str("how") ?? "", Hidden = b.Bool("hidden"),
-            Earned = b.ContainsKey("earned") ? b.Bool("earned") : true,      // a list of someone else's badges holds earned ones only
-            At = b.Long("at"), Value = b.Long("value"), Target = b.Long("target"),
+            Id = b.Id, Family = b.Family, FamilyName = b.FamilyName ?? b.Family, Tier = b.Tier, Name = b.Name ?? "???",
+            Flavour = b.Flavour ?? "", How = b.How ?? "", Hidden = b.Hidden ?? false,
+            Earned = b.Earned ?? true,      // a list of someone else's badges holds earned ones only
+            At = b.At ?? 0, Value = b.Value ?? 0, Target = b.Target ?? 0,
         };
 
     }
@@ -113,10 +114,10 @@ namespace ElansAddonHub.Lodge
         public Visibility HiddenNoteVisibility => HiddenNote.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Brush RowBrush => IsYou ? Avatar.Res("Brush.Accent.Tint") : Brushes.Transparent;
 
-        public static LadderRowVM Parse(Dictionary<string, object> r)
+        public static LadderRowVM From(LadderRow r)
         {
-            var row = new LadderRowVM { Rank = r.Int("rank"), Login = r.Str("name") ?? "", Points = r.Long("points"), IsYou = r.Bool("you"), Hidden = r.Bool("hidden") };
-            foreach (var t in (r.List("top") ?? new List<object>()).OfType<Dictionary<string, object>>().Take(5)) row.Top.Add(BadgeVM.Parse(t));
+            var row = new LadderRowVM { Rank = r.Rank, Login = r.Name ?? "", Points = r.Points, IsYou = r.You, Hidden = r.Hidden };
+            foreach (var t in r.Top.Take(5)) row.Top.Add(BadgeVM.From(t));
             return row;
         }
     }

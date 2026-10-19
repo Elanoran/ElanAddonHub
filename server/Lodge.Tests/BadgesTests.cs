@@ -559,4 +559,48 @@ public class BadgesTests
         Assert.Equal("", s2.Season);
         await Task.CompletedTask;
     }
+
+    static string[] Keys(JsonObject o) => o.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+    // the typed BadgesMineMsg / BadgesMemberMsg / LadderDataMsg / BadgesStateMsg (Elans.Shared) send the same keys the old JsonObjects did
+    [Fact]
+    public async Task Typed_badge_frames_keep_their_keys()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "owner"); var bob = r.Join("Bob", "officer");
+        Run(r);
+        await Kills(r, elan, 150); await Kills(r, bob, 1_200);
+        Run(r);
+        var mine = await Mine(r, elan);
+        Assert.Equal(new[] { "badges", "earned", "hide", "new", "ok", "points", "rank", "season", "seasonPoints", "seasonRank", "t", "total", "you" }, Keys(mine));
+        Assert.Equal(new[] { "at", "earned", "family", "familyName", "flavour", "hidden", "how", "id", "name", "target", "tier", "value" }, Keys(B(mine, "loot.bronze")));
+        Assert.Equal(new[] { "earned", "family", "familyName", "flavour", "hidden", "how", "id", "name", "target", "tier", "value" }, Keys(B(mine, "loot.silver")));
+        Assert.Equal(new[] { "earned", "family", "familyName", "flavour", "hidden", "how", "id", "name", "tier" }, Keys(B(mine, "nightowl")));
+
+        var theirs = await MemberBadges(r, elan, "Bob");
+        Assert.Equal(new[] { "badges", "count", "name", "ok", "t" }, Keys(theirs));
+        Assert.Equal(new[] { "at", "family", "id", "name", "tier" }, Keys((JsonObject)theirs["badges"]![0]!));
+        Assert.Equal(2, (int)theirs["count"]!);
+
+        r.Clock.Advance(TimeSpan.FromSeconds(3));
+        await r.Send(elan, new { t = "badges.hide", hide = true });
+        Assert.Equal(new[] { "badges", "earned", "hide", "new", "ok", "points", "rank", "season", "seasonPoints", "seasonRank", "t", "total", "you" }, Keys(r.Sock("Elan").Of("badges.mine").Last()));
+        var ladder = await Ladder(r, elan);
+        Assert.Equal(new[] { "current", "ok", "rows", "season", "seasons", "t", "you" }, Keys(ladder));
+        var rows = Rows(ladder);
+        Assert.Equal(new[] { "name", "points", "rank", "top" }, Keys(rows.Single(x => (string)x["name"]! == "Bob")));
+        Assert.Equal(new[] { "hidden", "name", "points", "rank", "top", "you" }, Keys(rows.Single(x => (string)x["name"]! == "Elan")));
+        Assert.Equal(new[] { "at", "family", "id", "name", "tier" }, Keys((JsonObject)rows[0]["top"]![0]!));
+        Assert.Equal(new[] { "hidden", "points", "rank" }, Keys((JsonObject)ladder["you"]!));
+        var asBob = await Ladder(r, bob);                                // Elan left the ladder: Bob doesn't see the row
+        Assert.Equal(new[] { "Bob" }, Names(asBob));
+
+        var guest = r.Join("Gus", "guest");
+        var gl = await Ladder(r, guest);
+        Assert.True(gl.ContainsKey("you") && gl["you"] == null);           // not on it: "you" is sent as null
+
+        Assert.Equal(new[] { "enabled", "locked" }, Keys((JsonObject)r.Hub.Welcome(elan)["badges"]!));
+        await r.Send(elan, new { t = "admin.badges", on = false });
+        Assert.Equal(new[] { "enabled", "locked", "t" }, Keys(r.Sock("Bob").Of("badges.state").Last()));
+    }
 }

@@ -283,7 +283,7 @@ public partial class LodgeHub
             ["canManageFiles"] = Cfg.FilesEnabled && Roles.Can(me.Role, Perm.FilesManage),
             ["filesMaxMb"] = Cfg.FilesMaxMb,
             ["canShareClassic"] = Cfg.ClassicEnabled && Roles.Can(me.Role, Perm.DatasetManage),
-            ["badges"] = new JsonObject { ["enabled"] = Badges.Enabled, ["locked"] = Badges.Locked },
+            ["badges"] = Badges.WelcomeView(),
             ["lodge"] = Info.ToJson(),
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),

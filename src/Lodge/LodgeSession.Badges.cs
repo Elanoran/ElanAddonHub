@@ -49,7 +49,7 @@ namespace ElansAddonHub.Lodge
             ResetBadges();
             SupportsBadges = features.Contains("badges");
             var st = m.Child("badges");
-            if (st != null) { BadgesStateKnown = true; BadgesOwnerOn = st.Bool("enabled"); BadgesLocked = st.Bool("locked"); }
+            if (st != null) { var bs = BadgesStateMsg.Read(new LodgeFieldsDict(st)); BadgesStateKnown = true; BadgesOwnerOn = bs.Enabled; BadgesLocked = bs.Locked; }
         }
 
         void ResetBadges()
@@ -71,7 +71,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsBadges || (Me != null && Me.Guest)) return;
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesMine });
+            _ = Send(LodgeFieldsDict.Build(new BadgesMineGetMsg().Write));
         }
 
         // I looked at my badges: the dot goes (locally at once, and on the server so it stays gone)
@@ -80,7 +80,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsBadges || NewBadges == 0) return;
             NewBadges = 0;
             BadgesChanged?.Invoke();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesSeen });
+            _ = Send(LodgeFieldsDict.Build(new BadgesSeenMsg().Write));
         }
 
         public void SetHideFromLadder(bool hide)
@@ -88,7 +88,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsBadges) return;
             HideFromLadder = hide;
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesHide, ["hide"] = hide });
+            _ = Send(LodgeFieldsDict.Build(new BadgesHideMsg { Hide = hide }.Write));
             BadgesChanged?.Invoke();
         }
 
@@ -96,7 +96,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsBadges) return;
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LadderGet, ["season"] = string.IsNullOrEmpty(season) ? "all" : season });
+            _ = Send(LodgeFieldsDict.Build(new LadderGetMsg { Season = string.IsNullOrEmpty(season) ? "all" : season }.Write));
         }
 
         // someone's earned badges (a profile card); asked again at most once a minute
@@ -106,7 +106,7 @@ namespace ElansAddonHub.Lodge
             if (memberBadgesAsked.TryGetValue(login, out var at) && Clock() - at < TimeSpan.FromMinutes(1)) return;
             memberBadgesAsked[login] = Clock();
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesMember, ["name"] = login });
+            _ = Send(LodgeFieldsDict.Build(new BadgesMemberGetMsg { Name = login }.Write));
         }
 
         public List<BadgeVM> BadgesOf(string login) =>
@@ -117,7 +117,7 @@ namespace ElansAddonHub.Lodge
         public void SetBadgesForLodge(bool on)
         {
             if (!CanSwitchBadges) return;
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminBadges, ["on"] = on });
+            _ = Send(LodgeFieldsDict.Build(new AdminBadgesMsg { On = on }.Write));
         }
 
         // the badges shown beside a name: highest tier first, then the newest
@@ -141,32 +141,36 @@ namespace ElansAddonHub.Lodge
             switch (m.Str("t"))
             {
                 case LodgeMsg.BadgesState:
-                    BadgesStateKnown = true; BadgesOwnerOn = m.Bool("enabled"); BadgesLocked = m.Bool("locked");
+                    var state = BadgesStateMsg.Read(new LodgeFieldsDict(m));
+                    BadgesStateKnown = true; BadgesOwnerOn = state.Enabled; BadgesLocked = state.Locked;
                     SupportsBadges = BadgesOwnerOn && !BadgesLocked;
                     if (SupportsBadges) AfterWelcomeBadges(); else { var keep = BadgesStateKnown; var l = BadgesLocked; var o = BadgesOwnerOn; ResetBadges(); BadgesStateKnown = keep; BadgesLocked = l; BadgesOwnerOn = o; }
                     BadgesChanged?.Invoke(); LadderChanged?.Invoke();
                     return true;
                 case LodgeMsg.BadgesMine:
-                    if (!SupportsBadges || !m.Bool("ok")) return true;
-                    HideFromLadder = m.Bool("hide"); NewBadges = m.Int("new");
-                    MyPoints = m.Long("points"); MyRank = m.Int("rank"); MySeasonPoints = m.Long("seasonPoints"); MySeasonRank = m.Int("seasonRank");
-                    BadgeSeason = m.Str("season") ?? ""; EarnedCount = m.Int("earned"); TotalBadges = m.Int("total");
-                    MyBadges = (m.List("badges") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(BadgeVM.Parse).Where(b => b.Id != null).ToList();
+                    var mine = BadgesMineMsg.Read(new LodgeFieldsDict(m));
+                    if (!SupportsBadges || !mine.Ok) return true;
+                    HideFromLadder = mine.Hide; NewBadges = mine.New;
+                    MyPoints = mine.Points; MyRank = mine.Rank; MySeasonPoints = mine.SeasonPoints; MySeasonRank = mine.SeasonRank;
+                    BadgeSeason = mine.Season ?? ""; EarnedCount = mine.Earned; TotalBadges = mine.Total;
+                    MyBadges = mine.Badges.Select(BadgeVM.From).Where(b => b.Id != null).ToList();
                     MyBadgesLoaded = true;
                     BadgesChanged?.Invoke();
                     return true;
                 case LodgeMsg.BadgesMember:
-                    if (!SupportsBadges || !m.Bool("ok")) return true;
-                    var who = m.Str("name");
+                    var theirs = BadgesMemberMsg.Read(new LodgeFieldsDict(m));
+                    if (!SupportsBadges || !theirs.Ok) return true;
+                    var who = theirs.Name;
                     if (string.IsNullOrEmpty(who)) return true;
-                    memberBadges[who] = (m.List("badges") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(BadgeVM.Parse).Where(b => b.Id != null).ToList();
+                    memberBadges[who] = theirs.Badges.Select(BadgeVM.From).Where(b => b.Id != null).ToList();
                     MemberBadgesLoaded?.Invoke(who);
                     return true;
                 case LodgeMsg.LadderData:
-                    if (!SupportsBadges || !m.Bool("ok")) return true;
-                    LadderSeason = m.Str("season") ?? "all"; LadderCurrent = m.Str("current") ?? "";
-                    LadderSeasons = (m.List("seasons") ?? new List<object>()).OfType<string>().ToList();
-                    LadderRows = (m.List("rows") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(LadderRowVM.Parse).ToList();
+                    var ladder = LadderDataMsg.Read(new LodgeFieldsDict(m));
+                    if (!SupportsBadges || !ladder.Ok) return true;
+                    LadderSeason = ladder.Season ?? "all"; LadderCurrent = ladder.Current ?? "";
+                    LadderSeasons = ladder.Seasons;
+                    LadderRows = ladder.Rows.Select(LadderRowVM.From).ToList();
                     LadderLoaded = true;
                     LadderChanged?.Invoke();
                     return true;

@@ -431,6 +431,10 @@ Fun milestones for what a member shares, and a monthly ladder. **Nothing new is 
 - `admin.badges { on: bool }`: the Guild Master switches the whole feature on or off (persisted). Everybody receives `badges.state { enabled, locked }`. Refused with code `locked` when the server setting is off.
 - Errors (never shown by the Outpost): code `disabled` ("Badges are switched off on this lodge"), `guest`, `rate`.
 - Limits: `badges.*` and `ladder.get` share one budget per person (a burst of 10, then one per 2 seconds). The numbers are computed on a timer (every 10 minutes) and when a member asks (at most every 30 seconds).
+- Typed (stage 2): every message above, `welcome.badges` and `badges.state` are classes in `shared/Elans.Shared/Lodge/BadgesMessages.cs`
+  (`BadgesMineGetMsg` ... `AdminBadgesMsg`, `BadgesMineMsg`, `BadgesMemberMsg`, `LadderDataMsg`, `BadgesStateMsg`; a badge in either form is a
+  `BadgeView`, a ladder row a `LadderRow`), used by both sides like the LFG ones. The server still reads `admin.badges`' `on` from the raw
+  JSON (missing or wrong-typed = on).
 
 **Data sources** (per member; a counter that no store keeps per member is a small tally in `data/badges.json`, counted from the day the feature went live):
 
