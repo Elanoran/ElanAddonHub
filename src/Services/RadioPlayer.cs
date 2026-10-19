@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Threading;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -56,6 +58,43 @@ namespace ElansAddonHub.Services
         public float AppliedGain => gain?.Current ?? Gain;
 
         public RadioPlayer() { ui = SynchronizationContext.Current; }
+
+        // one HttpClient for the streams and the covers (3.1: HttpWebRequest is obsolete on .NET 10 and closed an aborted connection only later,
+        // so a switch briefly had two open): no redirects (only the published address itself), no decompression, no cookies, the system proxy as
+        // before; the timeouts are per request (a stream runs for hours), every request says Connection: close
+        internal static readonly HttpClient Http = new HttpClient(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.None,
+            UseCookies = false,
+            MaxResponseDrainSize = 0,                  // a stopped stream is never read on to reuse its connection: disposing it closes the socket
+            ConnectTimeout = TimeSpan.FromSeconds(15),
+        }) { Timeout = Timeout.InfiniteTimeSpan };
+
+        // a GET with the Outpost's User-Agent and Connection: close (nothing lingers after Pause); the headers go out as they are
+        internal static HttpRequestMessage NewGet(string url)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.TryAddWithoutValidation("User-Agent", RadioParadise.UserAgent);
+            req.Headers.ConnectionClose = true;
+            return req;
+        }
+
+        // sends it and returns at the answer's headers (the body is read as it comes); connect + headers longer than ms is a timeout
+        internal static HttpResponseMessage Send(HttpRequestMessage req, CancellationTokenSource cts, int ms)
+        {
+            cts.CancelAfter(ms);
+            try { return Http.Send(req, HttpCompletionOption.ResponseHeadersRead, cts.Token); }
+            catch (OperationCanceledException) { throw new TimeoutException("The operation has timed out."); }
+            finally { try { cts.CancelAfter(Timeout.Infinite); } catch { } }
+        }
+
+        // a header of the answer as it was sent, not validated (null = none)
+        internal static string Header(HttpResponseMessage resp, string name)
+        {
+            if (resp.Headers.NonValidated.TryGetValues(name, out var v) || resp.Content.Headers.NonValidated.TryGetValues(name, out v)) return v.ToString();
+            return null;
+        }
 
         // ---- volume: the slider (0..1, a squared curve so the low end is usable) times the ducking factor
         public float Volume { get => volume; set { volume = Math.Max(0, Math.Min(1, value)); ApplyGain(); } }
@@ -135,19 +174,23 @@ namespace ElansAddonHub.Services
         {
             public volatile bool Cancelled;
             public Thread Thread;
-            public HttpWebRequest Request;
+            public CancellationTokenSource Cts;           // the current connection's: cancelling it aborts the request or the read in progress
+            public volatile HttpResponseMessage Response;
             public readonly ManualResetEvent Wake = new ManualResetEvent(false);
             public void Cancel()
             {
                 Cancelled = true;
-                try { Request?.Abort(); } catch { }
+                try { Cts?.Cancel(); } catch { }
+                try { Response?.Dispose(); } catch { }   // the socket closes now, not when the worker gets to it
                 Wake.Set();
             }
         }
 
         void Worker(Run run, Run prev)
         {
+            bool handover = prev?.Thread?.IsAlive == true;
             try { prev?.Thread?.Join(3000); } catch { }   // one connection at a time: the old one is gone before this one opens
+            if (handover) run.Wake.WaitOne(200);           // 3.1: and its close has reached the server (HttpClient connects again within a millisecond)
             int attempt = 0;
             while (!run.Cancelled)
             {
@@ -194,30 +237,31 @@ namespace ElansAddonHub.Services
             Set(run, () => Stream = stream);
             var url = UrlFor(stream.Path);
             if (!UrlAllowed(url)) { LastError = "not an allowed stream address"; final = RadioState.Unsupported; return false; }
-            var req = (HttpWebRequest)WebRequest.Create(url);
-            req.Method = "GET";
-            req.UserAgent = RadioParadise.UserAgent;
-            req.Headers["Icy-MetaData"] = "1";
-            req.KeepAlive = false;                      // Connection: close - nothing lingers after Pause
-            req.Timeout = 15000; req.ReadWriteTimeout = 20000;
-            req.AllowAutoRedirect = false;              // only the published address itself
-            req.AutomaticDecompression = DecompressionMethods.None;
-            run.Request = req;
-            if (run.Cancelled) return false;
+            var cts = new CancellationTokenSource();
+            run.Cts = cts;
+            if (run.Cancelled) { cts.Dispose(); return false; }
             Interlocked.Increment(ref ConnectionsOpened);
             IWavePlayer output = null; IRadioDecoder decoder = null;
+            HttpResponseMessage resp = null;
             var clock = Stopwatch.StartNew();
             try
             {
-                using (var resp = (HttpWebResponse)req.GetResponse())
+                using (var req = NewGet(url))
+                {
+                    req.Headers.TryAddWithoutValidation("Icy-MetaData", "1");
+                    resp = Send(req, cts, 15000);   // connect + headers in 15 s; then each read in 20 s (ReadTimeoutStream)
+                }
+                run.Response = resp;
+                if (run.Cancelled) return false;
+                using (resp)
                 {
                     if ((int)resp.StatusCode != 200) throw new WebException("HTTP " + (int)resp.StatusCode);
-                    var type = resp.ContentType ?? "";
+                    var type = Header(resp, "Content-Type") ?? "";
                     // the format the answer says it is (no type: the one asked for); a type the player has no decoder for is not retried
                     var fmt = type.Length == 0 ? stream.Format : RadioParadise.FormatOf(type);
                     if (fmt == null) { LastError = "stream format " + type.ToLowerInvariant(); final = RadioState.Unsupported; return false; }
-                    int.TryParse(resp.Headers["icy-metaint"], out var metaInt);
-                    using (var icy = new IcyStream(resp.GetResponseStream(), Math.Max(0, metaInt)))
+                    int.TryParse(Header(resp, "icy-metaint"), out var metaInt);
+                    using (var icy = new IcyStream(new ReadTimeoutStream(resp.Content.ReadAsStream(cts.Token), cts, 20000), Math.Max(0, metaInt)))
                     {
                         icy.MetaChanged += (t, u) => Set(run, () => { Title = t; CoverUrl = u; });
                         decoder = RadioDecoders.Create(fmt.Value, icy);
@@ -259,7 +303,8 @@ namespace ElansAddonHub.Services
                 try { output?.Dispose(); } catch { }
                 try { decoder?.Dispose(); } catch { }
                 gain = null;
-                try { req.Abort(); } catch { }
+                try { resp?.Dispose(); } catch { }        // closes the socket (Connection: close) before the next connection may open
+                try { cts.Dispose(); } catch { }
             }
             return clock.Elapsed.TotalSeconds >= 30;
         }
@@ -305,6 +350,32 @@ namespace ElansAddonHub.Services
                 return n;
             }
         }
+    }
+
+    // a response stream with the old ReadWriteTimeout: a read that waits longer than ms - or a stop (the token) - aborts the connection
+    sealed class ReadTimeoutStream : Stream
+    {
+        readonly Stream src;
+        readonly CancellationTokenSource cts;
+        readonly int ms;
+        public ReadTimeoutStream(Stream src, CancellationTokenSource cts, int ms) { this.src = src; this.cts = cts; this.ms = ms; }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            cts.CancelAfter(ms);
+            try { return src.ReadAsync(buffer, offset, count, cts.Token).GetAwaiter().GetResult(); }
+            catch (OperationCanceledException) { throw new TimeoutException("The operation has timed out."); }
+            finally { try { cts.CancelAfter(Timeout.Infinite); } catch { } }
+        }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if (disposing) src.Dispose(); base.Dispose(disposing); }
     }
 
     // plays nothing: pulls the samples at real-time pace (the self-test's "speaker", so the buffer drains like a real device)

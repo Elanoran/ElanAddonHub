@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -236,29 +235,28 @@ namespace ElansAddonHub.Services
             lock (Requested) { Requested.Add(realUrl); while (Requested.Count > 200) Requested.RemoveAt(0); }
             try
             {
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "GET";
-                req.UserAgent = RadioParadise.UserAgent;
-                req.Accept = "image/*";
-                req.AllowAutoRedirect = false;
-                req.KeepAlive = false;
-                req.Timeout = TimeoutMs; req.ReadWriteTimeout = TimeoutMs;
-                using (var resp = (HttpWebResponse)req.GetResponse())
+                // the radio's HttpClient (no redirects, Connection: close); connect + headers, then each read, within TimeoutMs
+                using (var cts = new CancellationTokenSource())
+                using (var req = RadioPlayer.NewGet(url))
                 {
-                    if ((int)resp.StatusCode != 200) { LastOutcome = "failed"; return null; }
-                    if (!(resp.ContentType ?? "").StartsWith("image/", StringComparison.OrdinalIgnoreCase)) { LastOutcome = "failed"; return null; }
-                    if (resp.ContentLength > MaxImageBytes) { LastOutcome = "failed"; return null; }
-                    using (var s = resp.GetResponseStream())
-                    using (var ms = new MemoryStream())
+                    req.Headers.TryAddWithoutValidation("Accept", "image/*");
+                    using (var resp = RadioPlayer.Send(req, cts, TimeoutMs))
                     {
-                        var buf = new byte[16384];
-                        int n;
-                        while ((n = s.Read(buf, 0, buf.Length)) > 0)
+                        if ((int)resp.StatusCode != 200) { LastOutcome = "failed"; return null; }
+                        if (!(RadioPlayer.Header(resp, "Content-Type") ?? "").StartsWith("image/", StringComparison.OrdinalIgnoreCase)) { LastOutcome = "failed"; return null; }
+                        if (resp.Content.Headers.ContentLength > MaxImageBytes) { LastOutcome = "failed"; return null; }
+                        using (var s = new ReadTimeoutStream(resp.Content.ReadAsStream(cts.Token), cts, TimeoutMs))
+                        using (var ms = new MemoryStream())
                         {
-                            ms.Write(buf, 0, n);
-                            if (ms.Length > MaxImageBytes) { LastOutcome = "failed"; return null; }
+                            var buf = new byte[16384];
+                            int n;
+                            while ((n = s.Read(buf, 0, buf.Length)) > 0)
+                            {
+                                ms.Write(buf, 0, n);
+                                if (ms.Length > MaxImageBytes) { LastOutcome = "failed"; return null; }
+                            }
+                            return ms.ToArray();
                         }
-                        return ms.ToArray();
                     }
                 }
             }
