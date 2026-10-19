@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using Elans.Shared;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
@@ -110,16 +111,14 @@ namespace ElansAddonHub
             var json = Encoding.UTF8.GetBytes(CairnDatasetJson(seq, kills));
             byte[] gz;
             using (var ms = new MemoryStream()) { using (var z = new GZipStream(ms, CompressionLevel.Optimal, true)) z.Write(json, 0, json.Length); gz = ms.ToArray(); }
-            var csha = CairnAtlas.Sha256Hex(json);
+            var csha = Es256.Sha256Hex(json);
             var file = "cairn-2026-10-17-" + seq + ".json.gz";
-            var sig = key == null ? "" : Convert.ToBase64String(key.SignData(Encoding.UTF8.GetBytes(CairnAtlas.SignedMessage("2026-10-17", seq, csha)), HashAlgorithmName.SHA256));
+            var sig = key == null ? "" : Convert.ToBase64String(Es256.Sign(key, CairnFormats.Dataset("2026-10-17", seq, csha)));
             f.Manifest = Encoding.UTF8.GetBytes("{\"format\":\"elans-cairn-manifest\",\"v\":1,\"license\":\"contributors\",\"latest\":{\"day\":\"2026-10-17\",\"seq\":" + seq + ",\"file\":\"" + file + "\",\"bytes\":" + gz.Length
-                + ",\"sha256\":\"" + CairnAtlas.Sha256Hex(gz) + "\",\"contentSha256\":\"" + csha + "\",\"sig\":\"" + sig + "\",\"kid\":\"test\"}}");
+                + ",\"sha256\":\"" + Es256.Sha256Hex(gz) + "\",\"contentSha256\":\"" + csha + "\",\"sig\":\"" + sig + "\",\"kid\":\"test\"}}");
             f.Gz = gz; f.CleanGz = gz;
             f.ETag = "\"" + csha.Substring(0, 32) + "\"";
         }
-
-        static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
         string CairnWelcome(string role, bool cairn2) =>
             FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\",\"atlas\",\"cairn\"" + (cairn2 ? ",\"cairn2\"" : ""), "2.27.0");
@@ -139,8 +138,7 @@ namespace ElansAddonHub
             var savedFetch = CairnAtlas.Fetch; var savedCache = CairnAtlas.CacheDirOverride;
             var savedX = CairnAtlas.PinnedKeyX; var savedY = CairnAtlas.PinnedKeyY; var savedLodge = AtlasQuery.Context.Lodge;
             {
-                byte[] U(string s) { s = s.Replace('-', '+').Replace('_', '/'); return Convert.FromBase64String(s + new string('=', (4 - s.Length % 4) % 4)); }
-                bool pinned = false; try { pinned = U(savedX).Length == 32 && U(savedY).Length == 32; } catch (Exception) { }
+                bool pinned; using (var ec = Es256.FromPoint(B64.FromUrl(savedX), B64.FromUrl(savedY))) pinned = ec != null;
                 Check("the live Cairn's signing key is pinned in the app (two 32-byte P-256 coordinates), so datasets are checked against it", pinned);
             }
             var savedShareOff = settings.AtlasShareOff; var savedUrl = settings.LodgeUrl; var savedRoot = settings.WowRoot;
@@ -161,7 +159,7 @@ namespace ElansAddonHub
                 Session.CairnClientForTest(new LodgeClient(fake.Url, FakeLodgeCairn.Code, "Elan"));
                 CairnAtlas.Fetch = (p, e) => Session.CairnFetchAsync(p, e);       // the app's own wiring (MainWindow.Atlas.cs)
                 settings.WowRoot = Path.Combine(work, "wow"); settings.AtlasShareOff = false;
-                var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+                var key = Es256.NewKey();
                 CairnServe(fake, 1, 200, key);
 
                 // ---- no Cairn address anywhere in the app: no URL field, no Url / DefaultUrl / UrlOverride member
@@ -222,8 +220,8 @@ namespace ElansAddonHub
 
                 // ---- with a pinned key: the Cairn's signature is checked (the Lodge in between can't change the numbers unseen)
                 var pub = key.ExportParameters(false);
-                CairnAtlas.PinnedKeyX = B64Url(pub.Q.X); CairnAtlas.PinnedKeyY = B64Url(pub.Q.Y);
-                CairnServe(fake, 3, 400, ECDsa.Create(ECCurve.NamedCurves.nistP256));
+                CairnAtlas.PinnedKeyX = B64.Url(pub.Q.X); CairnAtlas.PinnedKeyY = B64.Url(pub.Q.Y);
+                CairnServe(fake, 3, 400, Es256.NewKey());
                 int dl = fake.Count("/cairn/dataset");
                 var r4 = await CairnAtlas.Refresh(CairnReachable, force: true);
                 Check("pinned key: a file signed by another key is refused before it is downloaded", r4.Contains("signature") && CairnAtlas.Current?.Seq == 1 && fake.Count("/cairn/dataset") == dl, r4);

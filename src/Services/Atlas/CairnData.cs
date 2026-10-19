@@ -5,11 +5,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Elans.Shared;
 
 namespace ElansAddonHub.Services.Atlas
 {
@@ -83,27 +83,13 @@ namespace ElansAddonHub.Services.Atlas
             }
         }
 
-        static string Hex(byte[] b) { var sb = new StringBuilder(b.Length * 2); foreach (var x in b) sb.Append(x.ToString("x2", CultureInfo.InvariantCulture)); return sb.ToString(); }
-        public static string Sha256Hex(byte[] b) { using (var h = SHA256.Create()) return Hex(h.ComputeHash(b)); }
-        static byte[] B64Url(string s)
-        {
-            s = (s ?? "").Replace('-', '+').Replace('_', '/');
-            return Convert.FromBase64String(s + new string('=', (4 - s.Length % 4) % 4));
-        }
-
-        public static string SignedMessage(string day, long seq, string contentSha) => "elans-cairn/1\n" + day + "\n" + seq.ToString(CultureInfo.InvariantCulture) + "\n" + contentSha;
-
-        // the ES256 check against the pinned key (x / y base64url); false for anything malformed
+        // the signed text, the ES256 check and the checksums are Elans.Shared (CairnFormats.Dataset, Es256): the same code the Lodge and the Cairn use.
+        // the pinned key's x / y are base64url, the signature plain base64 (r||s); false for anything malformed
         public static bool SignatureOk(Entry e, string keyX, string keyY)
         {
-            try
-            {
-                if (string.IsNullOrEmpty(e?.Sig)) return false;
-                var p = new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = B64Url(keyX), Y = B64Url(keyY) } };
-                using (var ec = ECDsa.Create(p))
-                    return ec.VerifyData(Encoding.UTF8.GetBytes(SignedMessage(e.Day, e.Seq, e.ContentSha256)), Convert.FromBase64String(e.Sig), HashAlgorithmName.SHA256);
-            }
-            catch { return false; }
+            if (string.IsNullOrEmpty(e?.Sig)) return false;
+            using (var ec = Es256.FromPoint(B64.FromUrl(keyX), B64.FromUrl(keyY)))
+                return Es256.Verify(ec, CairnFormats.Dataset(e.Day, e.Seq, e.ContentSha256), B64.FromStd(e.Sig));
         }
 
         public static byte[] Gunzip(byte[] gz, long cap = MaxJsonBytes)
@@ -137,7 +123,7 @@ namespace ElansAddonHub.Services.Atlas
                 var meta = ReadMeta();
                 if (meta == null || !File.Exists(GzPath)) return;
                 var json = Gunzip(File.ReadAllBytes(GzPath));
-                if (Sha256Hex(json) != meta.Str("contentSha256")) { Util.Log("cairn: the saved copy does not match its checksum - dropped"); Delete(); return; }
+                if (Es256.Sha256Hex(json) != meta.Str("contentSha256")) { Util.Log("cairn: the saved copy does not match its checksum - dropped"); Delete(); return; }
                 var set = CairnSet.Parse(Encoding.UTF8.GetString(json));
                 if (set == null) return;
                 Current = set;
@@ -195,9 +181,9 @@ namespace ElansAddonHub.Services.Atlas
                 var g = await fetch(DatasetPath, null);
                 if (NotEntitled(g.Reason) || g.Status == 401) return Refused(g.Status == 401 ? "auth" : g.Reason);
                 if (g.Status != 200 || g.Body == null) return Fail("the file answered " + g.Status);
-                if (Sha256Hex(g.Body) != e.Sha256) return Fail("the file does not match its checksum");
+                if (Es256.Sha256Hex(g.Body) != e.Sha256) return Fail("the file does not match its checksum");
                 var json = Gunzip(g.Body);
-                if (Sha256Hex(json) != e.ContentSha256) return Fail("the data does not match its checksum");
+                if (Es256.Sha256Hex(json) != e.ContentSha256) return Fail("the data does not match its checksum");
                 var set = CairnSet.Parse(Encoding.UTF8.GetString(json));
                 if (set == null) return Fail("not a Cairn dataset");
                 WriteAtomic(GzPath, g.Body);

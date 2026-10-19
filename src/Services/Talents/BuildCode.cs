@@ -157,15 +157,8 @@ namespace ElansAddonHub.Services.Talents
             return crc;
         }
 
-        static string B64(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-        static byte[] FromB64(string s)
-        {
-            foreach (var c in s) if (!(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_')) return null;
-            var t = s.Replace('-', '+').Replace('_', '/');
-            if (t.Length % 4 == 1) return null;
-            t = t.PadRight((t.Length + 3) / 4 * 4, '=');
-            return Convert.FromBase64String(t);
-        }
+        // base64url without padding: Elans.Shared.B64 (the one decoder the signed formats use too); null for any character that does not belong
+        static string B64(byte[] b) => Elans.Shared.B64.Url(b);
+        static byte[] FromB64(string s) => Elans.Shared.B64.FromUrl(s);
     }
 }

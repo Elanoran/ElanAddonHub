@@ -19,7 +19,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>3.1.0</Version>
+    <Version>3.1.1</Version>
     <!-- 64-bit: the world map builders need more than the 32-bit address space (WebView2Loader is picked per architecture) -->
     <Product>Elan's Outpost</Product>
     <Company>Elan</Company>
@@ -27,6 +27,8 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <DebugType>none</DebugType>
+    <!-- 3.1.1: no .pdb of a referenced project (Elans.Shared) next to the exe: release.py takes the publish folder only with the one exe in it -->
+    <AllowedReferenceRelatedFileExtensions>.none</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <ItemGroup>
@@ -72,6 +74,11 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
     <PackageReference Include="Concentus" Version="2.2.2" />
+  </ItemGroup>
+
+  <!-- 3.1.1: the signed formats (ES256, base64url, Cairn dataset / notice messages, release signature) - one definition with the Lodge and the Cairn; bundled into the single-file exe -->
+  <ItemGroup>
+    <ProjectReference Include="..\shared\Elans.Shared\Elans.Shared.csproj" />
   </ItemGroup>
 
   <!-- WebView2Loader.dll rides inside the exe (single-file): extracted to &lt;data&gt;/webview2/loader/&lt;arch&gt; on first use, see VideoViewer.ExtractLoader -->

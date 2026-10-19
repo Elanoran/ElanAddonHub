@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
+using Elans.Shared;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
 
@@ -68,25 +66,16 @@ namespace ElansAddonHub.Lodge
             return NoticeSignatureOk(n, o.Str("sig"), CairnAtlas.PinnedKeyX, CairnAtlas.PinnedKeyY) ? n : null;
         }
 
-        public static string NoticeMessage(CairnNotice n) =>
-            "elans-cairn-notice/1\n" + n.Id.ToString(CultureInfo.InvariantCulture) + "\n" + n.Created.ToString(CultureInfo.InvariantCulture) + "\n"
-            + n.Expires.ToString(CultureInfo.InvariantCulture) + "\n" + n.Level + "\n" + n.To + "\n" + n.Text;
+        // the signed text and the ES256 check are Elans.Shared (CairnFormats.Notice, Es256): the same code the Lodge and the Cairn use.
+        // n.To is already `to ?? "*"` (ParseCairnNotice), as the Cairn signs it.
+        public static string NoticeMessage(CairnNotice n) => CairnFormats.Notice(n.Id, n.Created, n.Expires, n.Level, n.To, n.Text);
 
+        // the pinned key's x / y are base64url, the signature plain base64 (r||s)
         public static bool NoticeSignatureOk(CairnNotice n, string sig, string keyX, string keyY)
         {
-            try
-            {
-                if (string.IsNullOrEmpty(sig) || string.IsNullOrEmpty(keyX)) return false;
-                var p = new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = B64Url(keyX), Y = B64Url(keyY) } };
-                using (var ec = ECDsa.Create(p))
-                    return ec.VerifyData(Encoding.UTF8.GetBytes(NoticeMessage(n)), Convert.FromBase64String(sig), HashAlgorithmName.SHA256);
-            }
-            catch { return false; }
-        }
-        static byte[] B64Url(string s)
-        {
-            s = (s ?? "").Replace('-', '+').Replace('_', '/');
-            return Convert.FromBase64String(s + new string('=', (4 - s.Length % 4) % 4));
+            if (n == null || string.IsNullOrEmpty(sig) || string.IsNullOrEmpty(keyX)) return false;
+            using (var ec = Es256.FromPoint(B64.FromUrl(keyX), B64.FromUrl(keyY)))
+                return Es256.Verify(ec, NoticeMessage(n), B64.FromStd(sig));
         }
 
         public void DismissCairnNotice()

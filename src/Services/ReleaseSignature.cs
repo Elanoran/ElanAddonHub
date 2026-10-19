@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
+using Elans.Shared;
 
 namespace ElansAddonHub.Services
 {
@@ -15,7 +15,7 @@ namespace ElansAddonHub.Services
     // A later release sets RequireSignature, and from then on an unsigned manifest is refused too.
     public static class ReleaseSignature
     {
-        public const string Format = "elans-release-sig/1";
+        public const string Format = ReleaseSig.Format;
         public static bool RequireSignature = false;
 
         public sealed class Key { public string Id, X, Y; }
@@ -27,31 +27,18 @@ namespace ElansAddonHub.Services
 
         public enum Result { Valid, Missing, Invalid }
 
-        // the manifest's exact bytes and the .sig file's text (null = there is none); why = plain words for the log and the status line
+        // the manifest's exact bytes and the .sig file's text (null = there is none); why = plain words for the log and the status line.
+        // 3.1.1: the format check itself is Elans.Shared.ReleaseSig (the same code and tests as the Lodge and the Cairn); this keeps the pinned keys.
         public static Result Check(byte[] manifest, string sigText, out string why, IList<Key> keys = null)
         {
-            keys = keys ?? Keys;
-            if (sigText == null) { why = "the update information is not signed"; return RequireSignature ? Result.Invalid : Result.Missing; }
-            var lines = sigText.Replace("\r", "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length != 3 || lines[0] != Format) { why = "the update information's signature is not readable"; return Result.Invalid; }
-            var key = keys.FirstOrDefault(k => k.Id == lines[1]);
-            if (key == null) { why = "the update information is signed with an unknown key (" + Clip(lines[1]) + ")"; return Result.Invalid; }
-            byte[] sig;
-            try { sig = Convert.FromBase64String(lines[2]); } catch (FormatException) { why = "the update information's signature is not readable"; return Result.Invalid; }
-            if (sig.Length != 64 || manifest == null) { why = "the update information's signature is not readable"; return Result.Invalid; }
-            try
+            var shared = (keys ?? Keys).Select(k => new ReleaseSig.Key { Id = k.Id, X = k.X, Y = k.Y });
+            switch (ReleaseSig.Check(manifest, sigText, shared, RequireSignature, out why))
             {
-                using (var ec = ECDsa.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = Convert.FromBase64String(key.X), Y = Convert.FromBase64String(key.Y) } }))
-                {
-                    if (!ec.VerifyData(manifest, sig, HashAlgorithmName.SHA256)) { why = "the update information does not match its signature"; return Result.Invalid; }
-                }
+                case ReleaseSig.Result.Valid: return Result.Valid;
+                case ReleaseSig.Result.Missing: return Result.Missing;
+                default: return Result.Invalid;
             }
-            catch (CryptographicException) { why = "the update information's signature could not be checked"; return Result.Invalid; }
-            why = "signed with key " + key.Id;
-            return Result.Valid;
         }
-
-        static string Clip(string s) => s.Length > 20 ? s.Substring(0, 20) + "..." : s;
 
         // where the signature of a manifest is: next to it (releases/latest/download/manifest.json -> .../manifest.json.sig, and the same for an asset url)
         public static string SigUrl(string manifestUrl)
@@ -69,12 +56,12 @@ namespace ElansAddonHub.Services
             bool savedReq = RequireSignature;
             try
             {
-                using (var k = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+                using (var k = Es256.NewKey())
                 {
                     var p = k.ExportParameters(false);
                     var test = new List<Key> { new Key { Id = "0123456789abcdef", X = Convert.ToBase64String(p.Q.X), Y = Convert.ToBase64String(p.Q.Y) } };
                     var man = Encoding.UTF8.GetBytes("{\r\n  \"hub\": {\"version\": \"9.9.9\", \"sha256\": \"" + new string('a', 64) + "\"}\r\n}");
-                    string Sig(byte[] data, string kid = "0123456789abcdef") => Format + "\n" + kid + "\n" + Convert.ToBase64String(k.SignData(data, HashAlgorithmName.SHA256)) + "\n";
+                    string Sig(byte[] data, string kid = "0123456789abcdef") => ReleaseSig.Make(k, kid, data);
                     Ck("a manifest with its signature is valid", Check(man, Sig(man), out var w1, test) == Result.Valid, w1);
                     var tampered = (byte[])man.Clone(); tampered[tampered.Length - 5] ^= 1;
                     Ck("a changed manifest (one byte: another checksum) is refused", Check(tampered, Sig(man), out var w2, test) == Result.Invalid && w2.Contains("does not match"), w2);
@@ -92,7 +79,7 @@ namespace ElansAddonHub.Services
                 }
                 Ck("the signature sits next to the manifest", SigUrl("https://github.com/Elanoran/ElanAddonHub/releases/latest/download/manifest.json") == "https://github.com/Elanoran/ElanAddonHub/releases/latest/download/manifest.json.sig"
                     && SigUrl("http://127.0.0.1:1234/manifest.json?x=1") == "http://127.0.0.1:1234/manifest.json.sig?x=1");
-                Ck("two keys are built in (main and backup), each a P-256 point", Keys.Count == 2 && Keys.All(x => Convert.FromBase64String(x.X).Length == 32 && Convert.FromBase64String(x.Y).Length == 32));
+                Ck("two keys are built in (main and backup), each a P-256 point", Keys.Count == 2 && Keys.All(x => { using (var ec = Es256.FromPoint(B64.FromStd(x.X), B64.FromStd(x.Y))) return ec != null; }));
                 // the release PC: the manifest release.py signed last, checked with the shipped keys (Python's signature read by .NET)
                 var dir = releaseDir;
                 if (!string.IsNullOrEmpty(dir) && System.IO.File.Exists(System.IO.Path.Combine(dir, "manifest.json.sig")))

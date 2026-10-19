@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.1.1
+- **Knows Lodge server 2.31.1.** Internal: the signed Cairn messages and the public-address check now come from one shared definition with the Cairn and the Outpost; the address check now refuses the same special addresses the Cairn refuses.
+- Internal: the checks of update, Cairn data and Cairn notice signatures now use the same code as the Lodge and the Cairn, with its own tests; nothing changes in what you see.
+
 ## 3.1.0
 - **The Outpost now runs on .NET 10** (it ran on .NET Framework 4.8 until now). Loading the game data is about a quarter faster on the first start, and the Outpost now uses the same up-to-date foundation as the Lodge and Cairn servers, with current security fixes. It looks and works the same.
 - **One-time setup:** .NET 10 needs Microsoft's free ".NET Desktop Runtime 10" on your PC. If it is missing, Windows shows a message with a download link when the Outpost starts - install it once and start the Outpost again.

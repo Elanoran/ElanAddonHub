@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using Elans.Shared;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
@@ -26,21 +27,20 @@ namespace ElansAddonHub
             Dictionary<string, object> Last(string t) { lock (sent) return sent.LastOrDefault(f => f.Str("t") == t); }
             var savedX = CairnAtlas.PinnedKeyX; var savedY = CairnAtlas.PinnedKeyY;
             var savedGone = settings.CairnNoticesDismissed; var savedDismissed = settings.LodgeUpdateDismissed;
-            string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             string Welcome(string role, bool notices) =>
                 FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"profile\",\"displayname\",\"atlas\"" + (notices ? ",\"cairnnotices\"" : ""), Brand.LatestLodgeServer);
             try
             {
-                using (var key = ECDsa.Create(ECCurve.NamedCurves.nistP256))
-                using (var other = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+                using (var key = Es256.NewKey())
+                using (var other = Es256.NewKey())
                 {
                     var pub = key.ExportParameters(false);
-                    CairnAtlas.PinnedKeyX = B64Url(pub.Q.X); CairnAtlas.PinnedKeyY = B64Url(pub.Q.Y);
+                    CairnAtlas.PinnedKeyX = B64.Url(pub.Q.X); CairnAtlas.PinnedKeyY = B64.Url(pub.Q.Y);
                     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     string Notice(long id, string level, string text, long expires = 0, ECDsa signer = null, string signedText = null)
                     {
                         var n = new LodgeSession.CairnNotice { Id = id, Created = now - 60, Expires = expires != 0 ? expires : now + 86400, Level = level, To = "*", Text = signedText ?? text };
-                        var sig = Convert.ToBase64String((signer ?? key).SignData(System.Text.Encoding.UTF8.GetBytes(LodgeSession.NoticeMessage(n)), HashAlgorithmName.SHA256));
+                        var sig = Convert.ToBase64String(Es256.Sign(signer ?? key, CairnFormats.Notice(n.Id, n.Created, n.Expires, n.Level, n.To, n.Text)));   // what the Cairn signs
                         return "{\"id\":" + id + ",\"created\":" + n.Created + ",\"expires\":" + n.Expires + ",\"level\":" + Q(level) + ",\"to\":\"*\",\"text\":" + Q(text) + ",\"sig\":" + Q(sig) + ",\"kid\":\"test\"}";
                     }
                     string Frame(params string[] list) => "{\"t\":\"cairn.notices\",\"list\":[" + string.Join(",", list) + "]}";
