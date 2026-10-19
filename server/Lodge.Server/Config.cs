@@ -22,6 +22,8 @@ public class LodgeConfig
     public int HistoryMax { get; set; } = 2000;     // messages kept per channel (2.9; was a fixed 200)
     public int MaxTrackedIps { get; init; }        // wrong-code bookkeeping
     public int HttpPerMinute { get; init; }        // per IP, all HTTP routes
+    public int DownloadsPerHour { get; set; } = 600;        // file downloads (chat files and shared files together) per person, guests per address
+    public int DownloadMbPerHour { get; set; } = 2048;      // ... and the bytes they may take
     public bool AllowQueryCode { get; init; }      // legacy ?code= for 1.x clients (off by default since 2.8)
     public int MaxUploadsPerIdentity { get; set; } = 2;     // uploads running at once per person (guests: per IP)
     public int UploadTimeoutSeconds { get; set; } = 120;    // one upload may take this long at most
@@ -107,6 +109,8 @@ public class LodgeConfig
             HistoryMax = Int("LODGE_HISTORY_MAX", 2000, 50, 50000),
             MaxTrackedIps = Int("LODGE_MAX_TRACKED_IPS", 10000, 10, 1_000_000),
             HttpPerMinute = Int("LODGE_HTTP_PER_MINUTE", 240, 10, 100000),
+            DownloadsPerHour = Int("LODGE_DOWNLOADS_PER_HOUR", 600, 10, 100000),
+            DownloadMbPerHour = Int("LODGE_DOWNLOAD_MB_PER_HOUR", 2048, 50, 1024 * 1024),
             MaxUploadsPerIdentity = Int("LODGE_UPLOADS_PER_USER", 2, 1, 100),
             UploadTimeoutSeconds = Int("LODGE_UPLOAD_TIMEOUT_S", 120, 5, 3600),
             IdleTimeoutSeconds = Int("LODGE_IDLE_TIMEOUT_S", 75, 30, 3600),

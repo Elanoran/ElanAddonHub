@@ -277,3 +277,49 @@ public class FileStore
         });
     }
 }
+
+// What one identity may download per rolling hour: requests and bytes, chat files (/files) and shared files (/slots) together - keyed like
+// the upload limits (Identity.RateKey: the person, a guest by address / IPv6 /64). Guests may still download; they just can't pull the
+// same files over and over. The first download of a window is always allowed, however big (a file bigger than the byte budget can still
+// be fetched once an hour). Like DatasetsModule.CheckRate.
+public sealed class DownloadBudget
+{
+    sealed class Window { public readonly Queue<(DateTime At, long Bytes)> Q = new(); public long Bytes; }
+
+    readonly LodgeConfig cfg;
+    readonly IClock clock;
+    readonly ConcurrentDictionary<string, Window> windows = new();
+    int calls;
+    static readonly TimeSpan Hour = TimeSpan.FromHours(1);
+
+    public DownloadBudget(LodgeConfig cfg, IClock clock = null) { this.cfg = cfg; this.clock = clock ?? SystemClock.Instance; }
+
+    public int Tracked => windows.Count;
+
+    // true = go ahead (counted); false = over the budget, answer 429
+    public bool TryTake(string rateKey, long bytes)
+    {
+        var now = clock.UtcNow;
+        if ((Interlocked.Increment(ref calls) & 255) == 0) Sweep(now);
+        var w = windows.GetOrAdd(rateKey ?? "?", _ => new Window());
+        lock (w)
+        {
+            Drop(w, now);
+            if (w.Q.Count >= cfg.DownloadsPerHour) return false;
+            if (w.Q.Count > 0 && w.Bytes + bytes > cfg.DownloadMbPerHour * 1024L * 1024L) return false;
+            w.Q.Enqueue((now, bytes)); w.Bytes += bytes;
+            return true;
+        }
+    }
+
+    static void Drop(Window w, DateTime now)
+    {
+        while (w.Q.Count > 0 && now - w.Q.Peek().At > Hour) w.Bytes -= w.Q.Dequeue().Bytes;
+    }
+
+    // windows nobody used for an hour go (so a stream of addresses doesn't grow the table)
+    void Sweep(DateTime now)
+    {
+        foreach (var kv in windows) lock (kv.Value) { Drop(kv.Value, now); if (kv.Value.Q.Count == 0) windows.TryRemove(kv.Key, out _); }
+    }
+}

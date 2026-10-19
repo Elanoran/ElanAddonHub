@@ -20,7 +20,7 @@ older shorter codes keep working. Invite links look like `https://<site>/lodge#i
 | `GET /` | none | invite landing page |
 | `GET /health` | none, or a code | no code: `{"ok":true}` (no strike). With a code: 401 wrong / 429 blocked / `{ok, version, online}` |
 | `POST /files` raw body, header `X-File-Name` (URL-encoded) | `X-Lodge-Code`, member+ | `{"id","name","size","mime","at","by"}`; 403 guests, 413 too big, 507 storage full (`LODGE_MAX_STORAGE_MB` / `LODGE_MAX_FILES`), 429 too many at once or > `LODGE_UPLOADS_PER_10MIN` per person |
-| `GET /files/{id}` | `X-Lodge-Code` | the file (range requests supported) |
+| `GET /files/{id}` | `X-Lodge-Code` | the file (range requests supported); 429 `rate` over the download budget (`LODGE_DOWNLOADS_PER_HOUR`, `LODGE_DOWNLOAD_MB_PER_HOUR`: per person and hour, guests per address, chat and shared files together) |
 
 ## WebSocket `GET /ws?name=<display name>&client=<hub/2.0.0>[&vis=invisible]` + header `X-Lodge-Code`
 
@@ -408,7 +408,7 @@ A slot is `{id, name (1-60), createdBy, versions: [{v, fileName, size, sha256, u
 - `files.delete` `{slot}` and `files.rollback` `{slot, v}` (officer and up; rolling back removes the versions newer than `v`) -> `files.result` `{op, ok, slot, why?}`, `why`: `forbidden`, `missing`, `disabled`, `already-newest`, `save`.
 - Every change is announced to everyone: `files.changed` `{action: new|version|rollback|delete, slot, name, by, at, v?}`; clients refresh with `files.list`.
 - Upload (HTTP, same credential headers as `/files`, officer and up): `PUT /slots/new` (header `X-Slot-Name`) or `PUT /slots/{id}` (a new version) with headers `X-File-Name`, `X-Note` (URL-encoded), `X-Sha256` (hex of the whole body), a `Content-Length`, the raw body. Answer 200 with the slot JSON, or `{error, reason}` with 400 (`sha-mismatch`, `length`, `bad-sha`, `bad-name`, `empty`), 403 (`forbidden`, `disabled`), 404 (`missing`), 409 (`name-taken`), 411, 413 (`too-big`), 415 (`blocked-type`, `blocked-zip`), 429 (`rate`, `busy`), 507 (`full`, `too-many`).
-- Download: `GET /slots/{id}/{v}` (everybody, guests included) - the raw bytes as an attachment; the client checks size and SHA-256 against the list.
+- Download: `GET /slots/{id}/{v}` (everybody, guests included) - the raw bytes as an attachment; the client checks size and SHA-256 against the list. 429 `rate` over the download budget (the same one as `GET /files/{id}`).
 - Typed (stage 2): the socket messages are classes in `shared/Elans.Shared/Lodge/FileMessages.cs` (`FilesListMsg`, `FilesDeleteMsg`,
   `FilesRollbackMsg`, `FilesDataMsg`, `FilesChangedMsg`, `FilesResultMsg`; a slot is a `FileSlot`, a version a `FileVersion` - the upload's
   HTTP answer is the same `FileSlot`), used by both sides like the LFG ones. The bytes stay on HTTP; the rules (who may, the limits) stay in

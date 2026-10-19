@@ -208,13 +208,19 @@ app.MapPost("/files", async (HttpContext ctx) =>
     }
 });
 
+// downloads of chat files and shared files: a budget per person (guests per address) and hour - DownloadBudget, LODGE_DOWNLOADS_PER_HOUR,
+// LODGE_DOWNLOAD_MB_PER_HOUR
+var downloads = new DownloadBudget(cfg);
+IResult TooManyDownloads() => Results.Json(new { error = "Too many downloads - try again in a while", reason = "rate" }, statusCode: 429);
+
 // download: code in X-Lodge-Code (or legacy ?code=)
 app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
 {
-    var deny = GateReq(ctx, out _);
+    var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
     var meta = files.Get(id);
     if (meta == null) return Results.NotFound();
+    if (!downloads.TryTake(who.RateKey(IpOf(ctx)), meta.Size)) return TooManyDownloads();
     // the content is private (a code is needed) and never to be sniffed into something executable
     ctx.Response.Headers["Cache-Control"] = "private, no-store";
     ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
@@ -264,6 +270,7 @@ app.MapGet("/slots/{id}/{v:int}", (HttpContext ctx, string id, int v) =>
     try
     {
         var fs = lodge.SharedFiles.OpenVersion(id, v, out var ver);
+        if (!downloads.TryTake(who.RateKey(IpOf(ctx)), ver.Size)) { fs.Dispose(); return TooManyDownloads(); }
         ctx.Response.Headers["Cache-Control"] = "private, no-store";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
         ctx.Response.Headers["X-Sha256"] = ver.Sha256;
