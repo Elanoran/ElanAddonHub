@@ -555,9 +555,9 @@ namespace ElansAddonHub
                 check("DST: 20:00 in Berlin is 18:00Z before the clocks go back (25 Oct) and 19:00Z after - the wall clock stays", summer.Hour == 18 && winter.Hour == 19);
                 var gap = new CalendarForm { Title = "x", Day = new DateTime(2027, 3, 28), Hour = 2, Minute = 30 }.StartUtc.Value;
                 check("DST: 02:30 on the spring change day does not exist -> it moves forward to 03:30 (01:30Z)", gap == new DateTime(2027, 3, 28, 1, 30, 0, DateTimeKind.Utc));
-                var wire = new CalendarForm { Title = "x", Day = new DateTime(2026, 10, 31), Hour = 20 }.ToRequest("cal:create");
+                var wire = Wire(new CalendarForm { Title = "x", Day = new DateTime(2026, 10, 31), Hour = 20 }.ToRequest("cal:create"));
                 check("DST: the request carries the zone id and the offset at THAT date (60 in winter, 120 in summer)", (string)wire["tz"] == berlin.Id && (double)wire["off"] == 60
-                    && (double)new CalendarForm { Title = "x", Day = new DateTime(2026, 10, 17), Hour = 20 }.ToRequest("cal:create")["off"] == 120);
+                    && (double)Wire(new CalendarForm { Title = "x", Day = new DateTime(2026, 10, 17), Hour = 20 }.ToRequest("cal:create"))["off"] == 120);
             }
             await Task.Delay(50);
         }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -370,13 +371,13 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ incoming
 
-        void OnReceived(Dictionary<string, object> m)
+        void OnReceived(JsonObject m)
         {
-            switch (m.Str("t"))
+            switch (LodgeJson.Str(m, "t"))
             {
                 case LodgeMsg.Welcome: Welcome(m); break;
                 case JoinMsg.Type:
-                    var jv = JoinMsg.Read(new LodgeFieldsDict(m)).User;
+                    var jv = JoinMsg.Read(new LodgeJsonFields(m)).User;
                     if (jv == null) break;                              // no member entry: nothing to add
                     var j = ParseMember(jv);
                     if (Members.All(x => x.Id != j.Id)) Members.Add(j);
@@ -387,7 +388,7 @@ namespace ElansAddonHub.Lodge
                     Changed?.Invoke();
                     break;
                 case LeaveMsg.Type:
-                    int goneId = LeaveMsg.Read(new LodgeFieldsDict(m)).Id;
+                    int goneId = LeaveMsg.Read(new LodgeJsonFields(m)).Id;
                     var gone = Members.FirstOrDefault(x => x.Id == goneId);
                     if (gone != null)
                     {
@@ -402,7 +403,7 @@ namespace ElansAddonHub.Lodge
                     Changed?.Invoke();
                     break;
                 case UserMsg.Type:
-                    var uv = UserMsg.Read(new LodgeFieldsDict(m)).User;
+                    var uv = UserMsg.Read(new LodgeJsonFields(m)).User;
                     if (uv == null) break;
                     var u = ParseMember(uv);
                     var mem = Members.FirstOrDefault(x => x.Id == u.Id);
@@ -434,14 +435,14 @@ namespace ElansAddonHub.Lodge
                     SyncRooms();
                     break;
                 case ChatMessage.Type:
-                    var vm = AddMessage(ChatMessage.Read(new LodgeFieldsDict(m)));
+                    var vm = AddMessage(ChatMessage.Read(new LodgeJsonFields(m)));
                     TypingMap(vm.Channel).Remove(vm.FromId);
                     if (vm.Mine && Pending != null && Pending.Channel == vm.Channel) Pending = null;   // the server echoed it: it is out
                     OnNewMessage(vm);
                     break;
                 case LodgeMsg.Lfg:
                     // a sign-up card changed: the whole current state arrives (one place per person is the server's rule)
-                    var lu = LfgUpdateMsg.Read(new LodgeFieldsDict(m));
+                    var lu = LfgUpdateMsg.Read(new LodgeJsonFields(m));
                     var lm = MessagesOf(lu.Channel).FirstOrDefault(x => x.Id == lu.Id);
                     if (lm?.Lfg != null && lu.Card != null)
                     {
@@ -451,7 +452,7 @@ namespace ElansAddonHub.Lodge
                     }
                     break;
                 case ReactionMsg.Type:
-                    var rx = ReactionMsg.Read(new LodgeFieldsDict(m));
+                    var rx = ReactionMsg.Read(new LodgeJsonFields(m));
                     var rm = MessagesOf(rx.Channel).FirstOrDefault(x => x.Id == rx.Id);
                     if (rm != null)
                     {
@@ -462,7 +463,7 @@ namespace ElansAddonHub.Lodge
                     }
                     break;
                 case PinnedMsg.Type:
-                    var pin = PinnedMsg.Read(new LodgeFieldsDict(m));
+                    var pin = PinnedMsg.Read(new LodgeJsonFields(m));
                     var pc = pin.Channel;
                     var pv = ParsePin(pin.Pin);
                     if (pc == null || pv == null) break;
@@ -477,7 +478,7 @@ namespace ElansAddonHub.Lodge
                     if (pm != null) pm.Pinned = true;
                     break;
                 case UnpinnedMsg.Type:
-                    var unp = UnpinnedMsg.Read(new LodgeFieldsDict(m));
+                    var unp = UnpinnedMsg.Read(new LodgeJsonFields(m));
                     var uc = unp.Channel;
                     var ul = PinsOf(uc);
                     var uo = ul.FirstOrDefault(x => x.Id == unp.Id);
@@ -486,7 +487,7 @@ namespace ElansAddonHub.Lodge
                     if (um != null) um.Pinned = false;
                     break;
                 case EditedMsg.Type:
-                    var ed = EditedMsg.Read(new LodgeFieldsDict(m));
+                    var ed = EditedMsg.Read(new LodgeJsonFields(m));
                     var e = MessagesOf(ed.Channel).FirstOrDefault(x => x.Id == ed.Id);
                     if (e != null)
                     {
@@ -503,7 +504,7 @@ namespace ElansAddonHub.Lodge
                     }
                     break;
                 case DeletedMsg.Type:
-                    var del = DeletedMsg.Read(new LodgeFieldsDict(m));
+                    var del = DeletedMsg.Read(new LodgeJsonFields(m));
                     var list = MessagesOf(del.Channel);
                     var d = list.FirstOrDefault(x => x.Id == del.Id);
                     if (d != null) RemoveMessage(list, d, TextChannels.FirstOrDefault(c => c.Id == del.Channel));
@@ -511,12 +512,12 @@ namespace ElansAddonHub.Lodge
                 case LodgeMsg.HistoryPage: OnHistoryPage(m); break;
                 case LodgeMsg.SearchResult: OnSearchResult(m); break;
                 case MemberTypingMsg.Type:
-                    var tm = MemberTypingMsg.Read(new LodgeFieldsDict(m));
+                    var tm = MemberTypingMsg.Read(new LodgeJsonFields(m));
                     TypingMap(tm.Channel ?? TextChannels.FirstOrDefault()?.Id)[tm.Id] = DateTime.UtcNow.AddSeconds(4);
                     break;
                 case LodgeMsg.Profile:
                     // someone's avatar / accent changed (small broadcast)
-                    var pmsg = ProfileMsg.Read(new LodgeFieldsDict(m));
+                    var pmsg = ProfileMsg.Read(new LodgeJsonFields(m));
                     var pu = Members.FirstOrDefault(x => x.Id == pmsg.Id);
                     if (pu == null && pmsg.DisplayNameSent && DisplayNames.Remember(pmsg.Name, pmsg.DisplayName)) RefreshAuthorNames(); // the name directory stays fresh
                     if (pu != null)
@@ -529,7 +530,7 @@ namespace ElansAddonHub.Lodge
                     }
                     break;
                 case LodgeMsg.ProfileData:
-                    var pview = ProfileDataMsg.Read(new LodgeFieldsDict(m)).Profile;
+                    var pview = ProfileDataMsg.Read(new LodgeJsonFields(m)).Profile;
                     var pd = ProfileData.From(pview);
                     if (pd == null) break;
                     if (pd.Found && !string.IsNullOrEmpty(pd.Name) && pview.DisplayNameSent)
@@ -543,22 +544,22 @@ namespace ElansAddonHub.Lodge
                     break;
                 case LodgeErrorMsg.Type:
                     {
-                        var err = LodgeErrorMsg.Read(new LodgeFieldsDict(m));      // the one error frame (shared/Elans.Shared/Lodge/ErrorMessages.cs)
+                        var err = LodgeErrorMsg.Read(new LodgeJsonFields(m));      // the one error frame (shared/Elans.Shared/Lodge/ErrorMessages.cs)
                         OnServerError(err.Text, err.Code, err.Room);
                         break;
                     }
                 case LodgeMsg.AdminMembers:
                     {
-                        var am = AdminMembersMsg.Read(new LodgeFieldsDict(m));
+                        var am = AdminMembersMsg.Read(new LodgeJsonFields(m));
                         AdminMembers?.Invoke(am.Members, am.Channels);
                         break;
                     }
                 case LodgeMsg.AdminPurged:
-                    AdminPurged?.Invoke(AdminPurgedMsg.Read(new LodgeFieldsDict(m)));
+                    AdminPurged?.Invoke(AdminPurgedMsg.Read(new LodgeJsonFields(m)));
                     break;
                 case LodgeMsg.AdminInvited:
                     {
-                        var ai = AdminInvitedMsg.Read(new LodgeFieldsDict(m));
+                        var ai = AdminInvitedMsg.Read(new LodgeJsonFields(m));
                         AdminInvited?.Invoke(ai.Name, ai.Role, ai.Code);
                         break;
                     }
@@ -575,8 +576,8 @@ namespace ElansAddonHub.Lodge
                 case LodgeMsg.FlightsData: OnFlightData(m); break;
                 case LodgeMsg.FlightsRoutesShared: OnFlightRoutesShared(m); break;
                 case LodgeMsg.FlightsRoutesData: OnFlightRoutesData(m); break;
-                case LodgeMsg.AtlasShared: OnAtlasShared(AtlasSharedMsg.Read(new LodgeFieldsDict(m))); break;
-                case LodgeMsg.AtlasData: OnAtlasData(AtlasDataMsg.Read(new LodgeFieldsDict(m))); break;
+                case LodgeMsg.AtlasShared: OnAtlasShared(AtlasSharedMsg.Read(new LodgeJsonFields(m))); break;
+                case LodgeMsg.AtlasData: OnAtlasData(AtlasDataMsg.Read(new LodgeJsonFields(m))); break;
                 case LodgeMsg.CairnStatus: OnCairnStatus(m); break;
                 case LodgeMsg.CairnJoin: OnCairnJoin(m); break;
                 case LodgeMsg.CairnNotices: OnCairnNotices(m); break;
@@ -594,10 +595,10 @@ namespace ElansAddonHub.Lodge
             }
         }
 
-        void Welcome(Dictionary<string, object> m)
+        void Welcome(JsonObject m)
         {
             CommitPending();
-            var w = WelcomeMsg.Read(new LodgeFieldsDict(m));                   // shared/Elans.Shared/Lodge/WelcomeMessages.cs
+            var w = WelcomeMsg.Read(new LodgeJsonFields(m));                   // shared/Elans.Shared/Lodge/WelcomeMessages.cs
             int myId = w.You;
             ServerVersion = w.Server;
             MyRole = w.Role ?? "member";
@@ -825,17 +826,17 @@ namespace ElansAddonHub.Lodge
         // user.game (the raw presence object of a LodgeUser), read through Elans.Shared LodgeGame; null = not shared
         static void ApplyGame(MemberVM m, object raw)
         {
-            var g = raw is Dictionary<string, object> d ? LodgeGame.Read(new LodgeFieldsDict(d)) : null;
+            var g = raw is JsonObject d ? LodgeGame.Read(new LodgeJsonFields(d)) : null;
             m.SetGame(g != null && g.Playing, g?.Name, g?.Class, g?.ClassFile, g?.Level ?? 0, g?.Zone, g?.Guild, g?.Race, g?.RaceFile, g?.Sex ?? 0);
             m.SetPresence(g?.Flags ?? 0, g?.XpPct ?? -1, g?.Rested ?? false, g?.GroupSize ?? 0, g?.InInstance ?? false, g?.InstanceName);
         }
 
         // the "game" message: what I play and what I'm doing (older servers ignore the extra fields). Zone/instance and XP/rested are
         // left out when their sharing is off; the flags (combat, dead, AFK, group) always go.
-        public Dictionary<string, object> BuildGameMessage()
+        public JsonObject BuildGameMessage()
         {
             var vis = Invisible ? "invisible" : "visible";
-            if (Settings.ShareGameOff) return LodgeFieldsDict.Build(new GameMsg { Share = false, Visibility = vis }.Write);
+            if (Settings.ShareGameOff) return LodgeJson.Build(new GameMsg { Share = false, Visibility = vis }.Write);
             var c = Presence.Current;
             var g = new GameMsg { Playing = Presence.Playing, Visibility = vis };      // typed: Elans.Shared GameMsg (the Has* switches say which parts go)
             if (c != null)
@@ -853,7 +854,7 @@ namespace ElansAddonHub.Lodge
                     if (!Settings.ShareXpOff) { g.HasXp = true; g.XpPct = c.XpPercent >= 0 ? c.XpPercent : (int?)null; g.Rested = c.Rested; }
                 }
             }
-            return LodgeFieldsDict.Build(g.Write);
+            return LodgeJson.Build(g.Write);
         }
 
         // sent right away when something I chose changes, and by the 0.8 s timer for live changes; identical messages are skipped
@@ -861,7 +862,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!Online) return;
             var obj = BuildGameMessage();
-            var json = Json.Write(obj);
+            var json = LodgeJson.Serialize(obj);
             if (json == lastGameJson) return;
             lastGameJson = json;
             _ = Send(obj);
@@ -1226,9 +1227,9 @@ namespace ElansAddonHub.Lodge
             };
         }
 
-        public Task React(MessageVM msg, string emoji) => Send(LodgeFieldsDict.Build(new ReactMsg { Id = msg.Id, Emoji = emoji }.Write));
-        public Task PinMessage(string id) => Send(LodgeFieldsDict.Build(new PinMsg { Id = id }.Write));
-        public Task UnpinMessage(string id, string channel) => Send(LodgeFieldsDict.Build(new UnpinMsg { Id = id, Channel = channel }.Write));
+        public Task React(MessageVM msg, string emoji) => Send(LodgeJson.Build(new ReactMsg { Id = msg.Id, Emoji = emoji }.Write));
+        public Task PinMessage(string id) => Send(LodgeJson.Build(new PinMsg { Id = id }.Write));
+        public Task UnpinMessage(string id, string channel) => Send(LodgeJson.Build(new UnpinMsg { Id = id, Channel = channel }.Write));
 
         Dictionary<int, DateTime> TypingMap(string channel)
         {
@@ -1244,8 +1245,14 @@ namespace ElansAddonHub.Lodge
             return who.Count == 0 ? "" : who.Count == 1 ? $"{who[0]} is typing..." : $"{string.Join(", ", who)} are typing...";
         }
 
-        public Action<Dictionary<string, object>> SentForTest;   // the self-test sees what would go out
-        Task Send(Dictionary<string, object> obj) { SentForTest?.Invoke(obj); return client?.Send(obj) ?? Task.CompletedTask; }
+        // the self-test sees what would go out: the bytes as the Lodge would parse them, as plain dictionaries (LodgeJson.ToPlain)
+        public Action<Dictionary<string, object>> SentForTest;
+        Task Send(JsonObject obj)
+        {
+            var bytes = LodgeJson.SerializeUtf8(obj);                       // the shared Lodge JSON engine (Elans.Shared LodgeJson)
+            SentForTest?.Invoke(LodgeJson.ToPlain(LodgeJson.Parse(bytes)) as Dictionary<string, object>);
+            return client?.SendUtf8(bytes) ?? Task.CompletedTask;
+        }
 
         // The text I just sent, until the server echoes it. When the send fails (offline, closed socket, rate limit) the view puts it back.
         public sealed class PendingSend { public string Text, ReplyId, Channel; public DateTime At; }
@@ -1304,7 +1311,7 @@ namespace ElansAddonHub.Lodge
                 SettingsStore.Save(Settings);
                 Error?.Invoke("Others can see messages you send, even while you appear offline");
             }
-            return Send(LodgeFieldsDict.Build(new ChatSendMsg { Channel = Selected?.Id, Text = text ?? "", ReplyTo = replyTo, FileId = fileId }.Write));
+            return Send(LodgeJson.Build(new ChatSendMsg { Channel = Selected?.Id, Text = text ?? "", ReplyTo = replyTo, FileId = fileId }.Write));
         }
 
         // ---- sign-up cards ("Looking for group")
@@ -1314,13 +1321,13 @@ namespace ElansAddonHub.Lodge
         {
             var lfg = new LfgRequest { Title = title ?? "", Now = now, Note = note ?? "", Tank = tank, Healer = healer, Dps = dps };
             if (!now) lfg.Start = Ms(startLocal.ToUniversalTime());
-            return Send(LodgeFieldsDict.Build(new ChatSendMsg { Channel = Selected?.Id, Kind = "lfg", Text = title ?? "", Lfg = lfg }.Write));
+            return Send(LodgeJson.Build(new ChatSendMsg { Channel = Selected?.Id, Kind = "lfg", Text = title ?? "", Lfg = lfg }.Write));
         }
-        public Task LfgJoin(MessageVM m, string role) => Send(LodgeFieldsDict.Build(new LfgJoinMsg { Id = m.Id, Role = role }.Write));
-        public Task LfgMaybe(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgMaybeMsg { Id = m.Id }.Write));
-        public Task LfgLeave(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgLeaveMsg { Id = m.Id }.Write));
-        public Task LfgClose(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgCloseMsg { Id = m.Id }.Write));
-        public Task LfgCancel(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgCancelMsg { Id = m.Id }.Write));
+        public Task LfgJoin(MessageVM m, string role) => Send(LodgeJson.Build(new LfgJoinMsg { Id = m.Id, Role = role }.Write));
+        public Task LfgMaybe(MessageVM m) => Send(LodgeJson.Build(new LfgMaybeMsg { Id = m.Id }.Write));
+        public Task LfgLeave(MessageVM m) => Send(LodgeJson.Build(new LfgLeaveMsg { Id = m.Id }.Write));
+        public Task LfgClose(MessageVM m) => Send(LodgeJson.Build(new LfgCloseMsg { Id = m.Id }.Write));
+        public Task LfgCancel(MessageVM m) => Send(LodgeJson.Build(new LfgCancelMsg { Id = m.Id }.Write));
 
         readonly HashSet<string> lfgReminded = new HashSet<string>();
         public static readonly TimeSpan LfgRemindBefore = TimeSpan.FromMinutes(10);
@@ -1351,15 +1358,15 @@ namespace ElansAddonHub.Lodge
                 }
         }
 
-        public Task Edit(string id, string text) => Send(LodgeFieldsDict.Build(new EditMsg { Id = id, Text = text }.Write));
-        public Task Delete(string id) => Send(LodgeFieldsDict.Build(new DeleteMsg { Id = id }.Write));
+        public Task Edit(string id, string text) => Send(LodgeJson.Build(new EditMsg { Id = id, Text = text }.Write));
+        public Task Delete(string id) => Send(LodgeJson.Build(new DeleteMsg { Id = id }.Write));
 
         DateTime lastTyping;
         public void Typing()
         {
             if (!Online || (DateTime.UtcNow - lastTyping).TotalSeconds < 3) return;
             lastTyping = DateTime.UtcNow;
-            _ = Send(LodgeFieldsDict.Build(new TypingMsg { Channel = Selected?.Id }.Write));
+            _ = Send(LodgeJson.Build(new TypingMsg { Channel = Selected?.Id }.Write));
         }
 
         // ================================================================ files
@@ -1377,7 +1384,7 @@ namespace ElansAddonHub.Lodge
         async Task ShareNow(string path, string text, string replyTo, Action<double> progress)
         {
             var meta = await client.Upload(path, progress);
-            await SendMessage(text, replyTo, meta.Str("id"));
+            await SendMessage(text, replyTo, LodgeJson.Str(meta, "id"));
         }
 
         static string CacheDir => Directory.CreateDirectory(Path.Combine(Util.DataDir, "cache")).FullName;
@@ -1460,14 +1467,14 @@ namespace ElansAddonHub.Lodge
             }
             pendingMuted = pendingDeaf = false;
             MyRoom = room;
-            _ = Send(LodgeFieldsDict.Build(new VoiceStateMsg { Muted = voice.Muted, Deaf = voice.Deafened }.Write));
+            _ = Send(LodgeJson.Build(new VoiceStateMsg { Muted = voice.Muted, Deaf = voice.Deafened }.Write));
             if (!pendingQuiet) Sounds.Join();
             SyncRooms();
             Changed?.Invoke();
         }
 
         void SendVoice(string room) =>
-            _ = Send(LodgeFieldsDict.Build(new VoiceMsg { Room = room, On = true }.Write)); // "on" for 1.x servers
+            _ = Send(LodgeJson.Build(new VoiceMsg { Room = room, On = true }.Write)); // "on" for 1.x servers
 
         public void LeaveVoice(bool tellServer = true)
         {
@@ -1476,7 +1483,7 @@ namespace ElansAddonHub.Lodge
             MyRoom = null;
             voice?.Dispose();
             voice = null;
-            if (tellServer && client != null) _ = Send(LodgeFieldsDict.Build(new VoiceMsg { Room = null, On = false }.Write));
+            if (tellServer && client != null) _ = Send(LodgeJson.Build(new VoiceMsg { Room = null, On = false }.Write));
             if (tellServer) Sounds.Leave();
             foreach (var x in Members) x.Speaking = false;
             SyncRooms();
@@ -1489,7 +1496,7 @@ namespace ElansAddonHub.Lodge
             voice.Muted = muted || deaf; // deafened people can't talk either
             voice.Deafened = deaf;
             voice.Volume = deaf ? 0 : (float)(Settings.VoiceVolume ?? 1);
-            _ = Send(LodgeFieldsDict.Build(new VoiceStateMsg { Muted = voice.Muted, Deaf = deaf }.Write));
+            _ = Send(LodgeJson.Build(new VoiceStateMsg { Muted = voice.Muted, Deaf = deaf }.Write));
             Changed?.Invoke();
         }
 
@@ -1590,7 +1597,7 @@ namespace ElansAddonHub.Lodge
         {
             EvaluateAuto();
             Auto.MarkSent(Clock(), Auto.Status, Auto.Note);
-            _ = Send(LodgeFieldsDict.Build(new StatusMsg { Status = Auto.Status, Note = Auto.Note, Visibility = Invisible ? "invisible" : "visible" }.Write));
+            _ = Send(LodgeJson.Build(new StatusMsg { Status = Auto.Status, Note = Auto.Note, Visibility = Invisible ? "invisible" : "visible" }.Write));
         }
 
         // every 100 ms: send an automatic status change when it really changed (debounced to 2 s)
@@ -1600,7 +1607,7 @@ namespace ElansAddonHub.Lodge
             EvaluateAuto();
             if (Auto.TrySend(Clock(), out var st, out var note))
             {
-                _ = Send(LodgeFieldsDict.Build(new StatusMsg { Status = st, Note = note, Visibility = Invisible ? "invisible" : "visible" }.Write));
+                _ = Send(LodgeJson.Build(new StatusMsg { Status = st, Note = note, Visibility = Invisible ? "invisible" : "visible" }.Write));
                 Changed?.Invoke();
             }
         }
@@ -1628,30 +1635,30 @@ namespace ElansAddonHub.Lodge
 
         public void RequestProfile(string name)
         {
-            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(LodgeFieldsDict.Build(new ProfileGetMsg { Name = name }.Write));
+            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(LodgeJson.Build(new ProfileGetMsg { Name = name }.Write));
         }
 
         // own profile: only the fields given are changed (the server validates everything and answers with profile:data)
-        public Task SaveProfile(ProfileSetMsg fields) => Send(LodgeFieldsDict.Build(fields.Write));
+        public Task SaveProfile(ProfileSetMsg fields) => Send(LodgeJson.Build(fields.Write));
 
         // owner only: back to the default avatar and accent
         public void ResetProfile(string name, bool clearText = false) =>
-            _ = Send(LodgeFieldsDict.Build(new ProfileResetMsg { Name = name, ClearText = clearText }.Write));
+            _ = Send(LodgeJson.Build(new ProfileResetMsg { Name = name, ClearText = clearText }.Write));
 
         // ================================================================ officers and the guild master
 
         // (typed: shared/Elans.Shared/Lodge/AdminMessages.cs)
-        public void RequestAdmin() => _ = Send(LodgeFieldsDict.Build(new AdminMembersGetMsg().Write));
-        public void Invite(string name, string role) => _ = Send(LodgeFieldsDict.Build(new AdminInviteMsg { Name = name, Role = role }.Write));
-        public void SetRole(string name, string role) => _ = Send(LodgeFieldsDict.Build(new AdminRoleMsg { Name = name, Role = role }.Write));
-        public void RemoveMember(string name) => _ = Send(LodgeFieldsDict.Build(new AdminRemoveMsg { Name = name }.Write));
+        public void RequestAdmin() => _ = Send(LodgeJson.Build(new AdminMembersGetMsg().Write));
+        public void Invite(string name, string role) => _ = Send(LodgeJson.Build(new AdminInviteMsg { Name = name, Role = role }.Write));
+        public void SetRole(string name, string role) => _ = Send(LodgeJson.Build(new AdminRoleMsg { Name = name, Role = role }.Write));
+        public void RemoveMember(string name) => _ = Send(LodgeJson.Build(new AdminRemoveMsg { Name = name }.Write));
         // owner (server 2.22): take everything this member shared with the Atlas back out; they stay a member
-        public void RevertAtlas(string name) => _ = Send(LodgeFieldsDict.Build(new AdminPurgeMsg { Name = name, AtlasOnly = true }.Write));
+        public void RevertAtlas(string name) => _ = Send(LodgeJson.Build(new AdminPurgeMsg { Name = name, AtlasOnly = true }.Write));
         public void AddChannel(string name, string type, string minRole, int max) =>
-            _ = Send(LodgeFieldsDict.Build(new AdminChannelAddMsg { Name = name, ChannelType = type, MinRole = minRole, Max = max }.Write));
-        public void RemoveChannel(string id) => _ = Send(LodgeFieldsDict.Build(new AdminChannelRemoveMsg { Id = id }.Write));
-        public void Kick(MemberVM m) => _ = Send(LodgeFieldsDict.Build(new ModKickMsg { Id = m.Id }.Write));
-        public void ServerMute(MemberVM m, bool on) => _ = Send(LodgeFieldsDict.Build(new ModMuteMsg { Id = m.Id, On = on }.Write));
+            _ = Send(LodgeJson.Build(new AdminChannelAddMsg { Name = name, ChannelType = type, MinRole = minRole, Max = max }.Write));
+        public void RemoveChannel(string id) => _ = Send(LodgeJson.Build(new AdminChannelRemoveMsg { Id = id }.Write));
+        public void Kick(MemberVM m) => _ = Send(LodgeJson.Build(new ModKickMsg { Id = m.Id }.Write));
+        public void ServerMute(MemberVM m, bool on) => _ = Send(LodgeJson.Build(new ModMuteMsg { Id = m.Id, On = on }.Write));
 
         public bool CanModerateMember(MemberVM m) => CanModerate && m != null && !m.IsMe && MemberVM.RoleLevel(m.Role) < MemberVM.RoleLevel(MyRole);
 
@@ -1660,7 +1667,8 @@ namespace ElansAddonHub.Lodge
         // offline rendering test: feed protocol frames without a server
         public bool TestFed { get; private set; }
         public bool TestFedForView => TestFed;
-        public void FeedForTest(string json) { TestFed = true; OnReceived(Json.Obj(json)); }
+        // the text goes through the same parse as a received frame (LodgeJson.Parse); one that would be skipped is skipped here too
+        public void FeedForTest(string json) { TestFed = true; var m = LodgeJson.Parse(System.Text.Encoding.UTF8.GetBytes(json ?? "")); if (m != null) OnReceived(m); }
         public void SetReadMarkForTest(string channel, string id, long at)
         {
             LoadMarks();

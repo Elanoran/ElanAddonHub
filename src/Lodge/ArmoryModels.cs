@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -26,7 +27,7 @@ namespace ElansAddonHub.Lodge
         public bool Has(string profession) => Professions.Any(p => string.Equals(p.Name, profession, StringComparison.OrdinalIgnoreCase));
 
         // every field is checked again here, whatever the server sent
-        public static ArmoryEntry From(Dictionary<string, object> d) => d == null ? null : FromSummary(ArmorySummary.Read(new LodgeFieldsDict(d)));
+        public static ArmoryEntry From(JsonObject d) => d == null ? null : FromSummary(ArmorySummary.Read(new LodgeJsonFields(d)));
 
         // an armory.chars line (typed: ArmorySummary)
         public static ArmoryEntry FromSummary(ArmorySummary d)

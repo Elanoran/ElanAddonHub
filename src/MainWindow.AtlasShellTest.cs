@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -196,7 +197,7 @@ namespace ElansAddonHub
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; UpdateLayout();
                 {
                     var origLodge = AtlasQuery.Context.Lodge; var live = AtlasTestLodge();
-                    live.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 5) + ",\"finds\":[{\"i\":104,\"c\":1,\"at\":" + (AtNow - 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3,\"by\":\"Tess\",\"s\":9}]}"));
+                    live.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 5) + ",\"finds\":[{\"i\":104,\"c\":1,\"at\":" + (AtNow - 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3,\"by\":\"Tess\",\"s\":9}]}"));
                     AtlasQuery.Context.Lodge = () => live;
                     try
                     {

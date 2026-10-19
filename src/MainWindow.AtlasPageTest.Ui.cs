@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -79,7 +80,7 @@ namespace ElansAddonHub
                 {
                     AtlasView.DataChanged(); UpdateLayout();
                     var poolBefore = AtlasTexts(AtlasView);
-                    live.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 5) + ",\"finds\":[{\"i\":104,\"c\":1,\"at\":" + (AtNow - 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3,\"by\":\"Tess\",\"s\":9}]}"));
+                    live.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 5) + ",\"finds\":[{\"i\":104,\"c\":1,\"at\":" + (AtNow - 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3,\"by\":\"Tess\",\"s\":9}]}"));
                     AtlasView.PoolChanged(); UpdateLayout();
                     var poolAfter = AtlasTexts(AtlasView);
                     Check("data sources page: a pool update while the page is open redraws it (5 finds by 2 members)", !poolBefore.Any(t => t.Contains("5 finds by 2 members")) && poolAfter.Any(t => t.Contains("5 finds by 2 members")), string.Join(" | ", poolAfter.Where(t => t.Contains("finds"))));
@@ -494,7 +495,7 @@ namespace ElansAddonHub
             var modelBefore = AtlasView.Model;
             ShowTab("inventory"); ShowTab("atlas"); await AtlasView.WaitForTest(); UpdateLayout();
             Check("tab: coming back to the Atlas leaves the page as it was (the same page, not drawn again)", ReferenceEquals(AtlasView.Model, modelBefore));
-            AtlasQuery.Context.Lodge().Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 60) + "}"));
+            AtlasQuery.Context.Lodge().Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 60) + "}"));
             ShowTab("inventory"); ShowTab("atlas"); await AtlasView.WaitForTest(); UpdateLayout();
             Check("tab: when the Lodge pool changed meanwhile the page is drawn again", !ReferenceEquals(AtlasView.Model, modelBefore) && AtlasView.Model.Id == "item:100");
 

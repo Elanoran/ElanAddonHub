@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Globalization;
 using ElansAddonHub.Services;
@@ -17,7 +18,7 @@ namespace ElansAddonHub.Lodge
         public int Place, Of; public int? BetaOpenSlots;
         public long? ProbationUntil, ReceiveUntil, LastPost, Admitted;
 
-        public static CairnJoinStatus Parse(Dictionary<string, object> m) => From(CairnJoinMsg.Read(new LodgeFieldsDict(m)));
+        public static CairnJoinStatus Parse(JsonObject m) => From(CairnJoinMsg.Read(new LodgeJsonFields(m)));
 
         public static CairnJoinStatus From(CairnJoinMsg m) => new CairnJoinStatus
         {
@@ -108,26 +109,26 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnJoin = features.Contains("cairnjoin");
             CairnJoin = null;
-            if (CanSeeCairnJoin) _ = Send(LodgeFieldsDict.Build(new CairnJoinGetMsg().Write));
+            if (CanSeeCairnJoin) _ = Send(LodgeJson.Build(new CairnJoinGetMsg().Write));
             CairnJoinChanged?.Invoke();
         }
 
         void ResetCairnJoin() { SupportsCairnJoin = false; CairnJoin = null; }
 
-        void OnCairnJoin(Dictionary<string, object> m)
+        void OnCairnJoin(JsonObject m)
         {
             if (!SupportsCairnJoin) return;
             CairnJoin = CairnJoinStatus.Parse(m);
             CairnJoinChanged?.Invoke();
         }
 
-        public void RequestCairnJoin() { if (CanSeeCairnJoin) _ = Send(LodgeFieldsDict.Build(new CairnJoinGetMsg().Write)); }
+        public void RequestCairnJoin() { if (CanSeeCairnJoin) _ = Send(LodgeJson.Build(new CairnJoinGetMsg().Write)); }
 
         // the Guild Master's switch; publicUrl / code only when given (the Lodge keeps what it has otherwise). The code goes to the Lodge once.
         public void SetCairnJoin(bool on, string publicUrl = null, string code = null)
         {
             if (!CanSwitchCairn) return;
-            _ = Send(LodgeFieldsDict.Build(new AdminCairnMsg
+            _ = Send(LodgeJson.Build(new AdminCairnMsg
             {
                 On = on, PublicUrl = string.IsNullOrWhiteSpace(publicUrl) ? null : publicUrl.Trim(), Code = string.IsNullOrWhiteSpace(code) ? null : code.Trim(),
             }.Write));

@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -563,7 +564,7 @@ namespace ElansAddonHub
                 Check("revealed source: armor and damage are worked out for the Atlas page and kept beside (axe, epic: 5 dps x 2.6 s = 13 -> 10 - 16 from the one-hand table; chest: 72 armor); unknown stat amounts = no stats; the name is clean",
                     ax.DmgMin == 10 && ax.DmgMax == 16 && rev[1].Stats.Length == 0 && rev[1].Armor == 72 && !rev[2].Name.Contains("\"") && !rev[2].Name.Contains("["), ax.DmgMin + "-" + ax.DmgMax + " " + rev[1].Armor);
                 var batch = AtlasObs.MakeBatch(null, rev, new Dictionary<string, string>());
-                var bitems = batch?.Frame.Child("items");
+                var bitems = Wire(batch?.Frame).Child("items");
                 Check("revealed source: goes out through the existing Atlas sync as 'items' (3 entries, name / stats), no armor or damage on the wire", batch != null && bitems.Count == 3 && bitems.Child("2001").Str("n") == "Hidden Axe" && bitems.Child("2001").ContainsKey("st") && !bitems.Child("2001").ContainsKey("armor") && !bitems.Child("2001").ContainsKey("dmg"));
                 ItemData.SetForTest(new ItemSnapshot(new[] { revItems[3] }, new[] { revItems[0], revItems[1] }), ItemData.State.Ready);
                 var viaData = new RevealedItemsSource().Items().ToList();

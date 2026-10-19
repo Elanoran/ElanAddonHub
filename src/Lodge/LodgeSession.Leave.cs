@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using ElansAddonHub.Services;
 using Elans.Shared;
 
@@ -34,11 +35,11 @@ namespace ElansAddonHub.Lodge
         }
 
         // frames of this part; true = handled
-        bool OnLeaveFrame(Dictionary<string, object> m)
+        bool OnLeaveFrame(JsonObject m)
         {
-            switch (m.Str("t"))
+            switch (LodgeJson.Str(m, "t"))
             {
-                case LodgeMsg.LodgeInfo: ApplyLodgeInfo(LodgeInfoMsg.Read(new LodgeFieldsDict(m)).Lodge); Changed?.Invoke(); return true;
+                case LodgeMsg.LodgeInfo: ApplyLodgeInfo(LodgeInfoMsg.Read(new LodgeJsonFields(m)).Lodge); Changed?.Invoke(); return true;
                 case MemberLeftMsg.Type: Left?.Invoke(); return true;     // { t } only
             }
             return false;
@@ -46,14 +47,14 @@ namespace ElansAddonHub.Lodge
 
         // "Leave the lodge": the server drops my codes entry, all my devices and my pending device links; my messages stay.
         // Answers: member.left (done) or an error with code "last-owner".
-        public void RequestLeave() => _ = Send(LodgeFieldsDict.Build(new MemberLeaveMsg().Write));
+        public void RequestLeave() => _ = Send(LodgeJson.Build(new MemberLeaveMsg().Write));
 
         // Transfer = make someone else a Guild Master (owner only); afterwards I may leave or stay.
         public void TransferOwnership(string name) => SetRole(name, "owner");
 
         // owner: name (max 40) and a short welcome text (max 280 characters, 4 lines); empty clears
         public void SetLodgeInfo(string name, string welcome) =>
-            _ = Send(LodgeFieldsDict.Build(new AdminLodgeSetMsg { Name = name ?? "", Welcome = welcome ?? "" }.Write));
+            _ = Send(LodgeJson.Build(new AdminLodgeSetMsg { Name = name ?? "", Welcome = welcome ?? "" }.Write));
 
         // the same limits as the server, so a form can say so before asking
         public const int MaxLodgeName = 40, MaxLodgeWelcome = 280, MaxLodgeWelcomeLines = 4;

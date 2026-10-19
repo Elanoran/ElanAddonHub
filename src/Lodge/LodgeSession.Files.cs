@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
 using Elans.Shared;
@@ -52,17 +53,17 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles) return;
             filesLastRequest = Clock();
-            _ = Send(LodgeFieldsDict.Build(new FilesListMsg().Write));
+            _ = Send(LodgeJson.Build(new FilesListMsg().Write));
         }
 
-        void OnFilesFrame(Dictionary<string, object> m)
+        void OnFilesFrame(JsonObject m)
         {
             if (!SupportsFiles) return;
-            switch (m.Str("t"))
+            switch (LodgeJson.Str(m, "t"))
             {
-                case LodgeMsg.FilesData: ApplyFilesData(FilesDataMsg.Read(new LodgeFieldsDict(m))); break;
-                case LodgeMsg.FilesChanged: OnFilesChanged(FilesChangedMsg.Read(new LodgeFieldsDict(m))); break;
-                case LodgeMsg.FilesResult: OnFilesResult(FilesResultMsg.Read(new LodgeFieldsDict(m))); break;
+                case LodgeMsg.FilesData: ApplyFilesData(FilesDataMsg.Read(new LodgeJsonFields(m))); break;
+                case LodgeMsg.FilesChanged: OnFilesChanged(FilesChangedMsg.Read(new LodgeJsonFields(m))); break;
+                case LodgeMsg.FilesResult: OnFilesResult(FilesResultMsg.Read(new LodgeJsonFields(m))); break;
             }
         }
 
@@ -205,7 +206,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(LodgeFieldsDict.Build(new FilesDeleteMsg { Slot = slot.Id }.Write));
+            _ = Send(LodgeJson.Build(new FilesDeleteMsg { Slot = slot.Id }.Write));
             return null;
         }
 
@@ -213,7 +214,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(LodgeFieldsDict.Build(new FilesRollbackMsg { Slot = slot.Id, V = version }.Write));
+            _ = Send(LodgeJson.Build(new FilesRollbackMsg { Slot = slot.Id, V = version }.Write));
             return null;
         }
 

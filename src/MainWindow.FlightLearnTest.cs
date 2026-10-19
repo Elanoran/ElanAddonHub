@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -316,14 +317,14 @@ namespace ElansAddonHub
             // the Lodge's, when I have none of my own
             s.Clear();
             var bentL = FlFixtureBent(260, 53);
-            s.SetLodge(LearnedFlights.ParseServer(Json.Obj("{\"t\":\"flights.routes.data\",\"at\":1,\"routes\":{\"23>80\":{\"m\":0,\"p\":" + Json.Write(LearnedFlights.WritePts(bentL.Select(p => new FlightGeo.P(p[0], p[1])).Where((p, i) => i % 4 == 0 || i == bentL.Count - 1))) + ",\"t\":97,\"n\":3,\"k\":2}}}")));
+            s.SetLodge(LearnedFlights.ParseServer(LodgeJson.Parse("{\"t\":\"flights.routes.data\",\"at\":1,\"routes\":{\"23>80\":{\"m\":0,\"p\":" + Json.Write(LearnedFlights.WritePts(bentL.Select(p => new FlightGeo.P(p[0], p[1])).Where((p, i) => i % 4 == 0 || i == bentL.Count - 1))) + ",\"t\":97,\"n\":3,\"k\":2}}}")));
             var lod = Items().FirstOrDefault(i => (i.Str("name") ?? "").Contains("Orgrimmar"));
             Check("layer: a route the Lodge learned is drawn the same way, labelled \"learned by your Lodge\" with how many members (\"" + lod?.Str("extra") + "\")",
                 lod != null && lod.Str("learned") == "lodge" && lod.Str("tip").StartsWith(WorldMapLayers.LearnedLodgeTip) && lod.Str("extra").Contains("3 flights by 2 members"), Json.Write(lod));
             // my own newest flight on the game's line beats the Lodge's
             var gameLine = new List<double[]> { new[] { 300.0, 400 }, new[] { -50.0, 800 }, new[] { -400.0, 1200 } };
             var g = new LearnedFlights(null) { GameRoutes = m => new[] { TaxiRoute.Make(501, 23, 80, 0, gameLine.Select(p => new[] { p[0], p[1], 50.0 }).ToList()) }, Node = (m, id) => MapData.Index.Set.TaxiNodes.FirstOrDefault(n => n.Id == id) };
-            g.SetLodge(LearnedFlights.ParseServer(Json.Obj("{\"routes\":{\"23>80\":{\"m\":0,\"p\":" + Json.Write(LearnedFlights.WritePts(bentL.Select(p => new FlightGeo.P(p[0], p[1])).Where((p, i) => i % 4 == 0 || i == bentL.Count - 1))) + ",\"t\":97,\"n\":3,\"k\":2}}}")));
+            g.SetLodge(LearnedFlights.ParseServer(LodgeJson.Parse("{\"routes\":{\"23>80\":{\"m\":0,\"p\":" + Json.Write(LearnedFlights.WritePts(bentL.Select(p => new FlightGeo.P(p[0], p[1])).Where((p, i) => i % 4 == 0 || i == bentL.Count - 1))) + ",\"t\":97,\"n\":3,\"k\":2}}}")));
             bool lodgeFirst = g.Get(0, 23, 80)?.FromLodge == true;
             g.Add(new[] { FlOn(0, 23, 80, FlPath(32, 3, 54, 300, 400, -50, 800, -400, 1200), 95) });
             Check("layer: the Lodge's route is used until my own newest flight of that leg flies the game's line - then the game's line is drawn", lodgeFirst && g.Get(0, 23, 80) == null);

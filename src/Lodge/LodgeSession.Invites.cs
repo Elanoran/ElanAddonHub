@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
 using Elans.Shared;
@@ -47,21 +48,21 @@ namespace ElansAddonHub.Lodge
 
         static long NowMs() => new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
 
-        void OnInviteFrame(Dictionary<string, object> m)
+        void OnInviteFrame(JsonObject m)
         {
             long Now(long sent) => sent > 0 ? sent : NowMs();                  // the server's clock when it sent one
-            switch (m.Str("t"))
+            switch (LodgeJson.Str(m, "t"))
             {
                 case LodgeMsg.AdminInvites:
                     Invites.Clear();
-                    var invites = AdminInvitesMsg.Read(new LodgeFieldsDict(m));
+                    var invites = AdminInvitesMsg.Read(new LodgeJsonFields(m));
                     foreach (var d in invites.Invites.Select(x => InviteVM.From(x, Now(invites.Now)))
                         .OrderByDescending(i => i.Pending).ThenByDescending(i => i.Created)) Invites.Add(d);
                     InvitesChanged?.Invoke();
                     break;
                 case LodgeMsg.AdminInviteCreated:
                     {
-                        var made = AdminInviteCreatedMsg.Read(new LodgeFieldsDict(m));
+                        var made = AdminInviteCreatedMsg.Read(new LodgeJsonFields(m));
                         var inv = InviteVM.From(made.Invite, NowMs());
                         LastInviteLink = InviteLinks.Make(LodgeAddress, made.Secret);
                         InviteCreated?.Invoke(inv, LastInviteLink);
@@ -70,11 +71,11 @@ namespace ElansAddonHub.Lodge
                 case LodgeMsg.Devices:
                 case LodgeMsg.AdminDevices:
                     {
-                        bool mine = m.Str("t") == LodgeMsg.Devices;
+                        bool mine = LodgeJson.Str(m, "t") == LodgeMsg.Devices;
                         var target = mine ? MyDevices : AllDevices;
                         List<DeviceView> rows; long sent;
-                        if (mine) { var x = DevicesMsg.Read(new LodgeFieldsDict(m)); rows = x.Devices; sent = x.Now; }
-                        else { var x = AdminDevicesMsg.Read(new LodgeFieldsDict(m)); rows = x.Devices; sent = x.Now; }
+                        if (mine) { var x = DevicesMsg.Read(new LodgeJsonFields(m)); rows = x.Devices; sent = x.Now; }
+                        else { var x = AdminDevicesMsg.Read(new LodgeJsonFields(m)); rows = x.Devices; sent = x.Now; }
                         target.Clear();
                         foreach (var d in rows.Select(x => DeviceVM.From(x, Now(sent)))) target.Add(d);
                         DevicesChanged?.Invoke();
@@ -84,17 +85,17 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- requests (the server decides who may: officers and the owner for the invite calls)
-        public void RequestInvites() { if (SupportsTokens) _ = Send(LodgeFieldsDict.Build(new AdminInvitesGetMsg().Write)); }
-        public void RequestMyDevices() { if (SupportsTokens) _ = Send(LodgeFieldsDict.Build(new DeviceListMsg().Write)); }
-        public void RequestAllDevices() { if (SupportsTokens && CanInvite) _ = Send(LodgeFieldsDict.Build(new AdminDevicesGetMsg().Write)); }
+        public void RequestInvites() { if (SupportsTokens) _ = Send(LodgeJson.Build(new AdminInvitesGetMsg().Write)); }
+        public void RequestMyDevices() { if (SupportsTokens) _ = Send(LodgeJson.Build(new DeviceListMsg().Write)); }
+        public void RequestAllDevices() { if (SupportsTokens && CanInvite) _ = Send(LodgeJson.Build(new AdminDevicesGetMsg().Write)); }
 
         // kind: "person" (name + role) or "guest" (uses = how many people may use the link); hours 1..720 (0 = the server's default, 7 days)
         public void CreateInvite(string kind, string name, string role, int hours, int uses = 1) =>
-            _ = Send(LodgeFieldsDict.Build(new AdminInviteCreateMsg { Kind = kind, Name = name ?? "", Role = role ?? "member", Hours = hours, Uses = uses }.Write));
+            _ = Send(LodgeJson.Build(new AdminInviteCreateMsg { Kind = kind, Name = name ?? "", Role = role ?? "member", Hours = hours, Uses = uses }.Write));
 
-        public void RevokeInvite(string id) => _ = Send(LodgeFieldsDict.Build(new AdminInviteRevokeMsg { Id = id }.Write));
-        public void RevokeDevice(string id) => _ = Send(LodgeFieldsDict.Build(new DeviceRevokeMsg { Id = id }.Write));
-        public void RetireCode(string name) => _ = Send(LodgeFieldsDict.Build(new AdminRetireMsg { Name = name }.Write));
+        public void RevokeInvite(string id) => _ = Send(LodgeJson.Build(new AdminInviteRevokeMsg { Id = id }.Write));
+        public void RevokeDevice(string id) => _ = Send(LodgeJson.Build(new DeviceRevokeMsg { Id = id }.Write));
+        public void RetireCode(string name) => _ = Send(LodgeJson.Build(new AdminRetireMsg { Name = name }.Write));
 
         // ---- "Upgrade this device": a quiet offer, once, for someone still on a permanent code on a server that can do tokens
         public bool UpgradeOffered =>

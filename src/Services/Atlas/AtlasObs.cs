@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -731,7 +732,7 @@ namespace ElansAddonHub.Services
 
         public class Batch
         {
-            public Dictionary<string, object> Frame;                                         // the atlas.share message
+            public JsonObject Frame;                                                         // the atlas.share message
             public Dictionary<string, string> Sigs = new Dictionary<string, string>();       // sent key -> signature, marked as sent after the answer
             public int Entries;                                                              // entries in this batch
             public int Finds;                                                                // finds in this batch
@@ -751,7 +752,7 @@ namespace ElansAddonHub.Services
             void Add(string section, string key, string sentKey, string sig, object node, long order = 0)
             {
                 if (sent.TryGetValue(sentKey, out var have) && have == sig) return;
-                cands.Add(new Cand { Section = section, Key = key, SentKey = sentKey, Sig = sig, Node = node, Cost = Json.Write(node).Length + key.Length + 8, Order = order });
+                cands.Add(new Cand { Section = section, Key = key, SentKey = sentKey, Sig = sig, Node = node, Cost = LodgeJson.WritePlain(node).Length + key.Length + 8, Order = order });      // as the shared engine writes it
             }
             if (s != null)
             {
@@ -872,12 +873,13 @@ namespace ElansAddonHub.Services
                 b.Sigs[c.SentKey] = c.Sig;
                 b.Entries++;
             }
-            foreach (var kv in objs) frame.Sections.Add(new KeyValuePair<string, object>(kv.Key, kv.Value));
-            if (finds.Count > 0) frame.Finds = finds;
+            // the sections are built as plain dictionaries; they go out as the nodes the shared Lodge JSON engine makes of them
+            foreach (var kv in objs) frame.Sections.Add(new KeyValuePair<string, object>(kv.Key, LodgeJson.FromPlain(kv.Value)));
+            if (finds.Count > 0) frame.Finds = LodgeJson.FromPlain(finds);
             b.Counts = counts;
             b.Remaining = cands.Count - b.Entries;
             if (b.Entries == 0) return null;
-            b.Frame = ElansAddonHub.Lodge.LodgeFieldsDict.Build(frame.Write);
+            b.Frame = LodgeJson.Build(frame.Write);
             return b;
         }
 

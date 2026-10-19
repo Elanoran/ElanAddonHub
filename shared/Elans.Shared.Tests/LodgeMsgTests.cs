@@ -451,7 +451,7 @@ public class LodgeMsgTests
             .SelectMany(p => Regex.Matches(File.ReadAllText(p), @"\bHandle\(\s*Member\s+\w+\s*,\s*string\s+\w+\s*,\s*JsonObject\s+(\w+)\s*\)").Select(m => (File: Path.GetFileName(p), Name: m.Groups[1].Value))).ToList();
         Assert.True(handles.Count >= 10, "only " + handles.Count + " module Handle(Member, string, JsonObject) methods found");
         Assert.True(handles.All(h => h.Name == "m"), "a module names the frame otherwise: " + string.Join(", ", handles.Where(h => h.Name != "m")));
-        Assert.Contains("void OnReceived(Dictionary<string, object> m)", File.ReadAllText(Path.Combine(root, "src", "Lodge", "LodgeSession.cs")));
+        Assert.Contains("void OnReceived(JsonObject m)", File.ReadAllText(Path.Combine(root, "src", "Lodge", "LodgeSession.cs")));
         Assert.Matches(@"\bm = LodgeJson\.Parse\(", File.ReadAllText(Path.Combine(root, "server", "Lodge.Server", "Hub.cs")));
 
         var hits = ScanFrames(root);

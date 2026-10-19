@@ -486,7 +486,9 @@ namespace ElansAddonHub
             Quit();
         }
 
-        static string Q(string s) => "\"" + (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        // a JSON string literal for the self-tests' invented frames, escaped by the shared Lodge JSON engine (control characters too - a raw
+        // newline inside a string is no valid JSON, and the Outpost now reads Lodge frames as strictly as the Lodge does)
+        static string Q(string s) => Elans.Shared.LodgeJson.WritePlain(s ?? "");
 
         // Lodge 2.3 features (replies, reactions, unread line + badges, pins, old-server fallback) rendered from synthetic protocol
         // frames - no server needed

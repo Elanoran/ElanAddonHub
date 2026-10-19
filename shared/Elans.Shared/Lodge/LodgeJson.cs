@@ -15,6 +15,14 @@ namespace Elans.Shared
     //   LodgeJson.Str/Int/..   the lenient readers under it (the server's J): a field of the wrong type is "missing", never an exception
     public static class LodgeJson
     {
+        // ---------------------------------------------------------------- limits
+
+        // the biggest frame the Lodge takes from an Outpost (a bigger one closes the connection: server/Lodge.Server/Hub.cs ReceiveLoop)
+        public const int MaxFrameToLodge = 64 * 1024;
+        // the biggest frame an Outpost takes from a Lodge: the full Atlas pool is the biggest one there is, and the Lodge keeps that store under
+        // 64 MB on disk (AtlasStore); a bigger frame drops the connection (src/Services/LodgeClient.cs ReceiveFrames)
+        public const int MaxFrameFromLodge = 64 * 1024 * 1024;
+
         // ---------------------------------------------------------------- parse / serialize
 
         // a frame as the Lodge server read it: the UTF-8 text decoded, parsed, an object or nothing
@@ -36,6 +44,85 @@ namespace Elans.Shared
 
         // a typed message as the JsonObject that is sent: LodgeJson.Build(new PingMsg().Write)
         public static JsonObject Build(Action<ILodgeWriter> write) { var w = new LodgeJsonFields(); write(w); return w.Obj; }
+
+        // ---------------------------------------------------------------- plain .NET data (the Outpost's Dictionary validators)
+
+        // A JSON node as plain .NET data, the model of the Outpost's old hand-written reader (src/Services/Json.cs): an object is a
+        // Dictionary<string, object> (keys in the order received), an array a List<object>, every number a double, plus string, bool and
+        // null. Used only where a part of a frame feeds a validator written for that model (an Atlas section, a character sheet).
+        public static object ToPlain(JsonNode node)
+        {
+            switch (node)
+            {
+                case null: return null;
+                case JsonObject o:
+                    var d = new Dictionary<string, object>(o.Count);
+                    foreach (var kv in o) d[kv.Key] = ToPlain(kv.Value);
+                    return d;
+                case JsonArray a:
+                    var l = new List<object>(a.Count);
+                    foreach (var x in a) l.Add(ToPlain(x));
+                    return l;
+                case JsonValue v:
+                    switch (v.GetValueKind())
+                    {
+                        case JsonValueKind.String: return v.GetValue<string>();
+                        case JsonValueKind.True: return true;
+                        case JsonValueKind.False: return false;
+                        case JsonValueKind.Number:
+                            if (v.TryGetValue<double>(out var dn)) return dn;
+                            if (v.TryGetValue<long>(out var ln)) return (double)ln;          // a number written by code, not parsed
+                            if (v.TryGetValue<int>(out var i)) return (double)i;
+                            if (v.TryGetValue<float>(out var f)) return (double)f;
+                            if (v.TryGetValue<decimal>(out var m)) return (double)m;
+                            return double.Parse(v.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture);
+                        default: return null;
+                    }
+                default: return null;
+            }
+        }
+
+        // Plain .NET data (Dictionary / IDictionary<string, object>, any other IEnumerable, string, bool, int, long, double; anything else as
+        // its ToString(), a non-finite double as null) as the JSON text the old Outpost writer wrote for it - with this engine's escaping.
+        public static string WritePlain(object value)
+        {
+            var buf = new System.IO.MemoryStream();
+            using (var w = new Utf8JsonWriter(buf, new JsonWriterOptions { SkipValidation = false })) WritePlain(w, value);
+            return Encoding.UTF8.GetString(buf.GetBuffer(), 0, (int)buf.Length);
+        }
+
+        static void WritePlain(Utf8JsonWriter w, object v)
+        {
+            switch (v)
+            {
+                case null: w.WriteNullValue(); break;
+                case string s: w.WriteStringValue(s); break;
+                case bool b: w.WriteBooleanValue(b); break;
+                case int n: w.WriteNumberValue(n); break;
+                case long n: w.WriteNumberValue(n); break;
+                case double n: if (double.IsFinite(n)) w.WriteNumberValue(n); else w.WriteNullValue(); break;
+                case JsonNode node: node.WriteTo(w); break;
+                case IDictionary<string, object> d:
+                    w.WriteStartObject();
+                    foreach (var kv in d) { w.WritePropertyName(kv.Key); WritePlain(w, kv.Value); }
+                    w.WriteEndObject();
+                    break;
+                case System.Collections.IEnumerable e:
+                    w.WriteStartArray();
+                    foreach (var x in e) WritePlain(w, x);
+                    w.WriteEndArray();
+                    break;
+                default: w.WriteStringValue(v.ToString()); break;
+            }
+        }
+
+        // Plain .NET data as a JSON node that reads exactly like a received frame (written as text, parsed back): a section built by the
+        // Outpost's Dictionary code, sent raw in a typed message. null for null, or when it is no valid frame part (e.g. nested too deep).
+        public static JsonNode FromPlain(object value)
+        {
+            if (value == null) return null;
+            try { return JsonNode.Parse(WritePlain(value)); } catch { return null; }
+        }
 
         // ---------------------------------------------------------------- the lenient readers
 

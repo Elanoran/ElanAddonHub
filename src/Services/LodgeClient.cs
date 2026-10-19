@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
@@ -35,7 +36,7 @@ namespace ElansAddonHub.Services
         public bool Online { get; private set; }
         public bool IsRunning => !stopped;
         public bool SignedOut { get; private set; }                  // stopped because the server no longer knows this device (revoked)
-        public event Action<Dictionary<string, object>> Received;   // UI thread
+        public event Action<JsonObject> Received;                  // UI thread: a parsed frame (the shared Lodge JSON engine, Elans.Shared LodgeJson)
         public event Action<int, byte[], int, int> Voice;            // network thread: sender, data, offset, count
         public event Action<string, bool> Status;                    // UI thread: text, online
 
@@ -172,7 +173,7 @@ namespace ElansAddonHub.Services
         }
 
         // the ping frame (typed: Elans.Shared PingMsg), written once: {"t":"ping"}, the same bytes the hand-written frame was (lodgehardening checks it)
-        internal static readonly byte[] PingFrame = Encoding.UTF8.GetBytes(Json.Write(LodgeFieldsDict.Build(new PingMsg().Write)));
+        internal static readonly byte[] PingFrame = LodgeJson.SerializeUtf8(LodgeJson.Build(new PingMsg().Write));
 
         // an app-level ping every 20 s (the proxy chain can hold a dead connection open for minutes), and when the server is known
         // to answer them, 45 s without any frame means the connection is gone: abort it so the loop reconnects
@@ -221,6 +222,8 @@ namespace ElansAddonHub.Services
                     r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), ct);
                     if (r.MessageType == WebSocketMessageType.Close) return;
                     msg.Write(buf, 0, r.Count);
+                    // a frame bigger than any Lodge sends (the full Atlas pool is the biggest): the connection is dropped and made again
+                    if (msg.Length > LodgeJson.MaxFrameFromLodge) { Util.Log("lodge: a frame over " + LodgeJson.MaxFrameFromLodge / (1024 * 1024) + " MB - reconnecting"); try { ws.Abort(); } catch { } return; }
                 } while (!r.EndOfMessage);
 
                 lastRx = DateTime.UtcNow;
@@ -231,16 +234,17 @@ namespace ElansAddonHub.Services
                     if (len > 4) Voice?.Invoke(BitConverter.ToInt32(data, 0), data, 4, len - 4);
                     continue;
                 }
-                Dictionary<string, object> obj;
-                try { obj = Json.Obj(Encoding.UTF8.GetString(data, 0, len)); } catch { continue; }
+                var obj = LodgeJson.Parse(data, 0, len);                        // the shared Lodge JSON engine: null = no valid frame, skipped (as the Lodge does)
                 if (obj == null) continue;
-                if (obj.Str("t") == PongMsg.Type) { pongSeen = true; continue; }     // { t } only
-                if (first && obj.Str("t") == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
+                var type = LodgeJson.Str(obj, "t");
+                if (type == PongMsg.Type) { pongSeen = true; continue; }     // { t } only
+                if (first && type == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
                 Post(() => Received?.Invoke(obj));
             }
         }
 
-        public Task Send(Dictionary<string, object> obj) => SendRaw(Encoding.UTF8.GetBytes(Json.Write(obj)), WebSocketMessageType.Text, 5000);
+        public Task Send(JsonObject obj) => SendUtf8(LodgeJson.SerializeUtf8(obj));
+        public Task SendUtf8(byte[] frame) => SendRaw(frame, WebSocketMessageType.Text, 5000);       // a frame already serialized by LodgeJson
 
         // voice: drop the frame rather than queue up behind a slow send
         public Task SendVoice(byte[] packet, int count)
@@ -292,7 +296,7 @@ namespace ElansAddonHub.Services
             public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }
 
-        public async Task<Dictionary<string, object>> Upload(string file, Action<double> progress = null)
+        public async Task<JsonObject> Upload(string file, Action<double> progress = null)
         {
             using (var fs = File.OpenRead(file))
             using (var req = Request(HttpMethod.Post, "/files"))
@@ -303,10 +307,9 @@ namespace ElansAddonHub.Services
                 using (var resp = await Net.Http.SendAsync(req))
                 {
                     var text = await resp.Content.ReadAsStringAsync();
-                    Dictionary<string, object> body = null;
-                    try { body = Json.Obj(text); } catch { } // a proxy's 413 page isn't JSON
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(UploadError((int)resp.StatusCode, body.Str("error")));
-                    return body ?? new Dictionary<string, object>();
+                    var body = LodgeJson.Parse(text);                                // null: a proxy's 413 page isn't JSON
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(UploadError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
                 }
             }
         }
@@ -328,7 +331,7 @@ namespace ElansAddonHub.Services
 
         // ---- shared files (server 2.14): PUT /slots/new or /slots/{id} (headers X-Slot-Name, X-File-Name, X-Note URL-encoded, X-Sha256, Content-Length),
         // GET /slots/{id}/{v}. The answer to an upload is the slot as JSON; a refusal carries {error, reason}, whose text is already friendly.
-        public async Task<Dictionary<string, object>> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null)
+        public async Task<JsonObject> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null)
         {
             using (var fs = File.OpenRead(file))
             using (var req = Request(HttpMethod.Put, "/slots/" + (slotId ?? "new")))
@@ -342,10 +345,9 @@ namespace ElansAddonHub.Services
                 using (var resp = await Net.Http.SendAsync(req))
                 {
                     var text = await resp.Content.ReadAsStringAsync();
-                    Dictionary<string, object> body = null;
-                    try { body = Json.Obj(text); } catch { } // a proxy's error page isn't JSON
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, body?.Str("error")));
-                    return body ?? new Dictionary<string, object>();
+                    var body = LodgeJson.Parse(text);                                // null: a proxy's error page isn't JSON
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
                 }
             }
         }
@@ -371,7 +373,7 @@ namespace ElansAddonHub.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     string text = null;
-                    try { text = (Json.Obj(await resp.Content.ReadAsStringAsync()))?.Str("error"); } catch { }
+                    try { text = LodgeJson.Str(LodgeJson.Parse(await resp.Content.ReadAsStringAsync()), "error"); } catch { }
                     throw new InvalidOperationException(FilesError((int)resp.StatusCode, text));
                 }
                 long total = resp.Content.Headers.ContentLength ?? expectedSize;
@@ -397,7 +399,7 @@ namespace ElansAddonHub.Services
 
         // ---- hosted datasets (server 2.17, feature "classic"): PUT /datasets/{name} (headers X-Version URL-encoded, X-Sha256, Content-Length), GET /datasets/{name}
         // (answers X-Sha256 and X-Version). A refusal carries {error, reason}, whose text is already friendly.
-        public async Task<Dictionary<string, object>> UploadDataset(string dataset, string file, string version, string sha256, Action<double> progress = null)
+        public async Task<JsonObject> UploadDataset(string dataset, string file, string version, string sha256, Action<double> progress = null)
         {
             if (!System.Text.RegularExpressions.Regex.IsMatch(dataset ?? "", "^[a-z]{1,24}$")) throw new InvalidOperationException("That can't be shared");
             using (var fs = File.OpenRead(file))
@@ -410,10 +412,9 @@ namespace ElansAddonHub.Services
                 using (var resp = await Net.Http.SendAsync(req))
                 {
                     var text = await resp.Content.ReadAsStringAsync();
-                    Dictionary<string, object> body = null;
-                    try { body = Json.Obj(text); } catch { }
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(DatasetError((int)resp.StatusCode, body?.Str("error")));
-                    return body ?? new Dictionary<string, object>();
+                    var body = LodgeJson.Parse(text);
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(DatasetError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
                 }
             }
         }
@@ -443,7 +444,7 @@ namespace ElansAddonHub.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     string text = null;
-                    try { text = Json.Obj(await resp.Content.ReadAsStringAsync())?.Str("error"); } catch { }
+                    try { text = LodgeJson.Str(LodgeJson.Parse(await resp.Content.ReadAsStringAsync()), "error"); } catch { }
                     throw new InvalidOperationException(DatasetError((int)resp.StatusCode, text));
                 }
                 var res = new DatasetDownload();
@@ -489,7 +490,7 @@ namespace ElansAddonHub.Services
                     byte[] body;
                     using (var s = await resp.Content.ReadAsStreamAsync()) body = Atlas.CairnAtlas.ReadCapped(s, r.Status == 200 ? cap : 64 * 1024);
                     if (r.Status == 200) { r.Body = body; return r; }
-                    try { var o = Json.Obj(Encoding.UTF8.GetString(body)); r.Reason = o?.Str("reason"); r.Error = o?.Str("error"); } catch { }
+                    var o = LodgeJson.Parse(body); r.Reason = LodgeJson.Str(o, "reason"); r.Error = LodgeJson.Str(o, "error");
                     return r;
                 }
             }

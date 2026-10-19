@@ -6,6 +6,7 @@ Keep one `## x.y.z` section per hub version. This file is also shown in the Outp
 ## 3.1.1
 - **Knows Lodge server 2.31.1.** Internal: the signed Cairn messages and the public-address check now come from one shared definition with the Cairn and the Outpost; the address check now refuses the same special addresses the Cairn refuses; every Lodge message type now comes from one shared list, checked by tests; every Lodge message is now typed on both sides, from one shared definition. Two small Lodge server fixes: the Guild Master's switches for badges and for the Cairn always reach the right part of the server, and a Lodge that doesn't take part in the Cairn now answers the Outpost's Cairn questions with a clear "not offered here" instead of staying silent.
 - Internal: the checks of update, Cairn data and Cairn notice signatures now use the same code as the Lodge and the Cairn, with its own tests; nothing changes in what you see.
+- Internal: the connection to a Lodge now reads and writes its messages with .NET's own JSON engine, the same as the Lodge server, with limits on size and depth.
 
 ## 3.1.0
 - **The Outpost now runs on .NET 10** (it ran on .NET Framework 4.8 until now). Loading the game data is about a quarter faster on the first start, and the Outpost now uses the same up-to-date foundation as the Lodge and Cairn servers, with current security fixes. It looks and works the same.

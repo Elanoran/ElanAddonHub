@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Lodge;
@@ -28,7 +29,7 @@ namespace ElansAddonHub
                     + "\"spawns\":{\"1\":[{\"z\":11,\"x\":0.3,\"y\":0.4}]},"
                     + "\"nodes\":{\"50\":{\"11\":[{\"x\":0.5,\"y\":0.5,\"n\":7}]}}}";
                 var lodge = new LodgeAtlas();
-                Check("cairn maps: the invented Lodge page is taken", lodge.Apply(Json.Obj(lj)));
+                Check("cairn maps: the invented Lodge page is taken", lodge.Apply(LodgeJson.Parse(lj)));
                 AtlasQuery.Context.Lodge = () => lodge;
                 // the Cairn: npc 1 at the Lodge's spot (the same place) and at a new one, the innkeeper (npc 2, a Classic vendor) and vendor 77 somewhere,
                 // the chest at the Lodge's spot and a new one, and the Stormwind - Orgrimmar flight

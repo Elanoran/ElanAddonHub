@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -54,11 +55,11 @@ namespace ElansAddonHub.Services.WorldMap
         public sealed class LodgeData { public Dictionary<string, LearnedRoute> Routes = new Dictionary<string, LearnedRoute>(StringComparer.Ordinal); public int Dropped; public long At; }
 
         // typed: FlightsRoutesDataMsg, whose numbers are strict (missing or not a JSON number = null) and whose points are null unless a clean list
-        public static LodgeData ParseServer(Dictionary<string, object> m)
+        public static LodgeData ParseServer(JsonObject m)
         {
             var r = new LodgeData();
             if (m == null) return r;
-            var msg = FlightsRoutesDataMsg.Read(new LodgeFieldsDict(m));
+            var msg = FlightsRoutesDataMsg.Read(new LodgeJsonFields(m));
             r.At = msg.At; if (r.At < 0 || r.At > 4_000_000_000L) r.At = 0;
             foreach (var kv in msg.Routes)
             {
@@ -90,7 +91,7 @@ namespace ElansAddonHub.Services.WorldMap
         // ---------------------------------------------------------------- the upload
         public sealed class ShareBatch
         {
-            public Dictionary<string, object> Frame;                               // flights.routes.share
+            public JsonObject Frame;                                               // flights.routes.share
             public Dictionary<string, string> Sigs = new Dictionary<string, string>(StringComparer.Ordinal);
             public int Remaining;
         }
@@ -139,12 +140,12 @@ namespace ElansAddonHub.Services.WorldMap
             int bytes = 64;
             foreach (var kv in changed)
             {
-                int cost = Json.Write(LodgeFieldsDict.Build(kv.Value.Item1.Write)).Length + kv.Key.Length + 8;
+                int cost = LodgeJson.SerializeUtf8(LodgeJson.Build(kv.Value.Item1.Write)).Length + kv.Key.Length + 8;
                 if (msg.Routes.Count >= MaxShareRoutes || bytes + cost > MaxShareBytes) break;
                 msg.Routes.Add(new KeyValuePair<string, FlightRoute>(kv.Key, kv.Value.Item1)); b.Sigs[kv.Key] = kv.Value.Item2; bytes += cost;
             }
             b.Remaining = changed.Count - msg.Routes.Count;
-            b.Frame = LodgeFieldsDict.Build(msg.Write);
+            b.Frame = LodgeJson.Build(msg.Write);
             return b;
         }
     }

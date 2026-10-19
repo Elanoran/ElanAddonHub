@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -215,7 +216,7 @@ namespace ElansAddonHub.Services
 
         public class Batch
         {
-            public Dictionary<string, object> Frame;                                       // the flights.share message
+            public JsonObject Frame;                                                       // the flights.share message
             public Dictionary<string, string> Sigs = new Dictionary<string, string>();       // key -> signature, what to mark as sent after the answer
             public int Remaining;                                                          // changed legs that did not fit (next time)
         }
@@ -244,12 +245,12 @@ namespace ElansAddonHub.Services
             {
                 if (names.Count >= MaxNamesPerShare) break;
                 if (!local.Names.TryGetValue(id, out var nm)) continue;
-                int cost = id.Length + nm.Length + 8;
+                int cost = id.Length + LodgeJson.WritePlain(nm).Length + 6;       // the name as it goes out (escaped)
                 if (bytes + cost > MaxShareBytes) break;
                 names.Add(new KeyValuePair<string, string>(id, nm)); bytes += cost;
             }
             if (names.Count > 0) msg.Names = names;                                       // no node names: the key is left out
-            b.Frame = LodgeFieldsDict.Build(msg.Write);
+            b.Frame = LodgeJson.Build(msg.Write);
             return b;
         }
 
@@ -265,11 +266,11 @@ namespace ElansAddonHub.Services
 
         // flights.data (typed: FlightsDataMsg, whose numbers are strict - a leg's t / n must be JSON numbers): everything is re-validated here,
         // whatever the server says. Also the flights table of SharedData.lua.
-        public static Merged ParseServer(Dictionary<string, object> m)
+        public static Merged ParseServer(JsonObject m)
         {
             var r = new Merged();
             if (m == null) return r;
-            var msg = FlightsDataMsg.Read(new LodgeFieldsDict(m));
+            var msg = FlightsDataMsg.Read(new LodgeJsonFields(m));
             r.At = msg.At; if (r.At < 0 || r.At > 4_000_000_000L) r.At = 0;
             foreach (var kv in msg.Legs)
             {

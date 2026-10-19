@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,6 +18,9 @@ namespace ElansAddonHub
     //   sharing switched off, guests, a server that disabled the feature, and an older server (nothing at all).
     public partial class MainWindow
     {
+        // a frame that goes out (a share batch), as the Lodge would parse it, in the plain dictionaries the checks read (LodgeJson.ToPlain)
+        static Dictionary<string, object> Wire(System.Text.Json.Nodes.JsonObject frame) => LodgeJson.ToPlain(LodgeJson.Parse(LodgeJson.SerializeUtf8(frame))) as Dictionary<string, object>;
+
         const long AtlasAt = 1_790_000_000L;
         string atlasRoot;
         int atlasStamp;
@@ -159,7 +163,7 @@ namespace ElansAddonHub
             var sent = new Dictionary<string, string>();
             var b = AtlasObs.MakeBatch(s, null, sent);
             check("batch: the first batch carries all 11 entries (4 kills, 1 object, 1 fishing zone, 1 vendor, 1 quest, 1 spawn list, 2 finds)", b != null && b.Entries == 11 && b.Remaining == 0 && b.Sigs.Count == 11);
-            var f = b.Frame;
+            var f = Wire(b.Frame);
             check("batch: it is an atlas.share with the architecture's sections", f.Str("t") == "atlas.share" && f.Child("kills").Count == 4 && f.Child("objects").Count == 1 && f.Child("fishing").Count == 1 && f.Child("vendors").Count == 1
                 && f.Child("quests").Count == 1 && f.Child("spawns").Count == 1 && f.List("finds").Count == 2);
             var json = Json.Write(f);
@@ -172,17 +176,17 @@ namespace ElansAddonHub
             WriteAtlasHub("ACC1", AtlasLua(AtlasFixture().Replace("[101] = { n = 5 }", "[101] = { n = 6 }")));
             var s2 = AtlasObs.Read(atlasRoot);
             var d = AtlasObs.MakeBatch(s2, null, b.Sigs);
-            check("delta: a source that grew is the only entry", d != null && d.Entries == 1 && d.Frame.Child("kills").Count == 1 && d.Frame.Child("kills").Child("101").NLong("n") == 6 && !d.Frame.ContainsKey("finds"));
+            check("delta: a source that grew is the only entry", d != null && d.Entries == 1 && Wire(d.Frame).Child("kills").Count == 1 && Wire(d.Frame).Child("kills").Child("101").NLong("n") == 6 && !Wire(d.Frame).ContainsKey("finds"));
             WriteAtlasHub("ACC1", AtlasLua(AtlasFixture().Replace("finds = { {", "finds = { { i = 9, c = 1, src = \"obj:50\", at = " + (AtlasAt + 50) + " }, {")));
             var d2 = AtlasObs.MakeBatch(AtlasObs.Read(atlasRoot), null, b.Sigs);
-            check("delta: a new find is the only entry (finds are keyed by what they are, not by position)", d2 != null && d2.Entries == 1 && d2.Frame.List("finds").Count == 1 && ((Dictionary<string, object>)d2.Frame.List("finds")[0]).NLong("i") == 9);
+            check("delta: a new find is the only entry (finds are keyed by what they are, not by position)", d2 != null && d2.Entries == 1 && Wire(d2.Frame).List("finds").Count == 1 && ((Dictionary<string, object>)Wire(d2.Frame).List("finds")[0]).NLong("i") == 9);
             WriteAtlasHub("ACC1", AtlasLua(AtlasFixture()));
 
             // limits per message and the 56 KB frame
             var snap = new AtlasObs.Snapshot();
             for (int i = 1; i <= 250; i++) snap.Kills[i] = new AtlasObs.Counter { N = 1 };
             var big = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>());
-            check("limits: 250 changed kill sources -> 200 in the batch, 50 wait", big.Entries == AtlasObs.MaxKillsPerShare && big.Remaining == 50 && big.Frame.Child("kills").Count == 200);
+            check("limits: 250 changed kill sources -> 200 in the batch, 50 wait", big.Entries == AtlasObs.MaxKillsPerShare && big.Remaining == 50 && Wire(big.Frame).Child("kills").Count == 200);
             var heavy = new AtlasObs.Snapshot();
             for (int i = 1; i <= 190; i++)
             {
@@ -191,7 +195,7 @@ namespace ElansAddonHub
                 heavy.Kills[i] = c;
             }
             var hb = AtlasObs.MakeBatch(heavy, null, new Dictionary<string, string>());
-            check("limits: a heavy batch stays under 56 KB and leaves the rest for later", Json.Write(hb.Frame).Length <= AtlasObs.MaxShareBytes && hb.Remaining > 0 && hb.Entries > 0);
+            check("limits: a heavy batch stays under 56 KB and leaves the rest for later", LodgeJson.Serialize(hb.Frame).Length <= AtlasObs.MaxShareBytes && hb.Remaining > 0 && hb.Entries > 0);
             var rest = AtlasObs.MakeBatch(heavy, null, hb.Sigs);
             check("limits: the rest follows in the next batch", rest != null && rest.Entries + hb.Entries <= 190 && rest.Entries > 0);
 
@@ -206,7 +210,7 @@ namespace ElansAddonHub
                 new AtlasObs.Revealed { Id = 2594, Name = "Evil\" [[x]] \\ name" + new string('N', 200), Quality = 2 },
             };
             var rb = AtlasObs.MakeBatch(null, rev, new Dictionary<string, string>());
-            var items = rb?.Frame.Child("items");
+            var items = Wire(rb?.Frame).Child("items");
             check("revealed: valid details go out as 'items' (2 of 5; bad id, quality 9 and an empty name are left out)", rb != null && items.Count == 2 && items.Child("2589").Str("n") == "Linen Cloth" && items.Child("2589").NLong("q") == 1);
             var nm = items.Child("2594").Str("n");
             check("revealed: a name is cleaned (no quote, backslash or bracket) and cut at 80", nm.Length <= 80 && !nm.Contains("\"") && !nm.Contains("\\") && !nm.Contains("["));
@@ -241,7 +245,7 @@ namespace ElansAddonHub
             check("finds: the newest find is among them", s.Finds.Max(f => f.At) == t0 + 343 * 37 && s.Finds.Count(f => f.Zone == 0) > 60);
             var sent = new Dictionary<string, string>();
             var b = AtlasObs.MakeBatch(s, null, sent);
-            check("finds: all 344 go out in one share (cap 500), oldest first", b != null && b.Finds == 344 && b.Frame.List("finds").Count == 344 && b.Remaining == 0 && ((Dictionary<string, object>)b.Frame.List("finds")[343]).NLong("at") == t0 + 343 * 37);
+            check("finds: all 344 go out in one share (cap 500), oldest first", b != null && b.Finds == 344 && Wire(b.Frame).List("finds").Count == 344 && b.Remaining == 0 && ((Dictionary<string, object>)Wire(b.Frame).List("finds")[343]).NLong("at") == t0 + 343 * 37);
             // 12 new finds appended later (the Toolkit appends at the end): exactly those go out next
             WriteAtlasHub("ACC1", AtlasLua(FindsLua(356, t0)));
             var s2 = AtlasObs.Read(atlasRoot);
@@ -262,7 +266,7 @@ namespace ElansAddonHub
             for (int i = 0; i < 5; i++) local.Finds.Add(new AtlasObs.Find { Item = 10 + i, Count = 1, Src = "npc:1", Zone = 11, X = 0.5, Y = 0.5, At = AtNow + i });
             var sentRec = Session.AtlasSentForTest;
             foreach (var f in local.Finds) sentRec[AtlasObs.FindKey(f)] = "1";
-            Session.AtlasData.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"ex\",\"rev\":3,\"at\":" + AtNow + ",\"full\":true,\"finds\":["
+            Session.AtlasData.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"ex\",\"rev\":3,\"at\":" + AtNow + ",\"full\":true,\"finds\":["
                 + "{\"i\":10,\"c\":1,\"at\":" + AtNow + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.5,\"y\":0.5,\"by\":\"Me\",\"s\":1},{\"i\":12,\"c\":1,\"at\":" + (AtNow + 2) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.5,\"y\":0.5,\"by\":\"Me\",\"s\":2}]}"));
             int again = Session.AtlasResendMissingForTest(local);
             check("resend: 3 of 5 finds were marked as sent but are not in the pool -> forgotten (sent again), the 2 stored ones stay", again == 3 && Session.AtlasBacklogForTest && sentRec.Count == 2);
@@ -305,10 +309,10 @@ namespace ElansAddonHub
             // what is shared: fishspots only to a server that takes them; the x flag and the corrected price are in the frame
             var withFish = AtlasObs.MakeBatch(s, null, new Dictionary<string, string>(), false, true, true);
             var noFish = AtlasObs.MakeBatch(s, null, new Dictionary<string, string>(), false, true, false);
-            check("share: fishspots go out only when the server has atlas4", withFish.Frame.ContainsKey("fishspots") && withFish.Counts["fishspots"] == 1 && !noFish.Frame.ContainsKey("fishspots"));
-            var vend = withFish.Frame.Child("vendors").Child("7683").Child("items");
+            check("share: fishspots go out only when the server has atlas4", Wire(withFish.Frame).ContainsKey("fishspots") && withFish.Counts["fishspots"] == 1 && !Wire(noFish.Frame).ContainsKey("fishspots"));
+            var vend = Wire(withFish.Frame).Child("vendors").Child("7683").Child("items");
             check("share: the vendor items carry x only when 1, and price 0 stays 0", vend.Child("8525").NLong("x") == 1 && !vend.Child("8524").ContainsKey("x") && vend.Child("8524").NLong("p") == 25000);
-            var fs = withFish.Frame.Child("fishspots").List("1456");
+            var fs = Wire(withFish.Frame).Child("fishspots").List("1456");
             check("share: a fishing spot is { x, y, n, items }", fs.Count == 1 && ((Dictionary<string, object>)fs[0]).NLong("n") == 20 && ((Dictionary<string, object>)fs[0]).Child("items").NLong("6289") == 9);
             check("share: the upload round-trips through the server's rules (same parser) and is not sent twice", AtlasObs.MakeBatch(s, null, withFish.Sigs, false, true, true) == null);
 
@@ -316,18 +320,18 @@ namespace ElansAddonHub
             string fixedData = data.Replace("[8523] = { p = 0, s = 1, l = -1 }", "[8523] = { p = 4400, s = 1, l = -1 }").Replace("at = " + A + ", z = 1458", "at = " + (A + 600) + ", z = 1458");
             WriteAtlasHub("ACC1", AtlasLua(fixedData));
             var d = AtlasObs.MakeBatch(AtlasObs.Read(atlasRoot), null, withFish.Sigs, false, true, true);
-            check("share: corrected vendor prices (newer scan) are sent again as the only entry", d != null && d.Entries == 1 && d.Frame.Child("vendors").Child("7683").Child("items").Child("8523").NLong("p") == 4400);
+            check("share: corrected vendor prices (newer scan) are sent again as the only entry", d != null && d.Entries == 1 && Wire(d.Frame).Child("vendors").Child("7683").Child("items").Child("8523").NLong("p") == 4400);
             // the record from before the x flag existed (hash without x) still matches an unchanged vendor: no resend storm
             var oldVendor = AtlasObs.Sig(new AtlasObs.Vendor { At = A, Zone = 1, X = 0.1, Y = 0.1, Items = { [1] = new long[] { 5, 1, -1 } } });
             var newVendor = AtlasObs.Sig(new AtlasObs.Vendor { At = A, Zone = 1, X = 0.1, Y = 0.1, Items = { [1] = new long[] { 5, 1, -1, 0 } } });
             check("share: a vendor without any extended-cost item has the same signature as before the flag (the upload record stays valid)", oldVendor == newVendor);
             // the pool: the server's merged fishing spots are read, kept in the cache and handed to the maps
             var lodge = new ElansAddonHub.Lodge.LodgeAtlas();
-            lodge.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e9\",\"rev\":5,\"at\":" + (AtlasAt + 9) + ",\"full\":true,\"fishspots\":{\"1456\":[{\"x\":0.4161,\"y\":0.5942,\"n\":32,\"items\":{\"6289\":16}},{\"x\":5,\"y\":0.1,\"n\":1}],\"0\":[{\"x\":0.1,\"y\":0.1,\"n\":1}]},"
+            lodge.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"e9\",\"rev\":5,\"at\":" + (AtlasAt + 9) + ",\"full\":true,\"fishspots\":{\"1456\":[{\"x\":0.4161,\"y\":0.5942,\"n\":32,\"items\":{\"6289\":16}},{\"x\":5,\"y\":0.1,\"n\":1}],\"0\":[{\"x\":0.1,\"y\":0.1,\"n\":1}]},"
                 + "\"vendors\":{\"7683\":{\"at\":" + AtlasAt + ",\"z\":1458,\"x\":0.5,\"y\":0.5,\"items\":{\"8525\":{\"p\":0,\"s\":1,\"l\":-1,\"x\":1},\"8524\":{\"p\":7,\"s\":1,\"l\":-1}}}}}"));
             check("pool: fishing spots of an answer are read (a bad spot and map 0 left out, 2 dropped), also after the cache round trip",
                 lodge.FishSpotsOn(1456).Count == 1 && lodge.FishSpotsOn(1456)[0].N == 32 && lodge.FishSpotsOn(1456)[0].Items[6289] == 16 && lodge.Dropped == 2
-                && Json.Write(lodge.ToCache()).Contains("\"fishspots\":{\"1456\":[{\"x\":0.416"));
+                && LodgeJson.Serialize(lodge.ToCache()).Contains("\"fishspots\":{\"1456\":[{\"x\":0.416"));
             check("pool: the extended-cost flag of a vendor item is kept and offered by the item rows", lodge.Vendors(8525).Count == 1 && lodge.Vendors(8525)[0].Extended && !lodge.Vendors(8524)[0].Extended && lodge.Vendors(8524)[0].Price == 7);
             // the maps: the Lodge's spots plus this PC's own that no Lodge spot covers
             var hadLodge = ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge; var hadOwnFish = ElansAddonHub.Services.Atlas.AtlasQuery.Context.OwnFishSpots;
@@ -531,15 +535,15 @@ namespace ElansAddonHub
                 // ---- batches
                 var plain = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true);
                 var det = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true, seenDetails: true);
-                var pq = plain.Frame.Child("seenQuests").Child("498"); var dq = det.Frame.Child("seenQuests").Child("498");
-                check("seen details: without atlas7 the old shape goes out (title, levels, objectives only; no build)", pq.Keys.OrderBy(k => k).SequenceEqual(new[] { "level", "minLevel", "objectives", "title" }) && !plain.Frame.Child("seenNpcs").Child("2958").ContainsKey("tf"));
+                var pq = Wire(plain.Frame).Child("seenQuests").Child("498"); var dq = Wire(det.Frame).Child("seenQuests").Child("498");
+                check("seen details: without atlas7 the old shape goes out (title, levels, objectives only; no build)", pq.Keys.OrderBy(k => k).SequenceEqual(new[] { "level", "minLevel", "objectives", "title" }) && !Wire(plain.Frame).Child("seenNpcs").Child("2958").ContainsKey("tf"));
                 check("seen details: with atlas7 a quest carries the build, sort, flags, next, money, the race mask as two 32-bit halves, rewards / choices / provided as [item, count], reputation, goals and the texts",
                     dq.NLong("build") == 70374 && dq.NLong("sort") == 267 && dq.NLong("flags") == 8 && dq.NLong("next") == 533 && dq.NLong("money") == 1800 && dq.List("races").Count == 2 && Convert.ToInt64(dq.List("races")[0]) == 0x4e0ab3b2L && Convert.ToInt64(dq.List("races")[1]) == 0xaa2aaaaaL
                     && dq.List("rewards").Count == 1 && dq.List("choices").Count == 2 && dq.List("provided").Count == 1 && dq.List("rep").Count == 1 && dq.List("goals").Count == 2 && dq.Str("done") == "Return to Krusk." && dq.Str("desc") == "Me and some other warriors...");
-                check("seen details: a text-only record goes without details, and nothing personal is in the frame", !det.Frame.Child("seenQuests").Child("900").ContainsKey("build") && !Json.Write(det.Frame).Contains("Elan"));
-                var dn = det.Frame.Child("seenNpcs");
+                check("seen details: a text-only record goes without details, and nothing personal is in the frame", !Wire(det.Frame).Child("seenQuests").Child("900").ContainsKey("build") && !LodgeJson.Serialize(det.Frame).Contains("Elan"));
+                var dn = Wire(det.Frame).Child("seenNpcs");
                 check("seen details: npcs carry their type flags and kill credits, objects their lock", dn.Child("2958").NLong("tf") == 0x08000001 && !dn.Child("2958").ContainsKey("kc") && dn.Child("253272").List("kc").Count == 2 && Convert.ToInt64(dn.Child("253272").List("kc")[0]) == 253664
-                    && det.Frame.Child("seenObjects").Child("1621").NLong("lock") == 31 && dn.Child("2958").NLong("build") == 70374);
+                    && Wire(det.Frame).Child("seenObjects").Child("1621").NLong("lock") == 31 && dn.Child("2958").NLong("build") == 70374);
                 check("seen details: what was sent without details is sent again once the lodge takes them (the signature includes them), then not again", AtlasObs.MakeBatch(null, null, plain.Sigs, true, seenDetails: true)?.Entries == 5 && AtlasObs.MakeBatch(null, null, det.Sigs, true, seenDetails: true) == null
                     && AtlasObs.MakeBatch(null, null, plain.Sigs, true) == null);
                 AtlasObs.SeenBuild = () => 70400;
@@ -653,24 +657,24 @@ namespace ElansAddonHub
             // ---- batches
             check("seen: without the sub-feature nothing of it goes out", AtlasObs.MakeBatch(null, null, new Dictionary<string, string>()) == null);
             var b = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true);
-            var sn = b?.Frame.Child("seenNpcs");
-            check("seen: with it, valid npcs / objects / quests go out (3 of 5 npcs: no name and id 0 are left out)", b != null && sn != null && sn.Count == 3 && b.Frame.Child("seenObjects").Count == 1 && b.Frame.Child("seenQuests").Count == 2);
+            var sn = Wire(b?.Frame).Child("seenNpcs");
+            check("seen: with it, valid npcs / objects / quests go out (3 of 5 npcs: no name and id 0 are left out)", b != null && sn != null && sn.Count == 3 && Wire(b.Frame).Child("seenObjects").Count == 1 && Wire(b.Frame).Child("seenQuests").Count == 2);
             check("seen: npc fields", sn.Child("100").Str("name") == "Hogger" && sn.Child("100").NLong("type") == 7 && sn.Child("100").NLong("rank") == 1 && sn.Child("101").Str("title") == "Smith");
-            check("seen: control characters never leave", !Json.Write(b.Frame).Contains("\\u0001") && sn.Child("101").Str("name").IndexOf('\u0001') < 0 && sn.Child("101").Str("name").IndexOf('\n') < 0);
+            check("seen: control characters never leave", !LodgeJson.Serialize(b.Frame).Contains("\\u0001") && sn.Child("101").Str("name").IndexOf('\u0001') < 0 && sn.Child("101").Str("name").IndexOf('\n') < 0);
             check("seen: names and titles are cut (80), objectives at 1000 with line breaks kept", sn.Child("103").Str("name").Length == 80 && sn.Child("103").Str("title").Length == 80
-                && b.Frame.Child("seenQuests").Child("901").Str("objectives").Length == 1000 && b.Frame.Child("seenQuests").Child("900").Str("objectives") == "Kill 8 wolves.\nReturn." && b.Frame.Child("seenQuests").Child("901").NLong("level") == -1);
-            check("seen: the frame carries no key but the section names", b.Frame.Keys.All(k => k == "t" || k == "seenNpcs" || k == "seenObjects" || k == "seenQuests"));
+                && Wire(b.Frame).Child("seenQuests").Child("901").Str("objectives").Length == 1000 && Wire(b.Frame).Child("seenQuests").Child("900").Str("objectives") == "Kill 8 wolves.\nReturn." && Wire(b.Frame).Child("seenQuests").Child("901").NLong("level") == -1);
+            check("seen: the frame carries no key but the section names", Wire(b.Frame).Keys.All(k => k == "t" || k == "seenNpcs" || k == "seenObjects" || k == "seenQuests"));
             check("seen: sent ids are not sent again (deltas)", AtlasObs.MakeBatch(null, null, b.Sigs, true) == null);
             src.N[0].Title = "Gnoll Boss"; src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 104, Name = "New" });
             var d = AtlasObs.MakeBatch(null, null, b.Sigs, true);
-            check("seen: a changed or new id goes out alone", d != null && d.Frame.Child("seenNpcs").Count == 2 && d.Frame.Child("seenNpcs").Child("100").Str("title") == "Gnoll Boss" && d.Frame.Child("seenObjects") == null && d.Frame.Child("seenQuests") == null);
+            check("seen: a changed or new id goes out alone", d != null && Wire(d.Frame).Child("seenNpcs").Count == 2 && Wire(d.Frame).Child("seenNpcs").Child("100").Str("title") == "Gnoll Boss" && Wire(d.Frame).Child("seenObjects") == null && Wire(d.Frame).Child("seenQuests") == null);
             src.N.Clear();
             for (int i = 1; i <= 350; i++) src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = i, Name = "N" + i });
             src.O.Clear(); src.Q.Clear();
             var big = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true);
-            check("seen: at most 300 npcs per message, the rest waits", big != null && big.Frame.Child("seenNpcs").Count == AtlasObs.MaxSeenNpcsPerShare && big.Remaining == 50);
+            check("seen: at most 300 npcs per message, the rest waits", big != null && Wire(big.Frame).Child("seenNpcs").Count == AtlasObs.MaxSeenNpcsPerShare && big.Remaining == 50);
             var rest = AtlasObs.MakeBatch(null, null, big.Sigs, true);
-            check("seen: the next message carries the rest", rest != null && rest.Frame.Child("seenNpcs").Count == 50 && rest.Remaining == 0);
+            check("seen: the next message carries the rest", rest != null && Wire(rest.Frame).Child("seenNpcs").Count == 50 && rest.Remaining == 0);
             AtlasObs.SeenSource = new FakeSeen { N = null };
             check("seen: a source with no lists shares nothing and never throws", AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true) == null);
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using ElansAddonHub.Services;
 using Elans.Shared;
 
@@ -71,7 +72,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsBadges || (Me != null && Me.Guest)) return;
             badgesLastAsk = Clock();
-            _ = Send(LodgeFieldsDict.Build(new BadgesMineGetMsg().Write));
+            _ = Send(LodgeJson.Build(new BadgesMineGetMsg().Write));
         }
 
         // I looked at my badges: the dot goes (locally at once, and on the server so it stays gone)
@@ -80,7 +81,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsBadges || NewBadges == 0) return;
             NewBadges = 0;
             BadgesChanged?.Invoke();
-            _ = Send(LodgeFieldsDict.Build(new BadgesSeenMsg().Write));
+            _ = Send(LodgeJson.Build(new BadgesSeenMsg().Write));
         }
 
         public void SetHideFromLadder(bool hide)
@@ -88,7 +89,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsBadges) return;
             HideFromLadder = hide;
             badgesLastAsk = Clock();
-            _ = Send(LodgeFieldsDict.Build(new BadgesHideMsg { Hide = hide }.Write));
+            _ = Send(LodgeJson.Build(new BadgesHideMsg { Hide = hide }.Write));
             BadgesChanged?.Invoke();
         }
 
@@ -96,7 +97,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsBadges) return;
             badgesLastAsk = Clock();
-            _ = Send(LodgeFieldsDict.Build(new LadderGetMsg { Season = string.IsNullOrEmpty(season) ? "all" : season }.Write));
+            _ = Send(LodgeJson.Build(new LadderGetMsg { Season = string.IsNullOrEmpty(season) ? "all" : season }.Write));
         }
 
         // someone's earned badges (a profile card); asked again at most once a minute
@@ -106,7 +107,7 @@ namespace ElansAddonHub.Lodge
             if (memberBadgesAsked.TryGetValue(login, out var at) && Clock() - at < TimeSpan.FromMinutes(1)) return;
             memberBadgesAsked[login] = Clock();
             badgesLastAsk = Clock();
-            _ = Send(LodgeFieldsDict.Build(new BadgesMemberGetMsg { Name = login }.Write));
+            _ = Send(LodgeJson.Build(new BadgesMemberGetMsg { Name = login }.Write));
         }
 
         public List<BadgeVM> BadgesOf(string login) =>
@@ -117,7 +118,7 @@ namespace ElansAddonHub.Lodge
         public void SetBadgesForLodge(bool on)
         {
             if (!CanSwitchBadges) return;
-            _ = Send(LodgeFieldsDict.Build(new AdminBadgesMsg { On = on }.Write));
+            _ = Send(LodgeJson.Build(new AdminBadgesMsg { On = on }.Write));
         }
 
         // the badges shown beside a name: highest tier first, then the newest
@@ -136,19 +137,19 @@ namespace ElansAddonHub.Lodge
             return res;
         }
 
-        bool OnBadgesFrame(Dictionary<string, object> m)
+        bool OnBadgesFrame(JsonObject m)
         {
-            switch (m.Str("t"))
+            switch (LodgeJson.Str(m, "t"))
             {
                 case LodgeMsg.BadgesState:
-                    var state = BadgesStateMsg.Read(new LodgeFieldsDict(m));
+                    var state = BadgesStateMsg.Read(new LodgeJsonFields(m));
                     BadgesStateKnown = true; BadgesOwnerOn = state.Enabled; BadgesLocked = state.Locked;
                     SupportsBadges = BadgesOwnerOn && !BadgesLocked;
                     if (SupportsBadges) AfterWelcomeBadges(); else { var keep = BadgesStateKnown; var l = BadgesLocked; var o = BadgesOwnerOn; ResetBadges(); BadgesStateKnown = keep; BadgesLocked = l; BadgesOwnerOn = o; }
                     BadgesChanged?.Invoke(); LadderChanged?.Invoke();
                     return true;
                 case LodgeMsg.BadgesMine:
-                    var mine = BadgesMineMsg.Read(new LodgeFieldsDict(m));
+                    var mine = BadgesMineMsg.Read(new LodgeJsonFields(m));
                     if (!SupportsBadges || !mine.Ok) return true;
                     HideFromLadder = mine.Hide; NewBadges = mine.New;
                     MyPoints = mine.Points; MyRank = mine.Rank; MySeasonPoints = mine.SeasonPoints; MySeasonRank = mine.SeasonRank;
@@ -158,7 +159,7 @@ namespace ElansAddonHub.Lodge
                     BadgesChanged?.Invoke();
                     return true;
                 case LodgeMsg.BadgesMember:
-                    var theirs = BadgesMemberMsg.Read(new LodgeFieldsDict(m));
+                    var theirs = BadgesMemberMsg.Read(new LodgeJsonFields(m));
                     if (!SupportsBadges || !theirs.Ok) return true;
                     var who = theirs.Name;
                     if (string.IsNullOrEmpty(who)) return true;
@@ -166,7 +167,7 @@ namespace ElansAddonHub.Lodge
                     MemberBadgesLoaded?.Invoke(who);
                     return true;
                 case LodgeMsg.LadderData:
-                    var ladder = LadderDataMsg.Read(new LodgeFieldsDict(m));
+                    var ladder = LadderDataMsg.Read(new LodgeJsonFields(m));
                     if (!SupportsBadges || !ladder.Ok) return true;
                     LadderSeason = ladder.Season ?? "all"; LadderCurrent = ladder.Current ?? "";
                     LadderSeasons = ladder.Seasons;

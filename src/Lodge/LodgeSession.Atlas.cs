@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using System.Text;
 using ElansAddonHub.Services;
@@ -97,14 +98,15 @@ namespace ElansAddonHub.Lodge
 
         // One `atlas.data` page (or a cache file in the same shape). full = replace everything held first. Returns false when the page was ignored
         // (not an atlas.data frame, bad epoch, or an incremental page of another data set).
-        // (a frame or a cache file as Services/Json.cs reads it: through the typed envelope, shared/Elans.Shared/Lodge/AtlasMessages.cs)
-        public bool Apply(Dictionary<string, object> m) => m != null && Apply(AtlasDataMsg.Read(new LodgeFieldsDict(m)));
+        // (a frame or the cache file, parsed by the shared Lodge JSON engine: through the typed envelope, shared/Elans.Shared/Lodge/AtlasMessages.cs)
+        public bool Apply(JsonObject m) => m != null && Apply(AtlasDataMsg.Read(new LodgeJsonFields(m)));
 
-        // the sections are free-form objects (raw, in Services/Json.cs's model) and every entry is checked here (AtlasObs.Parse*)
+        // the sections are free-form objects (raw JsonNodes), turned into plain dictionaries once (LodgeJson.ToPlain) for the validators that
+        // check every entry here (AtlasObs.Parse*, which also read the player's own saved data in that model)
         public bool Apply(AtlasDataMsg m)
         {
             if (m == null) return false;
-            Dictionary<string, object> Sec(string name) => m.Section(name) as Dictionary<string, object>;
+            Dictionary<string, object> Sec(string name) => LodgeJson.ToPlain(m.Section(name) as JsonObject) as Dictionary<string, object>;
             var epoch = m.Epoch;
             if (!ValidEpoch(epoch)) return false;
             bool full = m.Full;
@@ -216,7 +218,7 @@ namespace ElansAddonHub.Lodge
                 }
                 if (any) NotesChanged++;
             }
-            var fl = m.Finds as List<object> ?? new List<object>();
+            var fl = LodgeJson.ToPlain(m.Finds as JsonArray) as List<object> ?? new List<object>();
             if (fl.Count > 0)
             {
                 var have = new HashSet<long>(finds.Select(f => f.Seq));
@@ -252,7 +254,7 @@ namespace ElansAddonHub.Lodge
 
         // ---------------------------------------------------------------- cache file (the same shape as a full atlas.data answer)
 
-        public Dictionary<string, object> ToCache()
+        public JsonObject ToCache()
         {
             Dictionary<string, object> Counters(Dictionary<int, AtlasObs.Counter> d)
             {
@@ -295,18 +297,18 @@ namespace ElansAddonHub.Lodge
                 if (f.Build > 0) o["gb"] = f.Build;
                 return (object)o;
             }).ToList();
-            // a full atlas.data answer, written by its typed class (the sections are raw, as on the wire)
-            return LodgeFieldsDict.Build(new AtlasDataMsg
-            {
-                Epoch = Epoch, Rev = Rev, At = Updated, Full = true, SeenMembers = SeenMembers, Finds = fl,
-                Sections = new Dictionary<string, object>
+            // a full atlas.data answer, written by its typed class (the sections are raw, as on the wire: built as plain dictionaries,
+            // made nodes by the shared Lodge JSON engine)
+            var plain = new Dictionary<string, object>
                 {
                     ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io,
                     ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco, ["npcspots"] = npc,
                     ["pickpocket"] = Counters(gather["pickpocket"]), ["skinning"] = Counters(gather["skinning"]), ["mining"] = Counters(gather["mining"]),
                     ["herbalism"] = Counters(gather["herbalism"]), ["salvage"] = Counters(gather["salvage"]), ["contained"] = Counters(gather["contained"]),
-                },
-            }.Write);
+                };
+            var msg = new AtlasDataMsg { Epoch = Epoch, Rev = Rev, At = Updated, Full = true, SeenMembers = SeenMembers, Finds = LodgeJson.FromPlain(fl) };
+            foreach (var kv in plain) msg.Sections[kv.Key] = LodgeJson.FromPlain(kv.Value);
+            return LodgeJson.Build(msg.Write);
         }
 
         // ---------------------------------------------------------------- the read API (for the Atlas page)
@@ -543,8 +545,8 @@ namespace ElansAddonHub.Lodge
             {
                 if (File.Exists(AtlasCachePath) && new FileInfo(AtlasCachePath).Length < 48L * 1024 * 1024)
                 {
-                    var cached = Json.Obj(File.ReadAllText(AtlasCachePath, Encoding.UTF8));
-                    if (cached != null) { var msg = AtlasDataMsg.Read(new LodgeFieldsDict(cached)); msg.Full = true; AtlasData.Apply(msg); }
+                    var cached = LodgeJson.Parse(File.ReadAllBytes(AtlasCachePath));          // the shared Lodge JSON engine (an atlas.data page)
+                    if (cached != null) { var msg = AtlasDataMsg.Read(new LodgeJsonFields(cached)); msg.Full = true; AtlasData.Apply(msg); }
                 }
             }
             catch (Exception e) { Util.Log("atlas: could not read the cache (" + e.GetType().Name + ")"); AtlasData.Clear(); }
@@ -559,7 +561,7 @@ namespace ElansAddonHub.Lodge
             try
             {
                 var tmp = AtlasCachePath + ".tmp";
-                File.WriteAllText(tmp, Json.Write(AtlasData.ToCache()), new UTF8Encoding(false));
+                File.WriteAllBytes(tmp, LodgeJson.SerializeUtf8(AtlasData.ToCache()));
                 if (File.Exists(AtlasCachePath)) File.Replace(tmp, AtlasCachePath, null); else File.Move(tmp, AtlasCachePath);
                 atlasCacheDirty = false; atlasCacheSaved = Clock();
             }
@@ -611,7 +613,7 @@ namespace ElansAddonHub.Lodge
             if (AtlasData.Rev > 0 && AtlasData.Epoch.Length > 0) { o.Since = AtlasData.Rev; o.Epoch = AtlasData.Epoch; }
             atlasFetching = true;
             Activity.Hold("atlas.get", "Receiving your Lodge's Atlas", Activity.Kind.Work);
-            _ = Send(LodgeFieldsDict.Build(o.Write));
+            _ = Send(LodgeJson.Build(o.Write));
         }
 
         void OnAtlasShared(AtlasSharedMsg m)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -125,10 +126,10 @@ namespace ElansAddonHub.Lodge
         public string Name, DisplayName = "", Role, AvatarId, Accent, About = "", PlayTimes = "", Main, ShowChars = "all", VisibleTo = "everyone";
         public bool Found, Guest, Online, Restricted;
         public List<CharVM> Chars = new List<CharVM>();
-        public Dictionary<string, object> Game;
+        public JsonObject Game;
 
         // welcome.profile (a dictionary) or profile:data's ProfileView
-        public static ProfileData Parse(Dictionary<string, object> p) => p == null ? null : From(ProfileView.Read(new LodgeFieldsDict(p)));
+        public static ProfileData Parse(JsonObject p) => p == null ? null : From(ProfileView.Read(new LodgeJsonFields(p)));
 
         public static ProfileData From(ProfileView p)
         {
@@ -138,7 +139,7 @@ namespace ElansAddonHub.Lodge
                 Name = p.Name, Found = p.Found, Guest = p.Guest, Role = p.Role ?? "member", Online = p.Online,
                 Restricted = p.Restricted, DisplayName = p.DisplayName ?? "", AvatarId = p.AvatarId, Accent = p.Accent, About = p.About ?? "",
                 PlayTimes = p.PlayTimes ?? "", Main = p.Main, ShowChars = p.ShowChars ?? "all", VisibleTo = p.VisibleTo ?? "everyone",
-                Game = p.Game as Dictionary<string, object>,      // the presence object, read as it came
+                Game = p.Game as JsonObject,                    // the presence object, kept as it came
             };
             foreach (var c in p.Chars) d.Chars.Add(CharVM.From(c));
             return d;

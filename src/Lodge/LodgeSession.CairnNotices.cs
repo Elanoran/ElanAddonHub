@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using Elans.Shared;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
@@ -41,15 +42,15 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnNotices = features.Contains("cairnnotices");
             CairnNotices = new List<CairnNotice>();
-            if (SupportsCairnNotices && !IsGuestNow) _ = Send(LodgeFieldsDict.Build(new CairnNoticesGetMsg().Write));
+            if (SupportsCairnNotices && !IsGuestNow) _ = Send(LodgeJson.Build(new CairnNoticesGetMsg().Write));
         }
 
         void ResetCairnNotices() { SupportsCairnNotices = false; CairnNotices = new List<CairnNotice>(); }
 
-        void OnCairnNotices(Dictionary<string, object> m)
+        void OnCairnNotices(JsonObject m)
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            CairnNotices = CairnNoticesMsg.Read(new LodgeFieldsDict(m)).List.Select(ParseCairnNotice)
+            CairnNotices = CairnNoticesMsg.Read(new LodgeJsonFields(m)).List.Select(ParseCairnNotice)
                 .Where(n => n != null && n.Expires > now).Take(20).ToList();
             // ids the Cairn no longer sends are forgotten, so the setting doesn't grow
             if (Settings?.CairnNoticesDismissed is List<long> gone && gone.RemoveAll(id => CairnNotices.All(n => n.Id != id)) > 0)
@@ -58,7 +59,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // null unless every field is sane and the signature matches the pinned Cairn key
-        public static CairnNotice ParseCairnNotice(Dictionary<string, object> o) => ParseCairnNotice(CairnNoticeEntry.Read(new LodgeFieldsDict(o)));
+        public static CairnNotice ParseCairnNotice(JsonObject o) => ParseCairnNotice(CairnNoticeEntry.Read(new LodgeJsonFields(o)));
 
         public static CairnNotice ParseCairnNotice(CairnNoticeEntry o)
         {
@@ -87,11 +88,11 @@ namespace ElansAddonHub.Lodge
             if (Settings.CairnNoticesDismissed == null) Settings.CairnNoticesDismissed = new List<long>();
             Settings.CairnNoticesDismissed.Add(n.Id);
             SettingsStore.Save(Settings);
-            if (CanModerate) _ = Send(LodgeFieldsDict.Build(new CairnNoticeSeenMsg { Ids = { n.Id } }.Write));
+            if (CanModerate) _ = Send(LodgeJson.Build(new CairnNoticeSeenMsg { Ids = { n.Id } }.Write));
             Changed?.Invoke();
         }
 
         // self-test: feed a notice list as if the Lodge had sent it
-        public void CairnNoticesForTest(Dictionary<string, object> m) => OnCairnNotices(m);
+        public void CairnNoticesForTest(JsonObject m) => OnCairnNotices(m);
     }
 }

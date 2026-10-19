@@ -267,11 +267,44 @@ public class JsonLeniencyTests
         Golden("JsonLeniency.golden.txt", Table(OldSides));
     }
 
-    // the shared engine (LodgeJson.Parse + LodgeJsonFields), as the Lodge server uses it
-    public static ILodgeFields SharedServer(byte[] b) => LodgeJson.Parse(b) is JsonObject o ? new LodgeJsonFields(o) : null;
+    // the shared engine (LodgeJson.Parse + LodgeJsonFields): one engine, the same on both sides of the Lodge link
+    public static ILodgeFields Shared(byte[] b) => LodgeJson.Parse(b) is JsonObject o ? new LodgeJsonFields(o) : null;
 
-    // Deliberate differences of the shared engine from the old server: input -> why. Everything else must read exactly as before.
+    // Deliberate differences of the shared engine from the old SERVER: input -> why. Everything else reads exactly as before.
     static readonly Dictionary<string, string> ServerChanges = new();
+
+    // Where the old Outpost read differently, the shared engine reads as the old server did (or as ServerChanges says): input -> why that is
+    // the Outpost's behaviour now. The rule was to keep the Outpost's own leniency unless the server's is clearly safer - none of the old
+    // Outpost's leniencies is kept, for these reasons:
+    static readonly Dictionary<string, string> OutpostChanges = new()
+    {
+        ["a = 2^53 + 1"] = "whole numbers beyond 2^53 are read exactly (they were rounded through a double); every id and time is far below that",
+        ["a = array of huge numbers"] = "the same, inside an array (Longs)",
+        ["a = array of whole fractions"] = "Longs takes whole JSON numbers only (1.0 / 2e0 = 0, as on the server): the Outpost's one Longs reading "
+            + "(armory.crafters spells) is not used - OnArmoryCrafters reads those numbers itself, strictly",
+        ["a = escaped lone high"] = "a lone surrogate is no text: the server's reading (see the parser's own rules)",
+        ["a = escaped lone low"] = "the same",
+        ["escaped lone surrogate in a key"] = "the same, in a key",
+        ["a = deep 64"] = "at most 64 levels, as on the server: the old reader took any depth and a very deep frame ended the process",
+        ["a = deep 1000"] = "the same",
+        ["very deep (100000)"] = "the same: skipped instead of a stack overflow",
+        ["duplicate key"] = "duplicate keys: one rule for both sides (see the parser's own rules) instead of the Outpost's last-wins",
+        ["duplicate key, different types"] = "the same",
+        ["duplicate key nested"] = "the same",
+        ["duplicate key in an array entry"] = "the same",
+        ["non-JSON whitespace (NBSP)"] = "invalid JSON is skipped, as on the server: every Lodge writes valid JSON, so leniency here only helps a forged frame",
+        ["trailing garbage"] = "the same",
+        ["two objects"] = "the same",
+        ["plus sign"] = "the same",
+        ["leading zero"] = "the same",
+        ["leading dot"] = "the same",
+        ["trailing dot"] = "the same",
+        ["raw control character in a string"] = "the same",
+        ["raw newline in a string"] = "the same",
+        ["unknown escape"] = "the same",
+    };
+
+    static string Line(List<(string Member, string Value)> d) => string.Join("  ", d.Select(x => x.Member + "=" + x.Value));
 
     [Fact]
     public void The_shared_engine_reads_every_tricky_input_as_the_server_did()
@@ -280,9 +313,26 @@ public class JsonLeniencyTests
         foreach (var (name, frame) in Cases())
         {
             if (ServerChanges.ContainsKey(name)) continue;
-            var old = Describe(OldSides[0].Read, frame); var now = Describe(SharedServer, frame);
-            if (!old.SequenceEqual(now)) bad.Add(name + "\n  old:    " + string.Join("  ", old.Select(x => x.Member + "=" + x.Value)) + "\n  shared: " + string.Join("  ", now.Select(x => x.Member + "=" + x.Value)));
+            var old = Describe(OldSides[0].Read, frame); var now = Describe(Shared, frame);
+            if (!old.SequenceEqual(now)) bad.Add(name + "\n  old:    " + Line(old) + "\n  shared: " + Line(now));
         }
         Assert.True(bad.Count == 0, string.Join("\n", bad));
+        Assert.True(ServerChanges.Keys.All(k => Cases().Any(c => c.Name == k)), "ServerChanges names an input that isn't in the table");
+    }
+
+    [Fact]
+    public void The_Outpost_reads_like_before_except_where_a_decision_says_otherwise()
+    {
+        // the old Outpost against the shared engine: they differ exactly on the inputs OutpostChanges explains (and agree on every other one)
+        var differ = new List<string>();
+        foreach (var (name, frame) in Cases())
+        {
+            var old = Describe(OldSides[1].Read, frame); var now = Describe(Shared, frame);
+            if (!old.SequenceEqual(now)) differ.Add(name);
+        }
+        var unexplained = differ.Where(n => !OutpostChanges.ContainsKey(n)).ToList();
+        var stale = OutpostChanges.Keys.Where(n => !differ.Contains(n)).ToList();
+        Assert.True(unexplained.Count == 0, "the Outpost now reads these differently, with no decision in OutpostChanges:\n" + string.Join("\n", unexplained));
+        Assert.True(stale.Count == 0, "OutpostChanges explains inputs that read alike (remove them):\n" + string.Join("\n", stale));
     }
 }

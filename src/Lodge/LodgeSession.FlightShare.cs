@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Text;
 using ElansAddonHub.Services;
 using Elans.Shared;
@@ -115,14 +116,14 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFlights) return;
             flightLastGet = Clock();
-            _ = Send(LodgeFieldsDict.Build(new FlightsGetMsg().Write));
+            _ = Send(LodgeJson.Build(new FlightsGetMsg().Write));
         }
 
-        void OnFlightShared(Dictionary<string, object> m)
+        void OnFlightShared(JsonObject m)
         {
             var batch = flightInflight;
             flightInflight = null;
-            var answer = FlightsSharedMsg.Read(new LodgeFieldsDict(m));
+            var answer = FlightsSharedMsg.Read(new LodgeJsonFields(m));
             if (answer.Ok && batch != null)
             {
                 var sent = FlightSent();
@@ -140,7 +141,7 @@ namespace ElansAddonHub.Lodge
             RequestFlights();
         }
 
-        void OnFlightData(Dictionary<string, object> m)
+        void OnFlightData(JsonObject m)
         {
             if (!SupportsFlights) return;
             var data = FlightShare.ParseServer(m);

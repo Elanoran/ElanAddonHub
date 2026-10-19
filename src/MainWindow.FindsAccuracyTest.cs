@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Services;
@@ -52,12 +53,12 @@ namespace ElansAddonHub
                 string.Join(",", snap.UnknownSections) + " finds " + snap.Finds.Count + " build " + snap.Build + " gather " + string.Join(",", snap.Gather.Keys));
             var b0 = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>());
             var b1 = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>(), includeExtras: true);
-            var k0 = b0.Frame.Child("kills").Child("8");
-            var k1 = b1.Frame.Child("kills").Child("8");
+            var k0 = Wire(b0.Frame).Child("kills").Child("8");
+            var k1 = Wire(b1.Frame).Child("kills").Child("8");
             Check("sharing: an older lodge gets the plain counters (no extras, no new sections, no finds from inside items); an atlas9 lodge gets all of it; a resend sends nothing",
-                !k0.ContainsKey("x") && !b0.Frame.ContainsKey("pickpocket") && !b0.Frame.ContainsKey("finds") && k1.ContainsKey("x") && b1.Frame.Child("pickpocket") != null && b1.Frame.Child("contained") != null
-                && b1.Frame.List("finds").Count == 1 && AtlasObs.MakeBatch(snap, null, b1.Sigs, includeExtras: true) == null,
-                Json.Write(b0.Frame).Substring(0, Math.Min(300, Json.Write(b0.Frame).Length)) + " || " + Json.Write(b1.Frame).Substring(0, Math.Min(400, Json.Write(b1.Frame).Length)));
+                !k0.ContainsKey("x") && !Wire(b0.Frame).ContainsKey("pickpocket") && !Wire(b0.Frame).ContainsKey("finds") && k1.ContainsKey("x") && Wire(b1.Frame).Child("pickpocket") != null && Wire(b1.Frame).Child("contained") != null
+                && Wire(b1.Frame).List("finds").Count == 1 && AtlasObs.MakeBatch(snap, null, b1.Sigs, includeExtras: true) == null,
+                LodgeJson.Serialize(b0.Frame).Substring(0, Math.Min(300, LodgeJson.Serialize(b0.Frame).Length)) + " || " + LodgeJson.Serialize(b1.Frame).Substring(0, Math.Min(400, LodgeJson.Serialize(b1.Frame).Length)));
 
             // ---- the wording of a rate
             Check("rate text: \"4 of 37 kills (10.8 %)\", and under 30 kills no rate is claimed",
@@ -65,7 +66,7 @@ namespace ElansAddonHub
 
             // ---- the lodge's merge and the pages
             var lodge = new Lodge.LodgeAtlas();
-            bool applied = lodge.Apply(new Dictionary<string, object>
+            bool applied = lodge.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
             {
                 ["t"] = "atlas.data", ["epoch"] = "fa1", ["rev"] = 3.0, ["full"] = true,
                 ["kills"] = new Dictionary<string, object>
@@ -81,11 +82,11 @@ namespace ElansAddonHub
                 ["skinning"] = new Dictionary<string, object> { ["8"] = new Dictionary<string, object> { ["n"] = 30.0, ["m"] = 2.0, ["items"] = new Dictionary<string, object> { ["2318"] = FaItem(30, 60) } } },
                 ["pickpocket"] = new Dictionary<string, object> { ["8"] = new Dictionary<string, object> { ["n"] = 5.0, ["m"] = 1.0, ["items"] = new Dictionary<string, object> { ["5428"] = FaItem(1, 1) } } },
                 ["contained"] = new Dictionary<string, object> { ["5523"] = new Dictionary<string, object> { ["n"] = 50.0, ["m"] = 2.0, ["items"] = new Dictionary<string, object> { ["5498"] = FaItem(12, 12) } } },
-            });
+            }) as System.Text.Json.Nodes.JsonObject);
             var back = new Lodge.LodgeAtlas();
             Check("lodge: the merge's dup and extras and the new counters are read and survive the cache file",
                 applied && lodge.Loot("npc", 8).X?.Dup == 4 && lodge.Loot("skin", 8)?.N == 30 && lodge.Loot("item", 5523)?.N == 50
-                && back.Apply(Json.Obj(Json.Write(lodge.ToCache()))) && back.Loot("npc", 8).X?.Dup == 4 && back.Loot("npc", 8).X.It[2000].Sx[1047] == 6 && back.Loot("pick", 8)?.N == 5 && back.Loot("item", 5523)?.N == 50);
+                && back.Apply(LodgeJson.Parse(LodgeJson.Serialize(lodge.ToCache()))) && back.Loot("npc", 8).X?.Dup == 4 && back.Loot("npc", 8).X.It[2000].Sx[1047] == 6 && back.Loot("pick", 8)?.N == 5 && back.Loot("item", 5523)?.N == 50);
 
             var hadLodge = AtlasQuery.Context.Lodge;
             try
