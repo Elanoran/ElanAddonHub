@@ -115,6 +115,27 @@ namespace ElansAddonHub
             check("https-only: the web form and the older #invite= form are checked the same way", InviteLinks.Parse("https://site.example/lodge/#join=http://example.org/lodge|" + InvA).Insecure
                 && InviteLinks.Parse("http://example.org/lodge#invite=" + InvA).Insecure && !InviteLinks.Parse("https://example.org/lodge#invite=" + InvA).Insecure);
             check("https-only: the refusal text explains what to do", InviteLinks.InsecureText.Contains("https://") && InviteLinks.InsecureText.Contains("Guild Master") && InviteLinks.InsecureText.Contains("localhost"));
+            // 3.1.1 (L1): a user-info part shows a trusted name before the host the link really goes to - refused in every form
+            check("user-info: refused in an elanshub:// link, a web link and the older form", InviteLinks.Parse("elanshub://lodge/join#nasferatu.dk@evil.example/lodge|" + InvA).MissingAddress
+                && InviteLinks.Parse("elanshub://lodge/join#https://nasferatu.dk@evil.example/lodge|" + InvA).Url == null && InviteLinks.Parse("elanshub://lodge/join#a:b@evil.example/lodge|" + InvA).MissingAddress
+                && InviteLinks.Parse("elanshub://lodge/join#nasferatu.dk%40evil.example/lodge|" + InvA).MissingAddress
+                && InviteLinks.Parse("https://site.example/lodge/#join=nasferatu.dk@evil.example/lodge|" + InvA).MissingAddress
+                && InviteLinks.Parse("https://nasferatu.dk@evil.example/lodge#invite=" + InvA).Url == null
+                && LinkOpen.Validate("elanshub://lodge/join#nasferatu.dk@evil.example/lodge|" + InvA) == null);
+            check("user-info: ValidAddress refuses it, honest addresses are still fine", !InviteLinks.ValidAddress("nasferatu.dk@evil.example/lodge") && !InviteLinks.ValidAddress("https://x@evil.example")
+                && InviteLinks.ValidAddress("nasferatu.dk/lodge") && InviteLinks.ValidAddress("https://example.org:8443/lodge") && InviteLinks.ValidAddress("[::1]:5280/lodge"));
+            check("shown address: the real host, punycode for an internationalised name, the port only when not the default ("
+                + LodgeView.ShortAddress("https://nаsferatu.dk/lodge") + ")",
+                LodgeView.ShortAddress("https://nasferatu.dk/lodge") == "nasferatu.dk/lodge" && LodgeView.ShortAddress("https://nasferatu.dk/lodge/") == "nasferatu.dk/lodge"
+                && LodgeView.ShortAddress("http://127.0.0.1:5280/lodge") == "127.0.0.1:5280/lodge" && LodgeView.ShortAddress("https://example.org:443/lodge") == "example.org/lodge"
+                && LodgeView.ShortAddress("https://nasferatu.dk@evil.example/lodge") == "evil.example/lodge"
+                && LodgeView.ShortAddress("https://nаsferatu.dk/lodge").StartsWith("xn--") && LodgeView.ShortAddress("https://bücher.example/lodge") == "xn--bcher-kva.example/lodge");
+            // 3.1.1 (L2): a saved sign-in is only for the same scheme + host + port
+            check("same lodge: scheme, host and port must match; the path may differ", InviteLinks.SameOrigin("https://example.org/lodge", "https://EXAMPLE.org/lodge2")
+                && InviteLinks.SameOrigin("example.org/lodge", "https://example.org:443/x") && !InviteLinks.SameOrigin("https://example.org/lodge", "https://evil.example/lodge")
+                && !InviteLinks.SameOrigin("https://example.org/lodge", "https://example.org:8443/lodge") && !InviteLinks.SameOrigin("https://example.org/lodge", "http://example.org/lodge")
+                && !InviteLinks.SameOrigin("https://example.org/lodge", "https://example.org.evil.example/lodge") && !InviteLinks.SameOrigin("https://example.org/lodge", null)
+                && !InviteLinks.SameOrigin("https://example.org/lodge", "https://example.org@evil.example/lodge"));
             l = InviteLinks.Parse("elanshub://lodge/join#example.org/lodge%7C" + InvA);
             check("link: a pipe that a chat app turned into %7C still parses", l.Url == "https://example.org/lodge" && l.Secret == InvA);
             l = InviteLinks.Parse("Join us: <elanshub://lodge/join#example.org/lodge|" + InvA + ">");
@@ -335,12 +356,25 @@ namespace ElansAddonHub
             LodgePage.RestoreSavedForTest();
             check("keep: 'Back to my saved sign-in' reconnects with the saved token", Session.Connected && Session.UsingToken && !LodgePage.JoinPanelVisibleForTest && !Session.HasPendingCredential && stillToken(null));
 
-            // an unreachable address / refused connect counts as a failed attempt too
+            // 3.1.1 (L2): another host, port or scheme with an empty code never gets the saved token - it needs its own invite
+            foreach (var other in new[] { "http://127.0.0.1:8/lodge", "http://localhost:9/lodge", "https://127.0.0.1:9/lodge", "https://evil.example/lodge" })
+            {
+                Session.Disconnect();
+                LodgePage.EditConnection();
+                LodgePage.UrlBoxForTest = other;
+                LodgePage.CodeBoxForTest = "";
+                LodgePage.JoinForTest();
+                check("edit connection: " + other + " with no code is refused, nothing is sent or pending (" + LodgePage.JoinStatusForTest + ")",
+                    LodgePage.JoinStatusForTest == LodgeView.OtherLodgeNeedsInviteText && !Session.HasPendingCredential && !Session.Connected && stillToken(null));
+                LodgePage.CancelEditForTest();
+            }
+            // an unreachable address / refused connect counts as a failed attempt too (the same lodge, another path: the saved token may go)
             LodgePage.EditConnection();
-            LodgePage.UrlBoxForTest = "http://127.0.0.1:8/other";
+            LodgePage.UrlBoxForTest = "http://127.0.0.1:9/other";
             LodgePage.CodeBoxForTest = "";
             LodgePage.JoinForTest();
-            check("keep: a new address alone is also only a candidate", Session.HasPendingCredential && stillToken(null));
+            check("keep: a new path on the same lodge alone is also only a candidate", Session.HasPendingCredential && stillToken(null));
+
             Session.StopForTest("Can't reach the lodge - check the address and your connection");
             await Task.Delay(100);
             check("keep: ...and a failed connect keeps the old address and token", stillToken(null) && LodgePage.RestoreVisibleForTest);

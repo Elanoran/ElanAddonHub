@@ -496,6 +496,8 @@ namespace ElansAddonHub.Lodge
         }
 
         const string MissingAddressText = "This link is missing the lodge address - ask for a new link";
+        public const string OtherLodgeNeedsInviteText = "That is a different Lodge - your saved sign-in only works for its own. Paste an invite link for the new one.";
+
 
         // Nothing here writes the saved sign-in. The new one is handed to the session as a candidate, which stores it only after the welcome.
         void TryJoin()
@@ -510,10 +512,12 @@ namespace ElansAddonHub.Lodge
             var url = link.Url;
             var secret = link.Secret ?? CodeBox.Password.Trim();
             var bad = !Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http");
-            // editing the connection with nothing new typed: keep the saved sign-in
+            // editing the connection with nothing new typed: keep the saved sign-in - but only for the same Lodge (3.1.1: the same scheme, host
+            // and port). A saved token or code is never sent to another address; that one needs its own invite.
             if (secret.Length == 0 && editingConnection && LodgeCredentials.Load(Session.Settings, out var kept, out var keptIsToken))
             {
                 if (bad) { JoinFail("Paste the invite link you were sent (elanshub://lodge/join#...)"); return; }
+                if (!InviteLinks.SameOrigin(url, Session.Settings.LodgeUrl)) { JoinFail(OtherLodgeNeedsInviteText); return; }
                 Session.Settings.LodgeName = NameBox.Text.Trim();
                 Session.Settings.LodgeDeviceName = string.IsNullOrWhiteSpace(DeviceBox.Text) ? null : DeviceBox.Text.Trim();
                 RejoinWithSaved(url, kept, keptIsToken);
@@ -604,12 +608,20 @@ namespace ElansAddonHub.Lodge
         }
 
         // "nasferatu.dk/lodge" - how a lodge address is shown to people
+        // 3.1.1: what is shown is the host the Outpost really connects to: an internationalised name as its punycode (xn--...), never a
+        // user-info part, the port only when it is not the default
         public static string ShortAddress(string url)
         {
             var u = (url ?? "").Trim();
+            if (u.Length > 0 && Uri.TryCreate(LodgeSession.NormalizeUrl(u), UriKind.Absolute, out var parsed) && parsed.IdnHost.Length > 0)
+            {
+                var host = parsed.HostNameType == UriHostNameType.IPv6 ? "[" + parsed.IdnHost.Trim('[', ']') + "]" : parsed.IdnHost;
+                return (host + (parsed.IsDefaultPort ? "" : ":" + parsed.Port) + parsed.AbsolutePath).TrimEnd('/');
+            }
             foreach (var p in new[] { "https://", "http://" }) if (u.StartsWith(p, StringComparison.OrdinalIgnoreCase)) { u = u.Substring(p.Length); break; }
             return u.TrimEnd('/');
         }
+
 
         public static string MaskSecret(string secret)
         {

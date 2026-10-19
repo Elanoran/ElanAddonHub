@@ -58,18 +58,41 @@ namespace ElansAddonHub.Lodge
             return Uri.TryCreate(t, UriKind.Absolute, out var u) && u.IsLoopback ? null : InsecureText;
         }
 
-        // a real lodge address: no template brackets, a host that can exist (a dot, localhost, an IP, or an explicit port)
+        // a real lodge address: no template brackets, a host that can exist (a dot, localhost, an IP, or an explicit port).
+        // 3.1.1: never a user-info part ("trusted.name@other.host" shows a name you know before the host it really goes to)
         public static bool ValidAddress(string server)
         {
             if (string.IsNullOrWhiteSpace(server) || server.IndexOfAny(new[] { '<', '>', '{', '}', ' ', '"', (char)39 }) >= 0) return false;
             var norm = LodgeSession.NormalizeUrl(server);
             if (!Uri.TryCreate(norm, UriKind.Absolute, out var u) || (u.Scheme != "http" && u.Scheme != "https") || string.IsNullOrEmpty(u.Host)) return false;
+            if (u.UserInfo.Length > 0 || Authority(norm).IndexOf('@') >= 0) return false;
             if (Uri.CheckHostName(u.Host) == UriHostNameType.Unknown) return false;
             return u.Host.Contains(".") || u.HostNameType == UriHostNameType.IPv4 || u.HostNameType == UriHostNameType.IPv6
                 || u.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || !u.IsDefaultPort;
         }
 
+        // the "host[:port]" part of an address as written (after the scheme, before the first / ? # or \)
+        static string Authority(string url)
+        {
+            var t = url ?? "";
+            int s = t.IndexOf("://", StringComparison.Ordinal);
+            if (s >= 0) t = t.Substring(s + 3);
+            int e = t.IndexOfAny(new[] { '/', '?', '#', '\\' });
+            return e < 0 ? t : t.Substring(0, e);
+        }
+
+        // 3.1.1: the same Lodge for a saved sign-in: the same scheme, host and port (the path may differ). A saved token or code is only ever
+        // sent again to the Lodge it was made for; another address needs its own invite.
+        public static bool SameOrigin(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+            if (!Uri.TryCreate(LodgeSession.NormalizeUrl(a), UriKind.Absolute, out var x) || !Uri.TryCreate(LodgeSession.NormalizeUrl(b), UriKind.Absolute, out var y)) return false;
+            if (x.UserInfo.Length > 0 || y.UserInfo.Length > 0) return false;
+            return string.Equals(x.Scheme, y.Scheme, StringComparison.OrdinalIgnoreCase) && string.Equals(x.IdnHost, y.IdnHost, StringComparison.OrdinalIgnoreCase) && x.Port == y.Port;
+        }
+
         // a whole link pasted where a code belongs
+
         public static bool LooksLikeLink(string s) =>
             s != null && (s.IndexOf("elanshub:", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("#invite=", StringComparison.OrdinalIgnoreCase) >= 0
                           || s.IndexOf("#join=", StringComparison.OrdinalIgnoreCase) >= 0);
@@ -148,8 +171,10 @@ namespace ElansAddonHub.Lodge
                 var m = Regex.Match(frag, @"(?:^|&)invite=([A-Za-z0-9._-]+)");
                 if (m.Success) r.Secret = m.Groups[1].Value;
                 r.Url = LodgeSession.NormalizeUrl(before);
+                if (!string.IsNullOrEmpty(r.Url) && Authority(r.Url).IndexOf('@') >= 0) { r.Url = null; r.MissingAddress = true; }   // 3.1.1: no user-info here either
             }
             r.IsInvite = LooksLikeInvite(r.Secret);
+
             r.Insecure = InsecureReason(r.Url) != null;
             return r;
         }
