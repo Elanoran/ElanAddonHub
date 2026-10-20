@@ -205,45 +205,98 @@ namespace ElansAddonHub.Services
         // content key -> encoding key (first one)
         public byte[] EncodingKeyFor(byte[] ckey)
         {
+            int size = encPageKb * 1024;
+            var pg = new byte[size];
+            encoding.ReadAt(encPagesStart + (long)EncodingPageOf(ckey, 0) * size, pg, 0, size);
+            int at = FindInEncodingPage(pg, size, ckey, 0);
+            if (at < 0) return null;
+            var ek = new byte[16];
+            Buffer.BlockCopy(pg, at, ek, 0, 16);
+            return ek;
+        }
+
+        // the page of the encoding file that would hold the content key at ckey[ko..ko+16]
+        int EncodingPageOf(byte[] ckey, int ko)
+        {
             int lo = 0, hi = encPages - 1, page = 0;
             while (lo <= hi)
             {
                 int mid = (lo + hi) >> 1;
-                if (Cmp16(encFirstKeys, mid * 16, ckey) <= 0) { page = mid; lo = mid + 1; } else hi = mid - 1;
+                if (Cmp16(encFirstKeys, mid * 16, ckey, ko) <= 0) { page = mid; lo = mid + 1; } else hi = mid - 1;
             }
-            int size = encPageKb * 1024;
-            var pg = new byte[size];
-            encoding.ReadAt(encPagesStart + (long)page * size, pg, 0, size);
+            return page;
+        }
+
+        // where the (first) encoding key of the content key at ckey[ko..ko+16] starts in a page of the encoding file; -1 = not in this page
+        static int FindInEncodingPage(byte[] pg, int size, byte[] ckey, int ko)
+        {
             int p = 0;
             while (p + 22 <= size)
             {
                 int n = pg[p];
                 if (n == 0) break;
-                if (Cmp16(pg, p + 6, ckey) == 0)
-                {
-                    var ek = new byte[16];
-                    Buffer.BlockCopy(pg, p + 22, ek, 0, 16);
-                    return ek;
-                }
+                if (Cmp16(pg, p + 6, ckey, ko) == 0) return p + 22;
                 p += 22 + 16 * n;
             }
-            return null;
+            return -1;
         }
 
-        static int Cmp16(byte[] a, int ao, byte[] b)
+        static int Cmp16(byte[] a, int ao, byte[] b, int bo = 0)
         {
-            for (int i = 0; i < 16; i++) { int c = a[ao + i].CompareTo(b[i]); if (c != 0) return c; }
+            for (int i = 0; i < 16; i++) { int c = a[ao + i].CompareTo(b[bo + i]); if (c != 0) return c; }
             return 0;
+        }
+
+        // for many content keys at once (16 bytes each, `count` of them in ckeys): is the file in the local storage? The keys are taken in sorted order, so
+        // every page of the encoding file is read once however many keys fall in it (the root index asks this for every tie, thousands of keys)
+        internal bool[] AreLocal(byte[] ckeys, int count)
+        {
+            var res = new bool[count];
+            if (count == 0) return res;
+            var ord = new int[count];
+            for (int i = 0; i < count; i++) ord[i] = i;
+            Array.Sort(ord, (x, y) => { for (int i = 0; i < 16; i++) { int c = ckeys[x * 16 + i].CompareTo(ckeys[y * 16 + i]); if (c != 0) return c; } return x.CompareTo(y); });
+            int size = encPageKb * 1024, last = -1;
+            var pg = new byte[size]; var ek = new byte[16];
+            foreach (var i in ord)
+            {
+                int page = EncodingPageOf(ckeys, i * 16);
+                if (page != last) { encoding.ReadAt(encPagesStart + (long)page * size, pg, 0, size); last = page; }
+                int at = FindInEncodingPage(pg, size, ckeys, i * 16);
+                if (at < 0) continue;
+                Buffer.BlockCopy(pg, at, ek, 0, 16);
+                res[i] = TryFind(ek, out _);
+            }
+            return res;
         }
 
         // ---- the root as a sorted table (opt-in: UseRootIndex). Without it every ResolveFileIds walks (and decodes) the whole root file again, about
         // 0.1 s and 50+ MB of short-lived arrays each time; a reader that asks for files in several rounds (the map data: a WDT, then its tiles, per
         // instance; the area probe: one tile at a time) paid that dozens or hundreds of times. With it the root is walked once per opened storage and
-        // every later lookup is a binary search. Same answers as the walk: per FileDataID the entry with the best score, the first one on a tie.
+        // every later lookup is a binary search. Same answers as the walk: per FileDataID the entry with the best score, the first one on a tie (see below).
         public bool UseRootIndex;
+        // 3.1.1, ties: a root can list one FileDataID twice with the same score - the Forever client lists most terrain and building textures in two blocks
+        // with the same content flags and locale, and only the second copy is on the disk. On such a tie the copy whose content is local wins; when none or
+        // several are local, the first one as before. The index keeps the other copies of its ties and decides an id the first time a reader asks for it
+        // (all the ids of one ResolveFileIds together, one pass over the encoding pages they need), so building the index costs nothing more and a decided
+        // id is a plain lookup afterwards; a walk of the root decides its wanted ids at once. Off only for the self-test's before / after count.
+        internal bool PreferLocalOnTie = true;
+        readonly HashSet<int> laterWalk = new HashSet<int>();  // the ids the walks so far took from a later copy
+        // ids of the index listed more than once with their best score / of those, the ones decided so far that took a later copy (the first is not local)
+        public int RootTies { get { lock (rootGate) return rootTable?.TieIds.Length ?? 0; } }
+        public int RootTiesTookLater { get { lock (rootGate) return rootTable == null ? 0 : rootTable.TieState.Count(s => s == 2); } }
+        // this id's content key is a later copy of a tie, taken because the first copy is not local (so before 3.1.1 it read as missing; the world map's
+        // buildings use it to remake the shapes whose colours were stand-ins). Known once the id was looked up.
+        public bool TookLaterCopy(int fdid)
+        {
+            lock (laterWalk) if (laterWalk.Contains(fdid)) return true;
+            RootPick t; lock (rootGate) t = rootTable;
+            if (t == null) return false;
+            lock (t) { int j = Array.BinarySearch(t.TieIds, fdid); return j >= 0 && t.TieState[j] == 2; }
+        }
+        public long RootIndexBytes { get { lock (rootGate) return rootTable?.Bytes ?? 0; } }
         readonly object rootGate = new object();
-        sealed class RootTable { public int[] Ids; public byte[] Keys; }     // Ids sorted, unique; Keys 16 bytes per id, same order
-        RootTable rootTable;    // under rootGate (set once)
+        RootPick rootTable;     // under rootGate (set once); its keys and tie states under lock (itself)
         volatile bool disposed;
         public int RootIndexCount { get { lock (rootGate) return rootTable?.Ids.Length ?? 0; } }
         public long RootIndexMs { get; private set; }
@@ -256,59 +309,167 @@ namespace ElansAddonHub.Services
             {
                 // built once, by the first caller; the others wait for it here. ids and keys are taken together (one object), so a reader never sees
                 // the ids of the new table with the keys of none
-                RootTable t;
+                RootPick t;
                 lock (rootGate) { if (rootTable == null) BuildRootIndex(); t = rootTable; }
                 var hit = new Dictionary<int, byte[]>();
-                foreach (var fid in wanted)
+                lock (t)
                 {
-                    int i = Array.BinarySearch(t.Ids, fid);
-                    if (i < 0) continue;
-                    var k = new byte[16];
-                    Buffer.BlockCopy(t.Keys, i * 16, k, 0, 16);
-                    hit[fid] = k;
+                    if (PreferLocalOnTie) DecideTies(t, wanted, AreLocal);
+                    foreach (var fid in wanted)
+                    {
+                        int i = Array.BinarySearch(t.Ids, fid);
+                        if (i < 0) continue;
+                        var k = new byte[16];
+                        Buffer.BlockCopy(t.Keys, i * 16, k, 0, 16);
+                        hit[fid] = k;
+                    }
                 }
                 return hit;
             }
             return WalkRoot(wanted);
         }
 
+        // the self-test's count: every tie of the index decided now
+        internal void DecideAllTies() { RootPick t; lock (rootGate) { if (rootTable == null) BuildRootIndex(); t = rootTable; } lock (t) DecideTies(t, null, AreLocal); }
+
         void BuildRootIndex()
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            int n = 0;
             int cap0 = Math.Max(1 << 16, Math.Min(1 << 26, RootEntryCount() + 1024));     // the header says how many entries there are: no growing arrays
-            var ids = new int[cap0]; var scores = new byte[cap0]; var keys = new byte[cap0 * 16];
-            ForEachRootBlock((nr, idBuf, keyBuf, sc) =>
+            rootTable = PickRootEntries(ForEachRootBlock, cap0, null);
+            RootIndexMs = sw.ElapsedMilliseconds;
+        }
+
+        Dictionary<int, byte[]> WalkRoot(HashSet<int> wanted)
+        {
+            var p = PickRootEntries(ForEachRootBlock, Math.Min(wanted.Count, 1 << 20) + 16, wanted);
+            if (PreferLocalOnTie) DecideTies(p, null, AreLocal);
+            var later = new List<int>();
+            for (int j = 0; j < p.TieIds.Length; j++) if (p.TieState[j] == 2) later.Add(p.TieIds[j]);
+            if (later.Count > 0) lock (laterWalk) foreach (var id in later) laterWalk.Add(id);
+            var res = new Dictionary<int, byte[]>(p.Ids.Length);
+            for (int i = 0; i < p.Ids.Length; i++)
             {
-                if (n + nr > ids.Length)
+                var k = new byte[16];
+                Buffer.BlockCopy(p.Keys, i * 16, k, 0, 16);
+                res[p.Ids[i]] = k;
+            }
+            return res;
+        }
+
+        // what the root gives per FileDataID: Ids sorted and unique, Keys 16 bytes per id in the same order (the first entry of the best score). The ties
+        // (ids with two or more entries of their best score), sorted: TieIds, the other entries' keys in root order in TieKeys from TieAt[j] * 16 to
+        // TieAt[j + 1] * 16, and TieState 0 = not decided yet, 1 = the first entry stays, 2 = a later entry was taken (its key is now in Keys)
+        internal sealed class RootPick
+        {
+            public int[] Ids; public byte[] Keys;
+            public int[] TieIds, TieAt; public byte[] TieKeys, TieState;
+            public long Bytes => Ids.Length * 4L + Keys.Length + TieIds.Length * 4L + TieAt.Length * 4L + TieKeys.Length + TieState.Length;
+        }
+
+        // the choice over every block of a root (forEachBlock gives: entries, their absolute ids as int32 little endian, their content keys, the block's score),
+        // for the wanted ids only (null = all): per id the entry with the best score, the earliest one first; the other entries of that score kept for
+        // DecideTies. The scores themselves (locale, content flags) are not touched. Static, so the self-test can run it on a root of its own.
+        internal static RootPick PickRootEntries(Action<Action<int, byte[], byte[], int>> forEachBlock, int cap0, HashSet<int> wanted)
+        {
+            int n = 0;
+            cap0 = Math.Max(16, cap0);
+            var ids = new int[cap0]; var scores = new byte[cap0]; var keys = new byte[cap0 * 16];
+            void Room(int need)
+            {
+                if (need <= ids.Length) return;
+                int cap = Math.Max(ids.Length * 2, need);
+                Array.Resize(ref ids, cap); Array.Resize(ref scores, cap); Array.Resize(ref keys, cap * 16);
+            }
+            forEachBlock((nr, idBuf, keyBuf, sc) =>
+            {
+                if (wanted == null)
                 {
-                    int cap = Math.Max(ids.Length * 2, n + nr);
-                    Array.Resize(ref ids, cap); Array.Resize(ref scores, cap); Array.Resize(ref keys, cap * 16);
+                    Room(n + nr);
+                    Buffer.BlockCopy(idBuf, 0, ids, n * 4, nr * 4);
+                    Buffer.BlockCopy(keyBuf, 0, keys, n * 16, nr * 16);
+                    for (int i = 0; i < nr; i++) scores[n + i] = (byte)sc;
+                    n += nr;
+                    return;
                 }
-                Buffer.BlockCopy(idBuf, 0, ids, n * 4, nr * 4);
-                Buffer.BlockCopy(keyBuf, 0, keys, n * 16, nr * 16);
-                for (int i = 0; i < nr; i++) scores[n + i] = (byte)sc;
-                n += nr;
+                for (int i = 0; i < nr; i++)
+                {
+                    int id = BitConverter.ToInt32(idBuf, i * 4);
+                    if (!wanted.Contains(id)) continue;
+                    Room(n + 1);
+                    ids[n] = id; scores[n] = (byte)sc;
+                    Buffer.BlockCopy(keyBuf, i * 16, keys, n * 16, 16);
+                    n++;
+                }
             });
             if (n >= 1 << 28) throw new IOException("root file too large");
             // order: id, then the better score, then the earlier entry
             var order = new long[n];
             for (int i = 0; i < n; i++) order[i] = ((long)ids[i] << 32) | ((long)(7 - scores[i]) << 28) | (uint)i;
             Array.Sort(order);
-            int u = 0;
-            for (int i = 0; i < n; i++) if (i == 0 || (int)(order[i] >> 32) != (int)(order[i - 1] >> 32)) u++;
-            var uIds = new int[u]; var uKeys = new byte[u * 16];
-            int w = 0;
-            for (int i = 0; i < n; i++)
+            int u = 0, ties = 0, extra = 0;
+            for (int i = 0; i < n;)
             {
-                int id = (int)(order[i] >> 32);
-                if (i > 0 && id == (int)(order[i - 1] >> 32)) continue;
-                uIds[w] = id;
-                Buffer.BlockCopy(keys, (int)(order[i] & 0x0FFFFFFF) * 16, uKeys, w * 16, 16);
-                w++;
+                int j = i + 1;
+                while (j < n && (order[j] >> 32) == (order[i] >> 32)) j++;            // every entry of this id
+                int t = i + 1;
+                while (t < j && (order[t] >> 28) == (order[i] >> 28)) t++;            // ... with the best score
+                u++; if (t - i > 1) { ties++; extra += t - i - 1; }
+                i = j;
             }
-            rootTable = new RootTable { Ids = uIds, Keys = uKeys };
-            RootIndexMs = sw.ElapsedMilliseconds;
+            var p = new RootPick { Ids = new int[u], Keys = new byte[u * 16], TieIds = new int[ties], TieAt = new int[ties + 1], TieKeys = new byte[extra * 16], TieState = new byte[ties] };
+            int w = 0, q = 0, e = 0;
+            for (int i = 0; i < n;)
+            {
+                p.Ids[w] = (int)(order[i] >> 32);
+                Buffer.BlockCopy(keys, (int)(order[i] & 0x0FFFFFFF) * 16, p.Keys, w * 16, 16);
+                int j = i + 1;
+                while (j < n && (order[j] >> 32) == (order[i] >> 32)) j++;
+                int t = i + 1;
+                while (t < j && (order[t] >> 28) == (order[i] >> 28)) t++;
+                if (t - i > 1)
+                {
+                    p.TieIds[q] = p.Ids[w]; p.TieAt[q] = e;
+                    for (int k = i + 1; k < t; k++) Buffer.BlockCopy(keys, (int)(order[k] & 0x0FFFFFFF) * 16, p.TieKeys, e++ * 16, 16);
+                    q++;
+                }
+                w++; i = j;
+            }
+            p.TieAt[ties] = e;
+            return p;
+        }
+
+        // decides the ties among these ids (null = all) not decided yet: the first entry stays unless it is not local and a later one is - then the
+        // earliest local one is taken. areLocal says which of many content keys (16 bytes each) are in the local storage; asked once for all of them.
+        // The caller holds the lock of p.
+        internal static void DecideTies(RootPick p, IEnumerable<int> ids, Func<byte[], int, bool[]> areLocal)
+        {
+            if (p.TieIds.Length == 0) return;
+            var todo = new List<int>();
+            if (ids == null) { for (int j = 0; j < p.TieIds.Length; j++) if (p.TieState[j] == 0) todo.Add(j); }
+            else foreach (var id in ids) { int j = Array.BinarySearch(p.TieIds, id); if (j >= 0 && p.TieState[j] == 0) todo.Add(j); }
+            if (todo.Count == 0) return;
+            int count = 0;
+            foreach (var j in todo) count += 1 + p.TieAt[j + 1] - p.TieAt[j];
+            var ks = new byte[count * 16];
+            int c = 0;
+            foreach (var j in todo)
+            {
+                Buffer.BlockCopy(p.Keys, Array.BinarySearch(p.Ids, p.TieIds[j]) * 16, ks, c++ * 16, 16);
+                int len = p.TieAt[j + 1] - p.TieAt[j];
+                Buffer.BlockCopy(p.TieKeys, p.TieAt[j] * 16, ks, c * 16, len * 16); c += len;
+            }
+            var local = areLocal(ks, count);
+            c = 0;
+            foreach (var j in todo)
+            {
+                int len = p.TieAt[j + 1] - p.TieAt[j];
+                p.TieState[j] = 1;
+                if (!local[c])
+                    for (int k = 1; k <= len; k++)
+                        if (local[c + k]) { Buffer.BlockCopy(ks, (c + k) * 16, p.Keys, Array.BinarySearch(p.Ids, p.TieIds[j]) * 16, 16); p.TieState[j] = 2; break; }
+                c += 1 + len;
+            }
         }
 
         // the number of entries the root header announces (0 when it does not say)
@@ -372,73 +533,12 @@ namespace ElansAddonHub.Services
                         cur = i == 0 ? BitConverter.ToInt32(ids, 0) : cur + 1 + BitConverter.ToInt32(ids, i * 4);
                         ids[i * 4] = (byte)cur; ids[i * 4 + 1] = (byte)(cur >> 8); ids[i * 4 + 2] = (byte)(cur >> 16); ids[i * 4 + 3] = (byte)(cur >> 24);
                     }
+                    // prefer: not low-violence (0x80), not do-not-load (0x100), enUS or all locales
                     int sc = ((cf & 0x80) == 0 ? 4 : 0) + ((cf & 0x100) == 0 ? 2 : 0) + ((locale & 0x2) != 0 ? 1 : 0);
                     block(nr, ids, keys, sc);
                     pos = ckPos + (long)nr * 16 + ((cf & 0x10000000) != 0 ? 0 : (long)nr * 8);
                 }
             }
-        }
-
-        Dictionary<int, byte[]> WalkRoot(HashSet<int> wanted)
-        {
-            var res = new Dictionary<int, byte[]>();
-            var score = new Dictionary<int, int>();
-            var ek = EncodingKeyFor(rootCKey);
-            if (ek == null) throw new IOException("root file is not in the encoding table");
-            using (var root = OpenEKey(ek))
-            {
-                var hd = new byte[24];
-                root.ReadAt(0, hd, 0, 24);
-                if (hd[0] != 'T' || hd[1] != 'S' || hd[2] != 'F' || hd[3] != 'M') throw new IOException("unknown root format");
-                uint hdrSize = BitConverter.ToUInt32(hd, 4), ver = BitConverter.ToUInt32(hd, 8);
-                // v2: magic, header size (0x18), version (2), total files, named files, padding. Older: magic, total, named.
-                bool v2 = hdrSize == 0x18 && (ver == 1 || ver == 2);
-                long pos = v2 ? hdrSize : 12;
-                ver = v2 ? ver : 0;
-                long len = root.Length;
-                var bh = new byte[17];
-                while (pos + 12 < len)
-                {
-                    root.ReadAt(pos, bh, 0, 12);
-                    int nr = (int)BitConverter.ToUInt32(bh, 0);
-                    uint locale, cf;
-                    if (ver == 2)
-                    {
-                        root.ReadAt(pos + 12, bh, 12, 5);
-                        locale = BitConverter.ToUInt32(bh, 4);
-                        cf = BitConverter.ToUInt32(bh, 8) | BitConverter.ToUInt32(bh, 12) | ((uint)bh[16] << 17);
-                        pos += 17;
-                    }
-                    else { cf = BitConverter.ToUInt32(bh, 4); locale = BitConverter.ToUInt32(bh, 8); pos += 12; }
-                    var ids = new byte[nr * 4];
-                    root.ReadAt(pos, ids, 0, ids.Length);
-                    long ckPos = pos + ids.Length;
-                    int cur = -1;
-                    List<int> hit = null;
-                    var hitIds = new List<int>();
-                    for (int i = 0; i < nr; i++)
-                    {
-                        cur = i == 0 ? BitConverter.ToInt32(ids, 0) : cur + 1 + BitConverter.ToInt32(ids, i * 4);
-                        if (wanted.Contains(cur)) { (hit ?? (hit = new List<int>())).Add(i); hitIds.Add(cur); }
-                    }
-                    if (hit != null)
-                    {
-                        // prefer: not low-violence (0x80), not do-not-load (0x100), enUS or all locales
-                        int sc = ((cf & 0x80) == 0 ? 4 : 0) + ((cf & 0x100) == 0 ? 2 : 0) + ((locale & 0x2) != 0 ? 1 : 0);
-                        var one = new byte[16];
-                        for (int h = 0; h < hit.Count; h++)
-                        {
-                            int fid = hitIds[h];
-                            if (score.TryGetValue(fid, out var old) && old >= sc) continue;
-                            root.ReadAt(ckPos + (long)hit[h] * 16, one, 0, 16);
-                            res[fid] = (byte[])one.Clone();
-                            score[fid] = sc;
-                        }
-                    }
-                    pos = ckPos + (long)nr * 16 + ((cf & 0x10000000) != 0 ? 0 : (long)nr * 8);
-                }
-            }
-            return res;
         }
 
         // ---- files by NAME (e.g. "Interface\Icons\Trade_Mining.blp", what an addon's toc IconTexture can point at). The root keeps, per entry

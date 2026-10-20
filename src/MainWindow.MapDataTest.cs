@@ -228,6 +228,46 @@ namespace ElansAddonHub
                 MapData.CacheFile = Path.Combine(work, "cache", "mapdata.bin");
                 MapRender.DirOverride = Path.Combine(work, "maps");
 
+                // ---- 3.1.1, the root's ties (CascStorage.PickRootEntries) on a root of its own: one id listed twice with the same score where only the second copy is
+                // on the disk (the Forever client's terrain and building textures), both copies local, neither, an id listed once, and a better score that is not local
+                {
+                    byte[] K(int id, char copy) { var k = new byte[16]; k[0] = (byte)id; k[1] = (byte)copy; return k; }
+                    var blocks = new List<Tuple<int, int[], byte[][]>>
+                    {
+                        Tuple.Create(7, new[] { 10, 20, 30 }, new[] { K(10, 'a'), K(20, 'a'), K(30, 'a') }),
+                        Tuple.Create(3, new[] { 50 }, new[] { K(50, 'c') }),
+                        Tuple.Create(7, new[] { 10, 20, 30, 40, 50 }, new[] { K(10, 'b'), K(20, 'b'), K(30, 'b'), K(40, 'b'), K(50, 'd') }),
+                    };
+                    void Root(Action<int, byte[], byte[], int> block)
+                    {
+                        foreach (var bl in blocks)
+                        {
+                            var ids = new byte[bl.Item2.Length * 4]; var keys = new byte[bl.Item2.Length * 16];
+                            for (int i = 0; i < bl.Item2.Length; i++) { Buffer.BlockCopy(BitConverter.GetBytes(bl.Item2[i]), 0, ids, i * 4, 4); Buffer.BlockCopy(bl.Item3[i], 0, keys, i * 16, 16); }
+                            block(bl.Item2.Length, ids, keys, bl.Item1);
+                        }
+                    }
+                    var localKeys = new HashSet<string> { "10b", "20a", "20b", "40b", "50c" };
+                    int asked = 0;
+                    bool[] Local(byte[] ks, int n) { asked += n; var r = new bool[n]; for (int i = 0; i < n; i++) r[i] = localKeys.Contains(ks[i * 16] + "" + (char)ks[i * 16 + 1]); return r; }
+                    string Pick(CascStorage.RootPick rp, int id) { int i = Array.BinarySearch(rp.Ids, id); return i < 0 ? "none" : rp.Keys[i * 16] + "" + (char)rp.Keys[i * 16 + 1]; }
+                    string Line(CascStorage.RootPick rp) => string.Join(" ", new[] { 10, 20, 30, 40, 50, 99 }.Select(id => id + ":" + Pick(rp, id)));
+                    // the index: the first entries, the ties kept; an id is decided when asked for (here 10 alone, then all), the same answers as deciding at once
+                    var all = CascStorage.PickRootEntries(Root, 4, null);
+                    string before = Line(all);
+                    CascStorage.DecideTies(all, new[] { 10, 40, 99 }, Local); int askedOne = asked; string afterOne = Line(all);
+                    CascStorage.DecideTies(all, null, Local); int askedAll = asked;
+                    CascStorage.DecideTies(all, null, Local);
+                    var some = CascStorage.PickRootEntries(Root, 4, new HashSet<int> { 10, 30, 99 }); CascStorage.DecideTies(some, null, Local);
+                    int took = all.TieState.Count(x => x == 2);
+                    Check("root ties (3.1.1): an id listed twice with the same score takes the copy that is on the disk (10 -> the second copy), both local -> the first (20), neither -> the first (30, read as missing as before), listed once -> that one (40), a better score is kept even when only a worse one is local (50); " + Line(all),
+                        Pick(all, 10) == "10b" && Pick(all, 20) == "20a" && Pick(all, 30) == "30a" && Pick(all, 40) == "40b" && Pick(all, 50) == "50d" && Pick(all, 99) == "none" && all.Ids.Length == 5 && all.TieIds.SequenceEqual(new[] { 10, 20, 30 }) && took == 1 && all.TieState[0] == 2,
+                        Line(all) + " ties " + all.TieIds.Length + " took " + took);
+                    Check("root ties (3.1.1): before any lookup the index holds the old choice, the first copy (" + before + "); asking for 10 decides only 10 (" + afterOne + ", " + askedOne + " keys checked), the rest when asked, each tie once (" + askedAll + " keys in all); a walk of a few wanted ids gives the same (" + Line(some) + ")",
+                        before == "10:10a 20:20a 30:30a 40:40b 50:50d 99:none" && afterOne == "10:10b 20:20a 30:30a 40:40b 50:50d 99:none" && askedOne == 2 && askedAll == 6 && asked == 6 + 4 && Pick(some, 10) == "10b" && Pick(some, 30) == "30a" && some.Ids.Length == 2,
+                        before + " / " + afterOne + " / " + Line(some) + " asked " + askedOne + "," + askedAll + "," + asked);
+                }
+
                 // ---- the table reader: relationship data, float arrays, strings across sections
                 var rel = Wdc5.Parse(TableWithRelations());
                 Check("wdc5: relationship data (UiMapArtTile.UiMapArtID style): record 0 -> 100, 1 -> 200, 2 -> 300; the copy row 13 of record 11 has 200 too; others 0",
