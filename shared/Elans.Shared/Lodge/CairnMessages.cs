@@ -149,23 +149,26 @@ namespace Elans.Shared
         }
     }
 
-    // one notice as the Cairn signed it: { id, created, expires (unix seconds), level: info|warning|critical, to, text, sig, kid }. Only the
-    // fields: the signature (over CairnFormats.Notice) is checked by the reader.
+    // one notice as the Cairn signed it: { id, created, expires (unix seconds), level: info|warning|critical, to, text, sig, kid, v? }. Only the
+    // fields: the signature is checked by the reader. v (Cairn 1.6.4) is the signed format's version: missing = 1 (CairnFormats.Notice, `to` the
+    // Lodge's id or "*"), 2 = CairnFormats.NoticeV2 (`to` "*" or the target Lodge's normalized public address).
     public sealed class CairnNoticeEntry
     {
         public long Id, Created, Expires;
         public string Level, To, Text, Sig, Kid;
+        public int V;     // 0 = not in the frame (a v1 notice); written only when set, so a v1 notice's frame is as it was
 
         public void Write(ILodgeWriter w)
         {
             w.Set("id", Id); w.Set("created", Created); w.Set("expires", Expires); w.Set("level", Level); w.Set("to", To); w.Set("text", Text);
             w.Set("sig", Sig); w.Set("kid", Kid);
+            if (V != 0) w.Set("v", V);
         }
 
         public static CairnNoticeEntry Read(ILodgeFields f) => new CairnNoticeEntry
         {
             Id = f.Long("id"), Created = f.Long("created"), Expires = f.Long("expires"), Level = f.Str("level"), To = f.Str("to"), Text = f.Str("text"),
-            Sig = f.Str("sig"), Kid = f.Str("kid"),
+            Sig = f.Str("sig"), Kid = f.Str("kid"), V = f.Int("v"),
         };
     }
 

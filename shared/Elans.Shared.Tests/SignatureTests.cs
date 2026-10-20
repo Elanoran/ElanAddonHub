@@ -150,9 +150,34 @@ public class CairnFormatsTests
     }
 
     [Fact]
+    public void Notice_v2_message_names_the_target_Lodge()
+    {
+        Assert.Equal("elans-cairn-notice/2\n7\n100\n200\nwarning\n*\nServer update", CairnFormats.NoticeV2(7, 100, 200, "warning", null, "Server update"));
+        Assert.Equal("elans-cairn-notice/2\n7\n100\n200\nwarning\n*\nServer update", CairnFormats.NoticeV2(7, 100, 200, "warning", "*", "Server update"));
+        Assert.Equal("elans-cairn-notice/2\n8\n100\n200\ncritical\nhttps://lodge.example.com/guild\nPatch",
+            CairnFormats.NoticeV2(8, 100, 200, "critical", "https://lodge.example.com/guild", "Patch"));
+        // the same fields never give the same text in v1 and v2, so a v1 signature can't pass as a v2 one (or the other way round)
+        Assert.NotEqual(CairnFormats.Notice(7, 100, 200, "info", "*", "Hi"), CairnFormats.NoticeV2(7, 100, 200, "info", "*", "Hi"));
+    }
+
+    [Fact]
+    public void A_v1_signature_never_verifies_as_v2()
+    {
+        using var cairn = Es256.NewKey();
+        var p = cairn.ExportParameters(false);
+        using var pinned = Es256.FromPoint(p.Q.X, p.Q.Y);
+        var v1 = Es256.Sign(cairn, CairnFormats.Notice(3, 10, 20, "info", "*", "Hi"));
+        var v2 = Es256.Sign(cairn, CairnFormats.NoticeV2(3, 10, 20, "info", "*", "Hi"));
+        Assert.True(Es256.Verify(pinned, CairnFormats.Notice(3, 10, 20, "info", "*", "Hi"), v1));
+        Assert.True(Es256.Verify(pinned, CairnFormats.NoticeV2(3, 10, 20, "info", "*", "Hi"), v2));
+        Assert.False(Es256.Verify(pinned, CairnFormats.NoticeV2(3, 10, 20, "info", "*", "Hi"), v1));
+        Assert.False(Es256.Verify(pinned, CairnFormats.Notice(3, 10, 20, "info", "*", "Hi"), v2));
+    }
+
+    [Fact]
     public void Prefixes_differ_so_signatures_never_cross_kinds()
     {
-        var all = new[] { CairnFormats.RequestPrefix, CairnFormats.ChallengePrefix, CairnFormats.DatasetPrefix, CairnFormats.NoticePrefix };
+        var all = new[] { CairnFormats.RequestPrefix, CairnFormats.ChallengePrefix, CairnFormats.DatasetPrefix, CairnFormats.NoticePrefix, CairnFormats.NoticeV2Prefix };
         Assert.Equal(all.Length, all.Distinct().Count());
         foreach (var a in all) foreach (var b in all) if (a != b) Assert.False((a + "\n").StartsWith(b + "\n"));
     }

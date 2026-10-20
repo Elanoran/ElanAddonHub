@@ -106,6 +106,31 @@ public class CairnNoticeTests
     }
 
     [Fact]
+    public async Task A_v2_notice_for_this_Lodges_address_is_passed_on_unchanged_with_its_version()
+    {
+        // Cairn 1.6.4: "v":2 and `to` = the Lodge's normalized public address (longer than an id); a v1 one stays without "v"
+        using var r = new Rig();
+        var gm = r.Fun.Join("Elan", "owner");
+        var target = "https://lodge." + new string('a', 120) + ".example.test/guild";
+        var v2 = N(1, "critical", "Update now"); v2["to"] = target; v2["v"] = 2;
+        var v1 = N(2, "info", "Old style");
+        var tooLong = N(3, "info", "address too long"); tooLong["to"] = "https://" + new string('b', 200) + ".test"; tooLong["v"] = 2;
+        var oddV = N(4, "info", "odd version"); oddV["v"] = -1;
+        r.Cairn.Notices = new JsonArray(v2, v1, tooLong, oddV);
+        r.Check();
+        await r.Do(gm, new { t = "cairn.notices.get" });
+        var list = r.Fun.Sock("Elan").Of("cairn.notices").Last()["list"]!.AsArray();
+        Assert.Equal(new long[] { 1, 2 }, list.Select(n => (long)n!["id"]!).ToArray());
+        Assert.True(JsonNode.DeepEquals(v2, list[0]), list[0]!.ToJsonString());      // every field as the Cairn sent it, "v" and the address too
+        Assert.True(JsonNode.DeepEquals(v1, list[1]), list[1]!.ToJsonString());
+        Assert.False(list[1]!.AsObject().ContainsKey("v"));
+        // kept across a restart with the version
+        var again = new CairnNotices(r.Fun.Hub.Cfg.DataDir, r.Log).Current(1_800_000_000);
+        Assert.Equal(2, (int)again[0]["v"]!);
+        Assert.Equal(target, (string)again[0]["to"]!);
+    }
+
+    [Fact]
     public async Task An_officers_look_is_reported_to_the_Cairn_once_a_members_is_not()
     {
         using var r = new Rig();
