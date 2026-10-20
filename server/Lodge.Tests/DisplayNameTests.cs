@@ -27,15 +27,40 @@ public class DisplayNameTests
     }
 
     [Fact]
-    public void Fold_merges_lookalikes_and_separators()
+    public void Name_key_merges_lookalikes_and_separators()
     {
-        Assert.Equal(ProfileRules.Fold("Elan"), ProfileRules.Fold("E1an"));
-        Assert.Equal(ProfileRules.Fold("Elan"), ProfileRules.Fold("EIan"));
-        Assert.Equal(ProfileRules.Fold("Elan"), ProfileRules.Fold("E|an"));
-        Assert.Equal(ProfileRules.Fold("Rose"), ProfileRules.Fold("R0s3"));
-        Assert.Equal(ProfileRules.Fold("Seth"), ProfileRules.Fold("5eth"));
-        Assert.Equal(ProfileRules.Fold("Elan"), ProfileRules.Fold("E-l.an"));
-        Assert.NotEqual(ProfileRules.Fold("Elan"), ProfileRules.Fold("Elana"));
+        // the rules of the older fold, all kept
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("E1an"));
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("EIan"));
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("E|an"));
+        Assert.Equal(ProfileRules.NameKey("Rose"), ProfileRules.NameKey("R0s3"));
+        Assert.Equal(ProfileRules.NameKey("Seth"), ProfileRules.NameKey("5eth"));
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("E-l.an"));
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("  El   an "));
+        Assert.NotEqual(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("Elana"));
+        // L5: Unicode's look-alike list (UTS #39)
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("E\u029Fan"));      // small capital L
+        Assert.Equal(ProfileRules.NameKey("Bob"), ProfileRules.NameKey("B\u0585b"));        // Armenian oh
+        Assert.Equal(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("\u0395\u217Ca\u0578")); // Greek E, Roman numeral L, Armenian vo
+        Assert.Equal(ProfileRules.NameKey("Mia"), ProfileRules.NameKey("rnia"));             // rn looks like m
+        // honest names stay apart: accents are visible, other scripts are names of their own
+        Assert.NotEqual(ProfileRules.NameKey("Elan"), ProfileRules.NameKey("\u00C9lan"));
+        Assert.NotEqual(ProfileRules.NameKey("Zoe"), ProfileRules.NameKey("Zo\u00EB"));
+        Assert.NotEqual(ProfileRules.NameKey("Sakura"), ProfileRules.NameKey("\u3055\u304F\u3089"));
+    }
+
+    [Fact]
+    public void Every_lookalike_of_the_old_cyrillic_greek_table_still_folds()
+    {
+        int n = 0;
+        for (char c = '\u0370'; c < '\u0530'; c++)
+        {
+            var latin = Names.Latin(c);
+            if (latin == c) continue;
+            Assert.Equal(ProfileRules.NameKey("x" + latin + "y"), ProfileRules.NameKey("x" + c + "y"));
+            n++;
+        }
+        Assert.Equal(38, n);                                                     // the whole table
     }
 
     [Fact]
@@ -154,6 +179,96 @@ public class DisplayNameTests
         var mia = await l.Join(MiaCode);
         await l.Set(mia, Set("Elan")); Assert.Equal("That display name is taken", Err(mia));
         mia.Clear(); await l.Set(mia, Set("Mia Moon")); Assert.Null(Err(mia));
+    }
+
+    [Fact]
+    public async Task Lookalikes_from_other_alphabets_of_a_login_or_display_name_are_refused()
+    {
+        using var l = new Lodge3();
+        var mia = await l.Join(MiaCode); var zed = await l.Join(ZedCode);
+        // the Guild Master's login (offline) and an officer's, with look-alike letters
+        foreach (var bad in new[] { "E\u029Fan", "\u1D07lan", "\u0415lan", "El\u0430n", "\u0395\u217Ca\u0578", "B\u0585b", "\u0412\u043Eb" })
+        {
+            mia.Clear();
+            await l.Set(mia, Set(bad));
+            Assert.Equal("That display name is taken", Err(mia));
+        }
+        Assert.Equal("", l.Hub.Members.First(m => m.Name == "Mia").Profile.DisplayName);
+        // another member's display name
+        mia.Clear(); await l.Set(mia, Set("Moonlight")); Assert.Null(Err(mia));
+        foreach (var bad in new[] { "M\u043E\u043Enlight", "Moon\u029Fight", "rnoonlight", "MOONL1GHT" })
+        {
+            zed.Clear(); await l.Set(zed, Set(bad));
+            Assert.Equal("That display name is taken", Err(zed));
+        }
+        Assert.Equal("", l.Hub.Members.First(m => m.Name == "Zed").Profile.DisplayName);
+    }
+
+    [Fact]
+    public async Task Honest_names_in_any_script_and_with_accents_stay_allowed()
+    {
+        using var l = new Lodge3();
+        var mia = await l.Join(MiaCode); var zed = await l.Join(ZedCode);
+        await l.Set(mia, Set("\u00C9lan")); Assert.Null(Err(mia));                     // accented: visibly not "Elan"
+        Assert.Equal("\u00C9lan", (string?)mia.Profile()["displayName"]);
+        foreach (var good in new[] { "\u3055\u304F\u3089", "\u039D\u03AF\u03BA\u03B7", "\u041C\u0430\u0440\u0438\u044F", "Zo\u00EB-Ann" })
+        {
+            l.Clock.Advance(TimeSpan.FromSeconds(61));
+            zed.Clear(); await l.Set(zed, Set(good));
+            Assert.Null(Err(zed));
+            Assert.Equal(good, (string?)zed.Profile()["displayName"]);
+        }
+    }
+
+    // L5: names stored before the look-alike check may share a key. Nothing is deleted or renamed: they keep working, only a change must
+    // pick a free name, and the server logs how many there are (no names).
+    [Fact]
+    public async Task Stored_lookalike_display_names_are_kept_counted_and_a_change_must_be_free()
+    {
+        var dir = new TempDir();
+        using (var first = new Lodge3(dir)) { first.Dir = new TempDir(); }       // writes the codes file; keep `dir`
+        File.WriteAllText(Path.Combine(dir.Path, "profiles.json"),
+            "{\"mia\":{\"displayName\":\"E\\u029Fan\"},\"zed\":{\"displayName\":\"Moonlight\"},\"bob\":{\"displayName\":\"M\\u043E\\u043Enlight\"}}");
+        var cfg = LodgeConfig.ForTests(dir.Path);
+        var log = new CaptureLogger();
+        _ = new LodgeHub(cfg, new Auth(cfg, log), new FileStore(cfg), log, new FakeClock());
+        var line = Assert.Single(log.Lines, x => x.StartsWith("Display names:"));
+        Assert.Contains(" 3 stored display name(s) look like", line);       // Mia (like the GM's login) + Zed and Bob (like each other)
+        Assert.DoesNotContain("Moonlight", line);
+        Assert.DoesNotContain("Mia", line);
+
+        using var l = new Lodge3(dir);
+        var mia = await l.Join(MiaCode);
+        Assert.Equal("E\u029Fan", l.Hub.Members.First(m => m.Name == "Mia").Profile.DisplayName);   // kept
+        mia.Clear(); await l.Set(mia, "{\"t\":\"profile:set\",\"displayName\":\"E\u029Fan\",\"about\":\"hi\"}");
+        Assert.Null(Err(mia));                                                  // saving the form again works
+        Assert.Equal("hi", l.Hub.Members.First(m => m.Name == "Mia").Profile.About);
+        mia.Clear(); await l.Set(mia, Set("E\u029F\u0430n"));                       // another look-alike: refused
+        Assert.Equal("That display name is taken", Err(mia));
+        Assert.Equal("E\u029Fan", l.Hub.Members.First(m => m.Name == "Mia").Profile.DisplayName);
+        mia.Clear(); await l.Set(mia, Set("Mia Moon")); Assert.Null(Err(mia));  // a free one: fine
+        Assert.Equal("Mia Moon", (string?)mia.Profile()["displayName"]);
+        dir.Dispose();
+    }
+
+    [Fact]
+    public void Lookalike_count_on_a_realistic_guild()
+    {
+        var logins = new[] { "Elan", "Bob", "Mia", "Zed", "Kira", "Thorgar", "Ana", "Sven", "Yuki", "Ole", "Dmitri", "Lena" };
+        var displays = new List<(string, string)>
+        {
+            ("bob", "Bobby"), ("mia", "Mia Moon"), ("kira", "Kira the Swift"), ("thorgar", "Thorgar Ironfist"),
+            ("ana", "\u00C1na"),                       // accented own name: not a look-alike
+            ("yuki", "\u96EA"),                         // snow
+            ("dmitri", "\u0414\u043C\u0438\u0442\u0440\u0438\u0439"),   // Dmitri in Cyrillic
+            ("lena", "\u039B\u03AD\u03BD\u03B1"),          // Lena in Greek
+            ("sven", "\u0405ven"),                      // Cyrillic S: looks like "Sven", but that is his own login - fine
+            ("ole", "E\u029Fan"),                       // looks like the Guild Master's login
+            ("zed", "Kira the 5wift"),                   // looks like Kira's display name (the older fold caught this one too)
+        };
+        Assert.Equal(3, ProfileRules.LookalikeDisplayNames(displays, logins));   // ole, zed, and kira (zed's twin)
+        Assert.Equal(0, ProfileRules.LookalikeDisplayNames(displays.Take(9), logins));
+        Assert.Equal(0, ProfileRules.LookalikeDisplayNames(new List<(string, string)>(), logins));
     }
 
     [Fact]

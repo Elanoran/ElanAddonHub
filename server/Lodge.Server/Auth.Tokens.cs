@@ -156,7 +156,7 @@ public partial class Auth
                 if (existing != null) { useName = existing.Name; useRole = existing.Role; }   // another device for someone who is already in
                 else
                 {
-                    if (snap.Personal.Any(p => Names.Alike(p.Name, name))) throw new InvalidOperationException($"{name} looks just like a name that's already taken");
+                    if (LooksTaken(name, snap.Personal.Select(p => p.Name))) throw new InvalidOperationException($"{name} looks just like a name that's already taken");
                     useName = name;
                     useRole = Roles.Normalize(role);
                     if (useRole == "guest") useRole = "member";
@@ -265,7 +265,8 @@ public partial class Auth
             {
                 MutateCodesLocked(lines =>
                 {
-                    if (lines.Select(Parse).Any(p => p != null && (Names.Same(p.Value.Name, name) || Names.Alike(p.Value.Name, name))))
+                    var logins = lines.Select(Parse).Where(p => p != null).Select(p => p.Value.Name).ToList();
+                    if (logins.Any(l => Names.Same(l, name)) || LooksTaken(name, logins))
                         throw new InvalidOperationException("name taken");
                     lines.Add($"{name}:{RetiredCode()}:{role}");
                 });
@@ -361,7 +362,7 @@ public partial class Auth
             if (!NameRule.IsMatch(typed)) return No(NameNeeded());
             var existing = snap.Personal.FirstOrDefault(p => Names.Same(p.Name, typed));
             if (existing != null) return new ClaimPlan(null, existing.Name, false, existing.Role != "owner");
-            if (snap.Personal.Any(p => Names.Alike(p.Name, typed))) return No(new ExchangeOutcome(409, $"{typed} looks just like a name that's already taken - pick another", "name-taken"));
+            if (LooksTaken(typed, snap.Personal.Select(p => p.Name))) return No(new ExchangeOutcome(409, $"{typed} looks just like a name that's already taken - pick another", "name-taken"));
             return new ClaimPlan(null, typed, true, false);
         }
         var target = row.Name == "*" ? typed : row.Name;

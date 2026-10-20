@@ -75,12 +75,15 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
 
 - A display name is cosmetic; the login name stays the only identity (messages, history, pins, reactions, rate limits, budgets, moderation
   all key on it). The hub shows `Display · @Login` in the hover card and profile card so the real name is never hidden.
-- Anti-impersonation: a display name must not equal - after NFKC/whitespace normalization and a look-alike fold (0->o, 1/i/|/!->l, 3->e,
-  5->s, separators dropped, case-insensitive) - any other personal login name (offline members included, read from the codes file at
-  the time of the change), the name of a connected guest, or another member's stored display name. Format: 2-24 characters, letters/digits/
-  space and `- _ ' . !` only, so no markup, `@`, `#` or zero-width tricks (those are removed by `Names`). Honest limit: the check runs at
-  change time; a code created later for a name that someone already took as display name is not retroactively rejected, and homoglyphs
-  from other scripts (Cyrillic `a`) are not folded - an owner can `profile:reset` the offender.
+- Anti-impersonation: a display name must not have the same name key (`Names.Key` = `Elans.Shared.Confusables.NameKey`: NFKC/whitespace
+  normalization, Unicode's look-alike skeleton from UTS #39 `confusables.txt`, case folding, small capitals as letters, 0->o, 1/i/|/!->l,
+  3->e, 5->s, separators dropped) as any other personal login name (offline members included, read from the codes file at the time of
+  the change), the name of a connected guest, or another member's stored display name. So look-alike letters from other scripts
+  (Cyrillic `а`, Armenian `օ`, small capital `ʟ`) count as the letter they look like; accents do not (`Élan` is its own name). Format:
+  2-24 characters, letters/digits/space and `- _ ' . !` only, so no markup, `@`, `#` or zero-width tricks (those are removed by `Names`).
+  A NEW login name (invite, owner claim, a code added by the owner) is checked the same way against every login and every display name.
+  Names stored before this check that now collide are kept (existing logins sign in exactly as before; a display name is re-checked only
+  when it changes); the server logs how many there are at start (counts, no names). An owner can still `profile:reset` an offender.
 - Guests can't set one (no stored identity to keep it unique). Changes are limited to 1 per 60 s per identity on top of the profile
   bucket; refused attempts don't spend the minute but do spend the 1-per-2-s token and the Control budget, so uniqueness can't be probed cheaply.
 - Stored in `profiles.json` and re-validated on load (format only); owner reset clears it. Invisible members: unchanged - the broadcast
@@ -182,7 +185,7 @@ longer lets a backslash into a name.
 - Chat text loses bidi overrides/isolates and more than 3 blank lines in a row; `@everyone`/`@here` from below officer are
   defused (a zero-width space after the `@`).
 - Guests always carry a " (guest)" tag and can not take a name that matches a login or display name under case, NFKC and
-  the Cyrillic/Greek look-alike fold. Invite names may use any letters but not a look-alike of an existing name.
+  the look-alike key (`Names.Key`). Invite names may use any letters but not a look-alike of an existing login or display name.
 - Uploads: 2 at once per person (guests: per address), 2 minute limit per upload.
 - Edit/delete need channel visibility; edit/delete of own messages match the author identity (guests: only messages from
   their current connection). Server-mute is kept per identity across reconnects. The voice room cap check and the join are

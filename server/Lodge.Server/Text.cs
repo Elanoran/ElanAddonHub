@@ -71,7 +71,8 @@ public static partial class Names
         return sb.ToString();
     }
 
-    // Common Cyrillic / Greek look-alikes of Latin letters. Only for COMPARISON keys, never shown.
+    // The older look-alike table (Cyrillic / Greek letters that look Latin), no longer used by Key - Unicode's list covers every pair
+    // (DisplayNameTests checks that). Only for COMPARISON, never shown.
     public static char Latin(char c) => c switch
     {
         'а' => 'a', 'е' => 'e', 'о' => 'o', 'р' => 'p', 'с' => 'c', 'у' => 'y', 'х' => 'x', 'і' => 'i', 'ј' => 'j', 'ѕ' => 's',
@@ -81,14 +82,11 @@ public static partial class Names
         _ => c,
     };
 
-    // case-, NFKC- and look-alike-insensitive key: a Cyrillic "о" in "Bоb" gives the same key as "bob"
-    public static string Key(string name)
-    {
-        var n = Normalize(name);
-        var sb = new StringBuilder(n.Length);
-        foreach (var c in n) sb.Append(char.ToLowerInvariant(Latin(c)));
-        return sb.ToString();
-    }
+    // the look-alike key (L5): Elans.Shared.Confusables.NameKey of the normalized name - Unicode's look-alike skeleton (UTS #39), case
+    // folded, small capitals as letters, 0->o 1/i/|/!->l 3->e 5->s, separators dropped. "Bоb" (Cyrillic о), "B0b", "Bօb" (Armenian)
+    // and "bob" are one key. Only for COMPARISON (is a NEW name taken?), never shown and never an identity: existing accounts are
+    // looked up by Same.
+    public static string Key(string name) => Confusables.NameKey(Normalize(name));
 
     public static bool Alike(string a, string b) => string.Equals(Key(a), Key(b), StringComparison.Ordinal);
 

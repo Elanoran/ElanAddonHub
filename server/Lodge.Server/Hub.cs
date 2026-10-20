@@ -160,6 +160,9 @@ public partial class LodgeHub
         if (auth != null) auth.Security = Security;
         Channels = new Channels(cfg.DataDir);
         Profiles = new ProfileStore(cfg.DataDir, log, Clock);
+        // a NEW login name must not look like a display name either (L5). Auth calls this inside its write lock; nothing holding
+        // Profiles.Gate ever waits for Auth's write lock, so the order is one way only.
+        if (auth != null) auth.DisplayNames = () => { lock (Profiles.Gate) return Profiles.DisplayNames(); };
         ProfileMod = new ProfileModule(this);
         Chat = new ChatModule(this) { FlushDelay = TimeSpan.FromSeconds(cfg.HistoryFlushSeconds) };
         Voice = new VoiceModule(this);
@@ -176,6 +179,28 @@ public partial class LodgeHub
         Realms = new RealmsModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
         modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, CairnIn, Armory, SharedFiles, Datasets, Badges, Realms, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        LogLookalikeDisplayNames();
+    }
+
+    // L5: display names and new login names are unique by their look-alike key now; names stored before that may share one. They are
+    // kept - only the counts are logged (no names), so the owner knows whether any exist.
+    void LogLookalikeDisplayNames()
+    {
+        if (Auth == null) return;
+        try
+        {
+            int n, logins;
+            lock (Profiles.Gate)
+            {
+                var shown = Profiles.DisplayNames();
+                var names = Auth.PersonalNames.ToList();
+                n = ProfileRules.LookalikeDisplayNames(shown, names);
+                logins = ProfileRules.LookalikeLogins(shown, names);
+            }
+            Log?.LogInformation("Display names: {Count} stored display name(s) look like another member's name (kept; a change must pick a free one)", n);
+            Log?.LogInformation("Login names: {Count} existing login name(s) look like another member's login or display name (kept; they sign in as before)", logins);
+        }
+        catch (Exception e) { Log?.LogWarning("Display names: the look-alike count failed: {Error}", e.GetType().Name); }
     }
 
     // personal codes: one budget per person; guests (shared code): one per address (IpKey: an IPv6 /64), so several friends on one guest
@@ -640,7 +665,7 @@ public partial class LodgeHub
 
     // Guests always carry a visible " (guest)" tag (shortened name + tag fit the 24 characters). The unique-name step
     // keeps even a suffixed name off every login name and display name - same letters under case, NFKC and the
-    // Cyrillic/Greek look-alike fold count as the same.
+    // Unicode look-alike key (Names.Key) count as the same.
     public string GuestName(string name)
     {
         name = Names.Normalize(name);

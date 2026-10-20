@@ -8,3 +8,5 @@ src/WorldMap/leaflet.js -text
 src/WorldMap/leaflet.css -text
 src/WorldMap/three.min.js -text
 src/WorldMap/LICENSE-three.txt -text
+Tools/unicode/confusables.txt -text
+Tools/unicode/LICENSE-unicode.txt -text

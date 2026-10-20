@@ -206,10 +206,16 @@ has `displayName` too (public, also while `visibleTo: officers`). The server has
 `profile:set {displayName}` (absent = unchanged, `""`/`null` clears):
 - normalized like names (NFKC, control/format characters out, whitespace collapsed); 2-24 characters after that (too long is an error,
   not a cut); only letters of any script, digits, space and `- _ ' . !`; at least one letter or digit.
-- unique: refused with `That display name is taken` when its *fold* equals the fold of another person's login name (every personal
-  code, plus names of connected guests) or of another member's display name (stored profiles, online or not). The fold is
-  lower case, `0->o 1/i/|/!->l 3->e 5->s`, and separators (space `- _ . '`) dropped, so `E1an` and `El an` collide with `Elan`. Your own
-  login name is allowed.
+- unique: refused with `That display name is taken` when its *name key* equals the key of another person's login name (every personal
+  code, plus names of connected guests) or of another member's display name (stored profiles, online or not). The key
+  (`Elans.Shared.Confusables.NameKey`) is Unicode's look-alike skeleton (UTS #39, the `confusables.txt` data in `Tools/unicode/`), lower
+  case, small capitals as their letter, `0->o 1/i/|/!->l 3->e 5->s`, and separators (space `- _ . '`) dropped, so `E1an`, `El an`, `Eʟan`
+  (small capital L) and `Elаn` (Cyrillic а) all collide with `Elan`. Accents stay: `Élan` is a name of its own. Your own login name is
+  allowed. Display names stored before the look-alike check that now share a key with someone's name are kept as they are (saving them
+  unchanged works); a change has to pick a free name. The server logs how many there are at start (a count, no names).
+- the same key guards NEW login names: an invite for a new person, the owner claim and a code added by the owner are refused (the
+  usual texts / `name-taken`) when the name has the key of an existing login or of another person's display name. Existing logins are
+  never renamed or blocked and are found exactly as before; the server logs at start how many of them share a key (a count, no names).
 - guests are refused (`Guests can't set a display name`); they keep their `(guest)` naming.
 - changing it is limited to 1 per 60 s per identity (kept across reconnects); saving the same name again, and refused attempts, cost
   nothing. Any refusal rejects the whole `profile:set`.
