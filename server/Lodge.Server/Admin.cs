@@ -118,6 +118,8 @@ public class AdminModule : IModule
     }.Write));
 
     // A person invite makes (or re-uses, for another device) the name; officers can only invite below their own rank.
+    // 2.31.2: a link that adds a device to someone who is ALREADY in is the Guild Master's alone (an officer could otherwise become that
+    // member); the member is told when it is first used (Auth: addedBy + a device notice; LodgeHub.DeliverDeviceNotices).
     // The secret is in this one reply and nowhere else; it is never logged.
     async Task CreateInvite(Member me, JsonObject m)
     {
@@ -130,6 +132,11 @@ public class AdminModule : IModule
             var existing = hub.Auth.ListPersonal().FirstOrDefault(p => Names.Same(p.Name, name));
             var target = existing.Name != null ? existing.Role : role;
             bool isOwner = Roles.Level(me.Role) >= Roles.Level("owner");
+            if (!isOwner && existing.Name != null)
+            {
+                await hub.Error(me, $"Only the Guild Master can add a device for {existing.Name} - they are already in the lodge", "owner-only");
+                return;
+            }
             if (!isOwner && Roles.Level(target) >= Roles.Level(me.Role))
                 throw new InvalidOperationException(existing.Name != null ? "You can only invite people below your rank" : "You can only invite ranks below your own");
         }
@@ -154,6 +161,7 @@ public class AdminModule : IModule
         Id = d.Id, Name = d.Guest ? "" : d.Name, Role = d.Role, Device = d.DeviceName,
         Created = Ms(d.Created), LastSeen = Ms(d.LastSeen), Ip = d.LastIp ?? "",
         Current = viewer.DeviceId == d.Id, Online = hub.Members.Any(x => x.DeviceId == d.Id),
+        AddedBy = string.IsNullOrEmpty(d.AddedBy) ? null : d.AddedBy,   // 2.31.2: who added it, when that wasn't the member
     };
 
     // devices (your own) or admin.devices (everyone's, or one member's)

@@ -173,7 +173,7 @@ public partial class Auth
     public void Remove(string name)
     {
         Mutate(lines => { EnsureOtherOwner(lines, name); ChangeLines(lines, name, _ => null); });
-        Locked(() => { RevokePendingInvitesLocked(name); return 0; });
+        Locked(() => { RevokePendingInvitesLocked(name); DropDeviceNoticesLocked(name); return 0; });
         RevokeDevicesOf(name); // a removed person's devices stop working with them
     }
 
@@ -195,6 +195,7 @@ public partial class Auth
         var gone = devs.Where(d => !d.Guest && Names.Same(d.Name, name)).ToList();
         if (gone.Count > 0) { devs.RemoveAll(gone.Contains); WriteDevices(devs); }
         RevokePendingInvitesLocked(name);
+        DropDeviceNoticesLocked(name);
         return gone;
     });
 

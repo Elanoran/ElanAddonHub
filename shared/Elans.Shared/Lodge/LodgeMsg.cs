@@ -82,6 +82,7 @@ namespace Elans.Shared
         public const string Devices = "devices";                    // server -> client: the answer to device.list
         public const string MemberLeave = "member.leave";           // client -> server: leave the Lodge (2.12)
         public const string MemberLeft = "member.left";             // server -> client: you have left (or this device was signed out)
+        public const string DeviceAdded = "device.added";           // server -> client: someone else added a device to your account (2.31.2)
 
         // ---- calendar (CalendarModule.cs) ----
         public const string CalCreate = "cal:create";               // client -> server: a new event (2.11)

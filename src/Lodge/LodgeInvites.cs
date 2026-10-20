@@ -256,9 +256,10 @@ namespace ElansAddonHub.Lodge
         public static List<string> Offered(string myRole, bool serverHasLinks) =>
             myRole == "owner" || !serverHasLinks ? All.ToList() : All.Where(r => MemberVM.RoleLevel(r) < MemberVM.RoleLevel(myRole)).ToList();
 
-        // may I send this member a new device link? (officers: only people below them)
+        // may I send this member a new device link? Only the Guild Master (Lodge 2.31.2 refuses officers: a device link for someone who is
+        // already in would let an officer become them). theirRole is kept for the callers; it no longer changes the answer.
         public static bool CanSendDeviceLink(string myRole, bool canInvite, bool serverHasLinks, string theirRole, bool guest) =>
-            canInvite && serverHasLinks && !guest && (myRole == "owner" || MemberVM.RoleLevel(theirRole) < MemberVM.RoleLevel(myRole));
+            canInvite && serverHasLinks && !guest && myRole == "owner";
     }
 
     // The sign-in this PC keeps for one lodge. A device token (DPAPI-protected) replaces the old permanent code.
@@ -368,17 +369,32 @@ namespace ElansAddonHub.Lodge
     public sealed class DeviceVM
     {
         public string Id, Owner, DeviceName, Ip, Role;
+        public string AddedBy;                                      // Lodge 2.31.2: someone else added it to the account (null = their own)
         public long Created, LastSeen, Now;
         public bool Current, Online;
         public string Title => string.IsNullOrEmpty(DeviceName) ? "Unknown device" : DeviceName;
-        public string Detail => (Online ? "Online now" : "Last seen " + AgoText.Ago(LastSeen, Now)) + (string.IsNullOrEmpty(Ip) ? "" : " · " + Ip);
+        public string Detail => (Online ? "Online now" : "Last seen " + AgoText.Ago(LastSeen, Now)) + (string.IsNullOrEmpty(Ip) ? "" : " · " + Ip)
+            + (string.IsNullOrEmpty(AddedBy) ? "" : " · added by " + SafeFile.Text(AddedBy));
         public string Who => string.IsNullOrEmpty(Owner) ? "Guest" : Owner;
 
         // devices' / admin.devices' rows (typed: shared/Elans.Shared/Lodge/DeviceMessages.cs DeviceView)
         public static DeviceVM From(DeviceView v, long now) => new DeviceVM
         {
-            Id = v.Id, Owner = v.Name, DeviceName = v.Device, Ip = v.Ip, Role = v.Role,
+            Id = v.Id, Owner = v.Name, DeviceName = v.Device, Ip = v.Ip, Role = v.Role, AddedBy = string.IsNullOrEmpty(v.AddedBy) ? null : v.AddedBy,
             Created = v.Created, LastSeen = v.LastSeen, Current = v.Current, Online = v.Online, Now = now,
         };
+    }
+
+    // Lodge 2.31.2 (device.added): someone else added a device to my account. Shown as a toast and as a line in Settings > Lodge > Your devices.
+    public sealed class DeviceNoticeVM
+    {
+        public string Id, DeviceName, By;
+        public long At;
+        public string Device => string.IsNullOrWhiteSpace(DeviceName) ? "Unknown device" : SafeFile.Text(DeviceName);
+        public string Who => string.IsNullOrWhiteSpace(By) ? "someone" : By == "console" ? "the server's console" : SafeFile.Text(By);
+        public string When => At > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(At).ToLocalTime().ToString("d MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "an unknown date";
+        public string Text => $"A new device '{Device}' was added to your account by {Who} on {When}. Not you? Remove it here.";
+
+        public static DeviceNoticeVM From(DeviceAddedMsg m) => new DeviceNoticeVM { Id = m.Id, DeviceName = m.Name, By = m.By, At = m.At };
     }
 }

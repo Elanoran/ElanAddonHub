@@ -314,6 +314,23 @@
             <TextBlock x:Name="DevicesNote" Style="{StaticResource Note}" Text="Each PC you sign in from has its own key. Sign one out here and it is disconnected at once." />
             <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12">
               <StackPanel>
+                <!-- Lodge 2.31.2: a device someone else added to this account (device.added) -->
+                <ItemsControl x:Name="DeviceNoticeRows" Visibility="Collapsed">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="0,10">
+                        <DockPanel>
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Dismiss" Tag="{Binding Id}" Click="DismissNotice_Click" Margin="8,0,0,0" VerticalAlignment="Center"
+                                  AutomationProperties.Name="Dismiss this notice" ToolTip="It was me or someone I trust - keep the device" />
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Remove" Tag="{Binding Id}" Click="RemoveNoticed_Click" Margin="8,0,0,0" VerticalAlignment="Center"
+                                  AutomationProperties.Name="Remove this device" ToolTip="Sign this device out of your account at once" />
+                          <TextBlock DockPanel.Dock="Left" Text="&#xE7BA;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Warn}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                          <TextBlock Text="{Binding Text}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </DockPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
                 <TextBlock x:Name="MyDevicesEmpty" Style="{StaticResource Text.Secondary}" Margin="0,12" TextWrapping="Wrap" Text="Nothing to show yet." />
                 <ItemsControl x:Name="MyDeviceRows">
                   <ItemsControl.ItemTemplate>

@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.1.2
+- **Knows Lodge server 2.31.2.** Only the Guild Master can add a device to an existing member's account, and the member is always told - with a way to remove it.
+- When someone else adds a device to your account, the Outpost shows it as a notice and in Settings > Lodge, Your devices ("A new device ... was added to your account by ..."), with a Remove button. Your device list also says who added a device. Officers no longer get "Send a new device link" for people who are already in; the Guild Master is told that the member will be informed.
+
 ## 3.1.1
 - **Knows Lodge server 2.31.1.** Internal: the signed Cairn messages and the public-address check now come from one shared definition with the Cairn and the Outpost; the address check now refuses the same special addresses the Cairn refuses; every Lodge message type now comes from one shared list, checked by tests; every Lodge message is now typed on both sides, from one shared definition. Two small Lodge server fixes: the Guild Master's switches for badges and for the Cairn always reach the right part of the server, and a Lodge that doesn't take part in the Cairn now answers the Outpost's Cairn questions with a clear "not offered here" instead of staying silent.
 - **Lodge server 2.31.1 safety:** a message holding an extreme number of items is refused before it is read; wrong-code lockouts and rate limits count an IPv6 /64 as one address, so someone rotating addresses can't lock everyone else out, and members with a saved device still get in; chat and shared files have a download budget per person and hour; more dangerous file types are refused (the same list the Outpost warns about) and zips uploaded in chat are checked for programs inside; status notes are cleaned of hidden and direction-changing characters, and error messages no longer show server internals.

@@ -322,7 +322,7 @@ namespace ElansAddonHub
             check("card: ...and not on my own card", !lodge.DeviceLinkVisibleForTest);
 
             Session.FeedForTest(Inv2Welcome("officer", true));
-            check("card: officer -> shown for a veteran and a member", shows("Vera", "veteran", false) && shows("Mia", "member", false));
+            check("card: officer (Lodge 2.31.2: owner only) -> never shown, not even for a veteran or a member", !shows("Vera", "veteran", false) && !shows("Mia", "member", false));
             check("card: ...NOT for another officer or for a Guild Master", !shows("Bob", "officer", false) && !shows("Olga", "owner", false));
             check("card: ...and not for a guest", !shows("Wanderer (guest)", "guest", true));
 
@@ -333,7 +333,8 @@ namespace ElansAddonHub
             Session.FeedForTest(Inv2Welcome("owner", true, tokens: false, v212: false));
             check("card: a server without invite links -> not shown, even to the Guild Master", !shows("Mia", "member", false));
             check("card: the rule itself (InviteRanks.CanSendDeviceLink)",
-                InviteRanks.CanSendDeviceLink("owner", true, true, "owner", false) && InviteRanks.CanSendDeviceLink("officer", true, true, "veteran", false)
+                InviteRanks.CanSendDeviceLink("owner", true, true, "owner", false) && InviteRanks.CanSendDeviceLink("owner", true, true, "member", false)
+                && !InviteRanks.CanSendDeviceLink("officer", true, true, "veteran", false) && !InviteRanks.CanSendDeviceLink("officer", true, true, "member", false)
                 && !InviteRanks.CanSendDeviceLink("officer", true, true, "officer", false) && !InviteRanks.CanSendDeviceLink("officer", true, true, "owner", false)
                 && !InviteRanks.CanSendDeviceLink("member", false, true, "member", false) && !InviteRanks.CanSendDeviceLink("owner", true, true, "member", true) && !InviteRanks.CanSendDeviceLink("owner", true, false, "member", false));
 
@@ -360,22 +361,32 @@ namespace ElansAddonHub
             sheet.Close();
             await Until(() => !sheet.IsOpen);
 
-            Session.FeedForTest(Inv2Welcome("officer", true));
+            // Lodge 2.31.2: the owner is told the member will be told (only when the server sends the notice)
+            Session.FeedForTest(Inv2Welcome("owner", true).Replace("\"lodgeinfo\"", "\"lodgeinfo\",\"devicenotice\""));
             sent.Clear();
             shows("Mia", "member", false);
             lodge.DeviceLinkClickForTest();
             c = Inv2Last(sent, "admin.invite.create");
-            check("card: officer -> Mia (Member): a person invite as Member", c != null && c.Str("kind") == "person" && c.Str("name") == "Mia" && c.Str("role") == "member");
+            check("card: owner on a 2.31.2 Lodge -> Mia: a person invite as Member", c != null && c.Str("kind") == "person" && c.Str("name") == "Mia" && c.Str("role") == "member");
+            check("card: ...the form explains that a member who is already in is told", sheet.FormForTest.HelpForTest.Contains("they are told"), sheet.FormForTest.HelpForTest);
+            Session.FeedForTest(Inv2Created(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), "person", "Mia", "member", 1, InvA));
+            await Task.Delay(100);
+            check("card: ...and the link's note says Mia will be told and can remove it", sheet.FormForTest.NoteForTest.Contains("Mia will be told") && sheet.FormForTest.NoteForTest.Contains("remove"), sheet.FormForTest.NoteForTest);
             sheet.Close();
             await Until(() => !sheet.IsOpen);
 
-            // a rank the officer may not give is never sent as 'member' instead
-            sent.Clear();
-            sheet.Open("Bob", "officer");
-            check("card: an officer asked for a device link on an officer sends NOTHING (never falls back to another rank) and says why",
-                !sent.Any(f => f.Str("t") == "admin.invite.create") && sheet.FormForTest.StatusForTest.Contains("below you"), sheet.FormForTest.StatusForTest);
-            sheet.Close();
-            await Until(() => !sheet.IsOpen);
+            // an officer: no device link for anyone who is already in - nothing is sent, the form says why (the server refuses it too)
+            Session.FeedForTest(Inv2Welcome("officer", true));
+            foreach (var (who, rank) in new[] { ("Mia", "member"), ("Bob", "officer") })
+            {
+                sent.Clear();
+                sheet.Open(who, rank);
+                check("card: an officer asked for a device link on " + who + " sends NOTHING and says only the Guild Master can",
+                    !sent.Any(f => f.Str("t") == "admin.invite.create") && sheet.FormForTest.StatusForTest.Contains("Only the Guild Master"), sheet.FormForTest.StatusForTest);
+                sheet.Close();
+                await Until(() => !sheet.IsOpen);
+            }
+            check("card: ...and the officer's form says only the Guild Master adds devices for people already in", sheet.FormForTest.HelpForTest.Contains("Only the Guild Master can add a device"), sheet.FormForTest.HelpForTest);
         }
 
         // ---------------------------------------------------------------- "Create a lodge" guide

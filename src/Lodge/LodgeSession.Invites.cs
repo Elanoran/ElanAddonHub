@@ -19,6 +19,7 @@ namespace ElansAddonHub.Lodge
         public bool CanInvite { get; private set; }                // owner and officers: one-time invite links, everyone's devices
         public bool CanRetire { get; private set; }               // owner: retire a permanent code
         public bool CanPurge { get; private set; }                // owner (server 2.22): revert one member's Atlas contributions
+        public bool SupportsDeviceNotice { get; private set; }     // server 2.31.2: device.added, addedBy, device links for existing members are the Guild Master's
         public string DeviceId { get; private set; }               // the device I am on (tokens only)
         public string DeviceName { get; private set; }
 
@@ -29,6 +30,7 @@ namespace ElansAddonHub.Lodge
             CanInvite = SupportsTokens && w.CanInvite;
             CanRetire = SupportsTokens && w.CanRetire;
             CanPurge = SupportsTokens && w.CanPurge && (v == null || v >= new Version(2, 22, 0));
+            SupportsDeviceNotice = SupportsTokens && features.Contains("devicenotice");
             DeviceId = w.Device?.Id;
             DeviceName = w.Device?.Name;
             ReadLodgeInfo(w, features);
@@ -39,7 +41,8 @@ namespace ElansAddonHub.Lodge
         public ObservableCollection<InviteVM> Invites { get; } = new ObservableCollection<InviteVM>();
         public ObservableCollection<DeviceVM> MyDevices { get; } = new ObservableCollection<DeviceVM>();
         public ObservableCollection<DeviceVM> AllDevices { get; } = new ObservableCollection<DeviceVM>();
-        public event Action InvitesChanged, DevicesChanged;
+        public ObservableCollection<DeviceNoticeVM> DeviceNotices { get; } = new ObservableCollection<DeviceNoticeVM>();   // 2.31.2, newest first
+        public event Action InvitesChanged, DevicesChanged, DeviceNoticesChanged;
         public event Action<InviteVM, string> InviteCreated;       // the invite and its ready-to-send link (shown once; the secret is in the link only)
         public string LastInviteLink { get; private set; }
 
@@ -78,10 +81,47 @@ namespace ElansAddonHub.Lodge
                         else { var x = AdminDevicesMsg.Read(new LodgeJsonFields(m)); rows = x.Devices; sent = x.Now; }
                         target.Clear();
                         foreach (var d in rows.Select(x => DeviceVM.From(x, Now(sent)))) target.Add(d);
+                        // a notice about a device that is gone from my own list has been dealt with (removed here or elsewhere)
+                        if (mine) foreach (var n in DeviceNotices.Where(n => !rows.Any(r => r.Id == n.Id)).ToList()) DeviceNotices.Remove(n);
                         DevicesChanged?.Invoke();
+                        DeviceNoticesChanged?.Invoke();
                         break;
                     }
+                case LodgeMsg.DeviceAdded:
+                    OnDeviceAdded(DeviceAddedMsg.Read(new LodgeJsonFields(m)));
+                    break;
             }
+        }
+
+        // ---- 2.31.2: "a new device was added to your account by Y" - a toast now and a line in Settings > Lodge until it is removed or dismissed
+        void OnDeviceAdded(DeviceAddedMsg a)
+        {
+            if (!SupportsDeviceNotice || string.IsNullOrEmpty(a.Id) || a.Id == DeviceId) return;   // never about the PC I am on
+            if (DeviceNotices.Any(n => n.Id == a.Id)) return;
+            var n = DeviceNoticeVM.From(a);
+            DeviceNotices.Insert(0, n);
+            while (DeviceNotices.Count > 20) DeviceNotices.RemoveAt(DeviceNotices.Count - 1);
+            Toasts.Push(new ToastItem
+            {
+                Kind = ToastKind.Security, Kicker = "Security", Sender = "New device on your account",
+                Text = $"'{n.Device}' was added by {n.Who}. Not you? Remove it in Settings > Lodge, Your devices.",
+            });
+            DeviceNoticesChanged?.Invoke();
+            RequestMyDevices();
+        }
+
+        public void DismissDeviceNotice(string id)
+        {
+            foreach (var n in DeviceNotices.Where(n => n.Id == id).ToList()) DeviceNotices.Remove(n);
+            DeviceNoticesChanged?.Invoke();
+        }
+
+        // the Remove button of a notice: signs that device out and forgets the notice
+        public void RemoveNoticedDevice(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id == DeviceId) return;
+            RevokeDevice(id);
+            DismissDeviceNotice(id);
         }
 
         // ---- requests (the server decides who may: officers and the owner for the invite calls)

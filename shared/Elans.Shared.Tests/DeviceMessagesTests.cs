@@ -100,4 +100,38 @@ public class DeviceMessagesTests
         Assert.Equal(new[] { "t", "name", "now", "devices" }, Written(new DevicesMsg().Write).D.Keys);
         Assert.Equal(new[] { "id", "name", "role", "device", "created", "lastSeen", "ip", "current", "online" }, Written(Dev("d1", "Nova", true).Write).D.Keys);
     }
+
+    // ---- 2.31.2: addedBy on a device row, and device.added
+
+    [Fact]
+    public void AddedBy_is_optional_and_left_out_when_empty()
+    {
+        var own = Dev("d1", "Nova", true);
+        Assert.Equal(new[] { "id", "name", "role", "device", "created", "lastSeen", "ip", "current", "online" }, Written(own.Write).D.Keys);
+        own.AddedBy = "";
+        Assert.Equal(new[] { "id", "name", "role", "device", "created", "lastSeen", "ip", "current", "online" }, Written(own.Write).D.Keys);
+        var added = Dev("d2", "Nova", false); added.AddedBy = "Elan";
+        var w = Written(added.Write);
+        Assert.Equal(new[] { "id", "name", "role", "device", "created", "lastSeen", "ip", "current", "online", "addedBy" }, w.D.Keys);
+        var old = OldDev("d2", "Nova", false); old["addedBy"] = "Elan";
+        SameJson(old, w.D);
+        Assert.Equal("Elan", DeviceView.Read(w).AddedBy);
+        Assert.Null(DeviceView.Read(Written(own.Write)).AddedBy);                    // an older Lodge: no addedBy, read as null
+        Assert.Null(DeviceView.Read(new TestFields(new Dictionary<string, object> { ["addedBy"] = 5 })).AddedBy);   // wrong type: missing
+    }
+
+    [Fact]
+    public void Device_added_golden_and_round_trip()
+    {
+        var m = new DeviceAddedMsg { Id = "d9", Name = "Laptop", By = "Elan", At = 1_790_000_700_000 };
+        var w = Written(m.Write);
+        Assert.Equal(new[] { "t", "id", "name", "by", "at" }, w.D.Keys);
+        SameJson(new JsonObject { ["t"] = "device.added", ["id"] = "d9", ["name"] = "Laptop", ["by"] = "Elan", ["at"] = 1_790_000_700_000L }, w.D);
+        var r = DeviceAddedMsg.Read(w);
+        Assert.Equal(("d9", "Laptop", "Elan", 1_790_000_700_000L), (r.Id, r.Name, r.By, r.At));
+        // lenient: a malformed frame reads as null / 0, never throws
+        var odd = DeviceAddedMsg.Read(new TestFields(new Dictionary<string, object> { ["id"] = 3, ["at"] = "x", ["by"] = true }));
+        Assert.Equal(((string)null, (string)null, (string)null, 0L), (odd.Id, odd.Name, odd.By, odd.At));
+        Assert.Equal("device.added", Written(new DeviceAddedMsg().Write).Str("t"));
+    }
 }

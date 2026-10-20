@@ -566,7 +566,7 @@ namespace ElansAddonHub.Lodge
                 case LodgeMsg.CalEvents: case LodgeMsg.CalRange:
                     OnCalendarFrame(m);
                     break;
-                case LodgeMsg.AdminInvites: case LodgeMsg.AdminInviteCreated: case LodgeMsg.Devices: case LodgeMsg.AdminDevices:
+                case LodgeMsg.AdminInvites: case LodgeMsg.AdminInviteCreated: case LodgeMsg.Devices: case LodgeMsg.AdminDevices: case LodgeMsg.DeviceAdded:
                     OnInviteFrame(m);
                     break;
                 case LodgeMsg.LodgeInfo: case LodgeMsg.MemberLeft:
