@@ -29,6 +29,7 @@ namespace ElansAddonHub.Services.WorldMap
     //                 objects {level}                     (3D page, 3.2) the Trees & objects switch: off | low | medium | high (also when the page steps it down by itself)
     //                 obuild | opause | oresume | ocancel  (3D page, 3.2) its card and progress line: Build now, Pause, Resume, Cancel
     //                 gneed {c, r}                        (3D page, 3.2) the real ground of tile (c, r) is wanted: the app makes its files and answers gready {c, r, ok}
+    //                 wneed {fdid}                        (3D page, 3.2) a building's detailed textured model is wanted: the app makes it and answers wready {fdid, ok}
     //                 error {msg}                         a script error in the page (logged and kept for "Copy details"; at most a few per page)
     //                 howto                               the live layer's "How to turn it on" link: the app opens its how-to card
     //                 follow {on}                         the live layer's "Follow me" switch (remembered in the settings)
@@ -39,7 +40,7 @@ namespace ElansAddonHub.Services.WorldMap
     //                 me {state, ...}                      the live position layer (see Me below), at most once a second
     //                 members {list}                      the Lodge members who share their position with me (see Members below), at most once a second
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap, MemberFollow, Objects, OBuild, OPause, OResume, OCancel, GNeed }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap, MemberFollow, Objects, OBuild, OPause, OResume, OCancel, GNeed, WNeed }
 
     public sealed class WorldMapMessage
     {
@@ -176,6 +177,12 @@ namespace ElansAddonHub.Services.WorldMap
                         m.Type = WorldMapMessageType.Objects; m.Detail = lv; return m;
                     }
                 case "obuild": m.Type = WorldMapMessageType.OBuild; return m;
+                case "wneed":
+                    {
+                        // the building's FileDataID rides in MemberId (an int the message already has)
+                        if (!(d.TryGetValue("fdid", out var fo) && fo is double fd && fd >= 1 && fd <= int.MaxValue && fd == Math.Floor(fd))) { refusal = "wneed needs a building's FileDataID"; return null; }
+                        m.Type = WorldMapMessageType.WNeed; m.MemberId = (int)fd; return m;
+                    }
                 case "gneed":
                     {
                         if (!(d.TryGetValue("c", out var co) && co is double cd && cd >= 0 && cd <= 63 && cd == Math.Floor(cd)) || !(d.TryGetValue("r", out var ro) && ro is double rd && rd >= 0 && rd <= 63 && rd == Math.Floor(rd)))

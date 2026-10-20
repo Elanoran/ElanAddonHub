@@ -236,6 +236,52 @@ namespace ElansAddonHub
                     && Pm("{\"t\":\"gneed\",\"c\":64,\"r\":1}") == null && Pm("{\"t\":\"gneed\",\"c\":1.5,\"r\":1}") == null && Pm("{\"t\":\"gneed\",\"c\":-1,\"r\":1}") == null && Pm("{\"t\":\"gneed\"}") == null);
             });
 
+            // ---- the cities (3.2): a batch's 16-bit material, the detailed textured model, the furnishings placed in the scene
+            Part("cities", () =>
+            {
+                // a group without MOPY and two batches: the first with flag 0x2 and material 300 in its 16-bit field, the second with material 5 in byte 23
+                BldBox(0, 2, 0, 2, 0, 2, out var bv, out var bidx);
+                var gb = new MemoryStream(); var gw = new BinaryWriter(gb);
+                gw.Write(new byte[68]);
+                void Sub(string tag, byte[] b) { gw.Write(Encoding.ASCII.GetBytes(new string(tag.Reverse().ToArray()))); gw.Write(b.Length); gw.Write(b); }
+                Sub("MOVI", bidx.SelectMany(i => BitConverter.GetBytes(i)).ToArray());
+                Sub("MOVT", bv.SelectMany(p => p.SelectMany(f => BitConverter.GetBytes(f))).ToArray());
+                var ba = new byte[48];
+                BitConverter.GetBytes((ushort)300).CopyTo(ba, 10); BitConverter.GetBytes(0u).CopyTo(ba, 12); BitConverter.GetBytes((ushort)18).CopyTo(ba, 16); ba[22] = 0x2; ba[23] = 9;
+                BitConverter.GetBytes(18u).CopyTo(ba, 24 + 12); BitConverter.GetBytes((ushort)18).CopyTo(ba, 24 + 16); ba[24 + 23] = 5;
+                Sub("MOBA", ba); gw.Flush();
+                var grp = BldCat(BldChunk("MVER", BitConverter.GetBytes(17)), BldChunk("MOGP", gb.ToArray()));
+                var gm = WmoGroupMesh.Parse(grp);
+                Check("buildings: a batch's material from its 16-bit field when it says so (flag 0x2), else from byte 23; no MOPY needed (" + string.Join(",", gm.Mat.Distinct()) + ")",
+                    gm.Ok && gm.Mat.Length == 12 && gm.Mat.Take(6).All(m => m == 300) && gm.Mat.Skip(6).All(m => m == 5));
+                // the detailed model: two materials (textures 41, 42; 42 not readable), one group
+                var rootB = BldRoot(new float[] { 0, 0, 0, 2, 2, 2 }, new uint[] { 0x8 }, new[] { 6001 }, new uint[] { 41, 42 });
+                var root = WmoRoot.Parse(rootB);
+                var grp2 = BldGroup(0x8, bv, bidx, new byte[] { 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1 });
+                var det = WmoDetail.Make(root, f => f == 6001 ? grp2 : null, t => t == 41, out int groups, out int skipped);
+                Check("detail: the outside group's triangles in one model, one batch per material, a texture that is not there becomes a stand-in colour (" + string.Join(" ", det.Batches.Select(b => b.Tex + "/" + b.N)) + ")",
+                    det.Drawable && groups == 1 && skipped == 0 && det.Nv == 8 && det.Batches.Count == 2 && det.Batches[0].Tex == 41 && det.Batches[1].Tex == 0 && det.Batches[0].N == 18 && det.Batches[1].N == 18 && det.Textures.SetEquals(new[] { 41 }) && det.Max[1] == 2);
+                // the furnishings: one doodad 1 yard north of the origin, turned 90 degrees about WoW's up axis, scale 2; the building at (100, 10, 200)
+                var mods = new byte[32]; BitConverter.GetBytes(0).CopyTo(mods, 20); BitConverter.GetBytes(1).CopyTo(mods, 24);
+                var modd = new byte[40]; BitConverter.GetBytes(1f).CopyTo(modd, 4); float h = (float)Math.Sqrt(0.5); BitConverter.GetBytes(h).CopyTo(modd, 24); BitConverter.GetBytes(h).CopyTo(modd, 28); BitConverter.GetBytes(2f).CopyTo(modd, 32);
+                var root2 = WmoRoot.Parse(BldCat(rootB, BldChunk("MODS", mods), BldChunk("MODI", BitConverter.GetBytes(777)), BldChunk("MODD", modd)));
+                var place = new WmoPlacement { X = 100, Y = 10, Z = 200, Scale = 1 };
+                var f0 = WmoDetail.Doodads(root2, place, WorldMapObjects.FurnishingUidBase);
+                place.RotY = 90;
+                var f1 = WmoDetail.Doodads(root2, place, WorldMapObjects.FurnishingUidBase);
+                bool Near(double a, double b) => Math.Abs(a - b) < 0.01;
+                Check("furnishings: a building's doodad is placed in the scene - 1 yard north becomes +1 along z, its 90 degree turn about up a 90 degree Y angle, scale 2 (" + (f0.Count == 1 ? f0[0].X + "," + f0[0].Y + "," + f0[0].Z + " rot " + f0[0].RotX + "," + f0[0].RotY + "," + f0[0].RotZ : "none") + ")",
+                    root2.Ok && root2.Doodads.Count == 1 && root2.DoodadFdids.SequenceEqual(new[] { 777 }) && f0.Count == 1 && f0[0].NameId == 777 && Near(f0[0].X, 100) && Near(f0[0].Y, 10) && Near(f0[0].Z, 201) && Near(f0[0].RotY, 90) && Near(f0[0].RotX, 0) && Near(f0[0].RotZ, 0) && f0[0].Scale == 2);
+                Check("furnishings: with the building turned 90 degrees the doodad moves with it (" + (f1.Count == 1 ? f1[0].X + "," + f1[0].Z + " rot " + f1[0].RotY : "none") + ")",
+                    f1.Count == 1 && Near(f1[0].X, 101) && Near(f1[0].Z, 200) && Near(Math.Abs(f1[0].RotY), 180));
+                // the placement files keep the furnishing flag
+                var tb = WorldMapObjects.TileToBytes(new List<M2Placement> { new M2Placement { NameId = 1, X = 5, Scale = 1, Flags = 0x40 }, f0[0] });
+                var tr2 = WorldMapObjects.TileFromBytes(tb);
+                Check("furnishings: the tile file (\"M2P2\", 36 bytes a placement) marks them, so the page draws them only with the buildings on", tb[3] == '2' && tb.Length == 8 + 2 * 36 && tr2 != null && BitConverter.ToUInt32(tb, 8 + 32) == 0 && BitConverter.ToUInt32(tb, 8 + 36 + 32) == WorldMapObjects.FlagFurnishing && tr2[1].UniqueId >= WorldMapObjects.FurnishingUidBase);
+                WorldMapMessage Pm(string j) => WorldMapProtocol.Parse(j, out _);
+                Check("protocol: wneed {fdid} takes a building's FileDataID; anything else is refused", Pm("{\"t\":\"wneed\",\"fdid\":7962574}")?.MemberId == 7962574 && Pm("{\"t\":\"wneed\",\"fdid\":0}") == null && Pm("{\"t\":\"wneed\",\"fdid\":1.5}") == null && Pm("{\"t\":\"wneed\"}") == null);
+            });
+
             // ---- the developer's pipe (Services/DevPipe.cs) exists only in a build made with -p:ElansDevPipe=true (Tools/devoutpost.ps1): never in this one
             Part("dev pipe", () =>
             {

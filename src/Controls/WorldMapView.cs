@@ -950,6 +950,15 @@ namespace ElansAddonHub
                 case WorldMapMessageType.Objects: case WorldMapMessageType.OBuild: case WorldMapMessageType.OPause: case WorldMapMessageType.OResume: case WorldMapMessageType.OCancel:
                     if (mode3d) obj.Handle(m, mapId);
                     break;
+                case WorldMapMessageType.WNeed:
+                    // 3.2 cities: a building's detailed model with its real textures, made once from the game files, then the page is told
+                    if (mode3d && mapId >= 0)
+                    {
+                        int wm = mapId, wf = m.MemberId;
+                        Task.Run(() => { try { return GroundService.MakeBuilding(wm, wf); } catch (Exception ex) { Util.Log("world map buildings detail: " + ex.Message); return false; } })
+                            .ContinueWith(t => Dispatcher.BeginInvoke(new Action(() => { if (mapId == wm) Post(Json.Write(new Dictionary<string, object> { ["t"] = "wready", ["fdid"] = wf, ["ok"] = t.Result })); })));
+                    }
+                    break;
                 case WorldMapMessageType.GNeed:
                     // 3.2: the real ground of a tile near the spot the page looks at: made from the game files now (once; then kept), then the page is told
                     if (mode3d && mapId >= 0)

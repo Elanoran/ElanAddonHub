@@ -349,7 +349,7 @@ namespace ElansAddonHub
         {
             // WmoGroupMesh keeps ushort indices (a group file's own limit); a mesh of more vertices is made of several groups
             int nv = m.Pos.Length / 3;
-            if (nv <= 65535) { m.Idx = ids.Select(i => (ushort)i).ToArray(); m.Mat = new byte[ids.Count / 3]; return m; }
+            if (nv <= 65535) { m.Idx = ids.Select(i => (ushort)i).ToArray(); m.Mat = new ushort[ids.Count / 3]; return m; }
             throw new InvalidOperationException("a group has at most 65,535 vertices");
         }
     }

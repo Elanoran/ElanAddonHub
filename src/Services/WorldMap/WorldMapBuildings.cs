@@ -305,7 +305,8 @@ namespace ElansAddonHub.Services.WorldMap
         // which groups a model is made of: 1 = exterior groups only (before 2.89), 2 = exterior and exterior-lit ones (WmoRoot.OutsideGroups). A finished folder made by an
         // older rule is not ready: the models it would make differently (ExteriorLitGroups > 0, a handful per continent) are removed and made again, without asking.
         // 3 (3.1.1) = the files the game lists twice are read from the copy that is on the disk: the models with such a file (most textures of the Forever client) are made again.
-        public const int Rules = 3;
+        // 4 (3.2) = a batch's material is read from its 16-bit field when the batch says so (every model of this client: they all had one colour): every model is made again.
+        public const int Rules = 4;
         public const string Folder = "buildings";
         public const int PlacementBytes = 60;
         public static string Dir(string mapDir) => Path.Combine(mapDir, Folder);
@@ -623,7 +624,7 @@ namespace ElansAddonHub.Services.WorldMap
             if (scan == null || oldRules >= Rules) return 0;
             foreach (var m in scan.Models.Values)
             {
-                if (m.RootMissing || !((oldRules < 2 && m.ExteriorLitGroups > 0) || (oldRules < 3 && m.LaterCopy))) continue;
+                if (m.RootMissing || !((oldRules < 2 && m.ExteriorLitGroups > 0) || (oldRules < 3 && m.LaterCopy) || oldRules < 4)) continue;
                 var f = ModelFile(dir, m.Fdid);
                 try { if (File.Exists(f)) { File.Delete(f); n++; } } catch (Exception) { }
             }

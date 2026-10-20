@@ -166,8 +166,8 @@ namespace ElansAddonHub
                     await WmEval("window.wm3.objectsLevel('medium', true)");
                     await View(-10650, 1050, 160, 90, 28);
                     var og = await Settle();
-                    for (int w = 0; w < 30; w++) { var gi = Json.Obj(Json.Parse(await WmEval("window.wm3.ground()")) as string ?? "{}"); if (gi != null && gi.Int("shown") >= 2) break; await Task.Delay(500); await WmEval("window.wm3.step(2,130)"); }
-                    var gd = Json.Obj(Json.Parse(await WmEval("window.wm3.ground()")) as string ?? "{}");
+                    for (int w = 0; w < 30; w++) { var gi = Json.Obj(Json.Parse(await WmEval("window.wm3.groundState()")) as string ?? "{}"); if (gi != null && gi.Int("shown") >= 2) break; await Task.Delay(500); await WmEval("window.wm3.step(2,130)"); }
+                    var gd = Json.Obj(Json.Parse(await WmEval("window.wm3.groundState()")) as string ?? "{}");
                     var pngG = SelfTestClock.ShotsOn || !string.IsNullOrEmpty(shotEnv) ? await WorldMapView.CaptureForTest() : null; if (pngG != null) File.WriteAllBytes(Shot("westfall-ground"), pngG);
                     long onDisk = Directory.Exists(gdir) ? Directory.EnumerateFiles(gdir).Sum(f => new FileInfo(f).Length) : 0;
                     var gtdir = Path.Combine(WorldMapObjects.Dir(WorldMapCache.MapDir(0)), "gt");
@@ -176,8 +176,31 @@ namespace ElansAddonHub
                     Check("real ground: a tile is made from the game files on demand (" + tileMs + " ms, " + (tileBytes / 1024) + " KB) and the page shows the real ground near the spot it looks at (" + gd?.Int("shown") + " tiles, " + gd?.Int("layers") + " textures, " + gd?.Int("errors") + " errors)",
                         made && tileBytes > 1000 && gd != null && gd.Int("shown") >= 2 && gd.Int("layers") >= 4 && gd.Int("errors") == 0);
                     await WmEval("window.wm3.objectsLevel('low', true)"); await Task.Delay(400); await WmEval("window.wm3.step(3,130)");
-                    var gLow = Json.Obj(Json.Parse(await WmEval("window.wm3.ground()")) as string ?? "{}");
+                    var gLow = Json.Obj(Json.Parse(await WmEval("window.wm3.groundState()")) as string ?? "{}");
                     Check("real ground: Low shows no real ground (the minimap only; " + gLow?.Int("shown") + " tiles)", gLow != null && gLow.Int("shown") == 0);
+                }
+                // ---- the cities (3.2): Stormwind's detailed model with its materials, and its furnishings, on the page at Medium with the buildings on
+                {
+                    notes.Add("note real cities: " + scan.Furnishings.ToString("N0", I) + " furnishings of the buildings in the scan");
+                    BuildingsService.ResetForTest(); await BuildingsService.Prepare(0, "all"); var bt = BuildingsService.Start(0, "all"); if (bt != null) await bt;
+                    var sws = System.Diagnostics.Stopwatch.StartNew(); bool swOk = GroundService.MakeBuilding(0, 7962574); long swMs = sws.ElapsedMilliseconds;
+                    var swFile = WmoDetail.ModelFile(WorldMapObjects.Dir(WorldMapCache.MapDir(0)), 7962574);
+                    Dictionary<string, object> swMeta = null;
+                    if (File.Exists(swFile)) { var b = File.ReadAllBytes(swFile); if (b.Length > 8) swMeta = Json.Obj(System.Text.Encoding.UTF8.GetString(b, 8, BitConverter.ToInt32(b, 4))); }
+                    int swMats = swMeta?.List("batches").Count ?? 0, swTex = swMeta?.List("textures").Count ?? 0;
+                    notes.Add("note real cities: Stormwind's detailed model made in " + swMs + " ms: " + swMeta?.Int("tris") + " triangles, " + swMats + " materials, " + swTex + " textures, " + (File.Exists(swFile) ? new FileInfo(swFile).Length / 1024 : 0) + " KB");
+                    Check("real cities: Stormwind's detailed model has its many materials and real textures (" + swMats + " materials, " + swTex + " textures, " + swMeta?.Int("tris") + " triangles) and the scan finds the buildings' furnishings (" + scan.Furnishings.ToString("N0", I) + ")",
+                        swOk && swMats > 50 && swTex > 50 && swMeta.Int("tris") > 100000 && scan.Furnishings > 10000);
+                    await WmEval("window.wm3.buildingMode('all'); window.wm3.objectsLevel('medium', true)");
+                    await View(-8860, 600, 500, 160, 35);
+                    for (int w = 0; w < 40; w++) { var oc = await Wm3Obj(); if (oc != null && oc.TryGetValue("cities", out var cv) && cv is Dictionary<string, object> cd && cd.Int("shown") >= 1) break; await Task.Delay(500); await WmEval("window.wm3.step(2,130)"); }
+                    var oCity = await Settle();
+                    var cities = oCity != null && oCity.TryGetValue("cities", out var cv2) ? cv2 as Dictionary<string, object> : null;
+                    var pngC = SelfTestClock.ShotsOn || !string.IsNullOrEmpty(shotEnv) ? await WorldMapView.CaptureForTest() : null; if (pngC != null) File.WriteAllBytes(Shot("stormwind"), pngC);
+                    var errs = Json.Obj(Json.Parse(await WmEval("window.wm3.state()")) as string ?? "{}")?.List("errs");
+                    Check("real cities: the page shows Stormwind in detail near the spot it looks at (" + cities?.Int("shown") + " buildings, " + cities?.Int("tris") + " triangles) with no page errors (" + (errs?.Count ?? -1) + ")",
+                        cities != null && cities.Int("shown") >= 1 && cities.Int("tris") > 100000 && errs != null && errs.Count == 0, Json.Write(errs));
+                    await WmEval("window.wm3.buildingMode('off')");
                 }
                 int D(string k) => res.TryGetValue(k, out var o) && o != null ? o.Int("drawn") : -1;
                 Check("real objects page: Elwynn (" + D("goldshire-medium") + " near Goldshire, " + D("elwynn-forest-medium") + " in the forest) and Duskwood (" + D("duskwood-medium") + ") have trees and objects drawn at Medium, with textures and no read errors",

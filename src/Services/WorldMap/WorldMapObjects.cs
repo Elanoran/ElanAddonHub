@@ -12,7 +12,8 @@ namespace ElansAddonHub.Services.WorldMap
     // "Trees & objects" of the 3D world map (3.2, experimental): the M2 placements of a continent (the MDDF chunks of its obj0 ADTs: trees, rocks, fences,
     // carts, banners) with their real shapes and textures, read from the player's own game files into  <map folder>\objects\ :
     //   manifest.json       version, game build, counts, measured costs, what could not be read (written last: a damaged folder is never taken for a finished one)
-    //   p\{col}_{row}.bin   the placements of one tile: "M2P1" | int count | count x 32 bytes { uint fdid, float pos[3], float rot[3] (degrees), float scale }
+    //   p\{col}_{row}.bin   the placements of one tile: "M2P2" | int count | count x 36 bytes { uint fdid, float pos[3], float rot[3] (degrees), float scale, uint flags }
+    //                       flags 1 = a building's furnishing (WmoDetail.Doodads: the lamps, benches and trees of a city; drawn only with the buildings on)
     //                       (scene axes, as the buildings; a placement listed by two tiles is kept once, by the tile it stands in)
     //   tiles.bin           "M2T1" | int count | count x { ushort key (col * 64 + row), ushort placements }: which tiles have a placements file
     //   m\{fdid}.m2b        one model per distinct M2 (M2Mesh); the stub "M2BX" for one with nothing to draw, so it is not tried again
@@ -31,7 +32,7 @@ namespace ElansAddonHub.Services.WorldMap
     {
         public Dictionary<int, List<M2Placement>> ByTile = new Dictionary<int, List<M2Placement>>();     // key col * 64 + row
         public Dictionary<int, ObjModelInfo> Models = new Dictionary<int, ObjModelInfo>();
-        public int Tiles, Placements, NameIndexSkipped, Duplicates;
+        public int Tiles, Placements, NameIndexSkipped, Duplicates, Furnishings;
         public long Ms;
     }
 
@@ -65,9 +66,10 @@ namespace ElansAddonHub.Services.WorldMap
 
     public static class WorldMapObjects
     {
-        public const int Version = 1;
+        public const int Version = 2;          // 2 (3.2): the buildings' furnishings, placements with flags (M2P2)
         public const string Folder = "objects";
-        public const int PlacementBytes = 32;
+        public const int PlacementBytes = 36;
+        public const uint FlagFurnishing = 1;
         public const double Ty = 1600.0 / 3;
         public static string Dir(string mapDir) => Path.Combine(mapDir, Folder);
         public static string ModelsDir(string dir) => Path.Combine(dir, "m");
@@ -98,14 +100,14 @@ namespace ElansAddonHub.Services.WorldMap
         public static byte[] TileToBytes(IList<M2Placement> ps)
         {
             var ms = new MemoryStream(); var w = new BinaryWriter(ms);
-            w.Write(new[] { (byte)'M', (byte)'2', (byte)'P', (byte)'1' }); w.Write(ps.Count);
-            foreach (var p in ps) { w.Write(p.NameId); w.Write(p.X); w.Write(p.Y); w.Write(p.Z); w.Write(p.RotX); w.Write(p.RotY); w.Write(p.RotZ); w.Write(p.Scale); }
+            w.Write(new[] { (byte)'M', (byte)'2', (byte)'P', (byte)'2' }); w.Write(ps.Count);
+            foreach (var p in ps) { w.Write(p.NameId); w.Write(p.X); w.Write(p.Y); w.Write(p.Z); w.Write(p.RotX); w.Write(p.RotY); w.Write(p.RotZ); w.Write(p.Scale); w.Write(p.HasNameIndex ? 0u : (uint)(p.Flags == 0x40 && p.UniqueId >= FurnishingUidBase ? FlagFurnishing : 0)); }
             w.Flush(); return ms.ToArray();
         }
 
         public static List<M2Placement> TileFromBytes(byte[] b)
         {
-            if (b == null || b.Length < 8 || b[0] != 'M' || b[1] != '2' || b[2] != 'P' || b[3] != '1') return null;
+            if (b == null || b.Length < 8 || b[0] != 'M' || b[1] != '2' || b[2] != 'P' || b[3] != '2') return null;
             int n = BitConverter.ToInt32(b, 4);
             if (n < 0 || 8L + (long)n * PlacementBytes != b.Length) return null;
             var res = new List<M2Placement>(n);
@@ -116,6 +118,7 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     NameId = BitConverter.ToUInt32(b, o), X = BitConverter.ToSingle(b, o + 4), Y = BitConverter.ToSingle(b, o + 8), Z = BitConverter.ToSingle(b, o + 12),
                     RotX = BitConverter.ToSingle(b, o + 16), RotY = BitConverter.ToSingle(b, o + 20), RotZ = BitConverter.ToSingle(b, o + 24), Scale = BitConverter.ToSingle(b, o + 28),
+                    UniqueId = (BitConverter.ToUInt32(b, o + 32) & FlagFurnishing) != 0 ? FurnishingUidBase : 0, Flags = 0x40,
                 });
             }
             return res;
@@ -148,6 +151,7 @@ namespace ElansAddonHub.Services.WorldMap
 
         public static bool PlacementsOnDisk(string dir, ObjectScan scan)
         {
+            if (!scan.ByTile.Where(kv => kv.Value.Count > 0).Take(1).All(kv => File.Exists(TileFile(dir, kv.Key / 64, kv.Key % 64)) && TileFromBytes(File.ReadAllBytes(TileFile(dir, kv.Key / 64, kv.Key % 64))) != null)) return false;      // an older format
             var t = File.Exists(TilesPath(dir)) ? TilesFromBytes(File.ReadAllBytes(TilesPath(dir))) : null;
             if (t == null || t.Count != scan.ByTile.Count(kv => kv.Value.Count > 0)) return false;
             foreach (var kv in scan.ByTile) if (kv.Value.Count > 0 && (!t.TryGetValue(kv.Key, out var n) || n != Math.Min(65535, kv.Value.Count) || !File.Exists(TileFile(dir, kv.Key / 64, kv.Key % 64)))) return false;
@@ -197,11 +201,15 @@ namespace ElansAddonHub.Services.WorldMap
         }
 
         // ---------------------------------------------------------------- scan: the placements of every tile and the distinct models
+        // furnishings get unique ids from here up (an ADT's own ids are far below): a building's placement id x 4096 + the doodad's index, kept apart from them
+        public const uint FurnishingUidBase = 0x80000000;
+
         public static ObjectScan Scan(IList<WdtTile> tiles, IBuildingSource src, CancellationToken ct)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var scan = new ObjectScan();
             var seen = new HashSet<uint>();
+            var wmos = new List<WmoPlacement>(); var wmoSeen = new HashSet<uint>();
             src.Prefetch(tiles.Where(t => t.Obj0Fdid > 0).Select(t => t.Obj0Fdid));
             foreach (var t in tiles.Where(t => t.Obj0Fdid > 0).OrderBy(t => t.Row).ThenBy(t => t.Col))
             {
@@ -212,18 +220,36 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     if (p.HasNameIndex) { scan.NameIndexSkipped++; continue; }
                     if (!seen.Add(p.UniqueId)) { scan.Duplicates++; continue; }
-                    int col = (int)Math.Floor(p.X / Ty), row = (int)Math.Floor(p.Z / Ty);
-                    if (col < 0 || row < 0 || col > 63 || row > 63) continue;
-                    int key = col * 64 + row;
-                    if (!scan.ByTile.TryGetValue(key, out var l)) scan.ByTile[key] = l = new List<M2Placement>();
-                    l.Add(p); scan.Placements++;
-                    int id = (int)p.NameId;
-                    if (!scan.Models.TryGetValue(id, out var mi)) scan.Models[id] = mi = new ObjModelInfo { Fdid = id };
-                    mi.Placements++;
+                    Add(scan, p);
                 }
+                foreach (var w in AdtObjects.ParsePlacements(d, out _)) if (!w.HasNameIndex && wmoSeen.Add(w.UniqueId)) wmos.Add(w);
+            }
+            // 3.2: the buildings' own furnishings (set 0 and the placement's set): each building's root once
+            var roots = new Dictionary<int, WmoRoot>();
+            src.Prefetch(wmos.Select(w => (int)w.NameId).Distinct());
+            foreach (var w in wmos)
+            {
+                ct.ThrowIfCancellationRequested();
+                int id = (int)w.NameId;
+                if (!roots.TryGetValue(id, out var r)) { var rb = src.Read(id); roots[id] = r = rb == null ? null : WmoRoot.Parse(rb); }
+                if (r == null || !r.Ok) continue;
+                uint uid = FurnishingUidBase + (w.UniqueId & 0x7FFFF) * 4096;
+                foreach (var dp in WmoDetail.Doodads(r, w, uid)) { Add(scan, dp); scan.Furnishings++; }
             }
             scan.Ms = sw.ElapsedMilliseconds;
             return scan;
+        }
+
+        static void Add(ObjectScan scan, M2Placement p)
+        {
+            int col = (int)Math.Floor(p.X / Ty), row = (int)Math.Floor(p.Z / Ty);
+            if (col < 0 || row < 0 || col > 63 || row > 63) return;
+            int key = col * 64 + row;
+            if (!scan.ByTile.TryGetValue(key, out var l)) scan.ByTile[key] = l = new List<M2Placement>();
+            l.Add(p); scan.Placements++;
+            int id = (int)p.NameId;
+            if (!scan.Models.TryGetValue(id, out var mi)) scan.Models[id] = mi = new ObjModelInfo { Fdid = id };
+            mi.Placements++;
         }
 
         public static bool ModelDone(string dir, int fdid) => File.Exists(ModelFile(dir, fdid));

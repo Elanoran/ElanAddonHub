@@ -963,7 +963,7 @@
     dirty = false; frameN++;
     oProbeFrame(now);
     updateCamera();
-    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateBuildings(now); updateObjects(now); updateGround(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
+    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateCityDetail(now); updateBuildings(now); updateObjects(now); updateGround(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
     var shown = updateOverlays();
     shimmer(now);
     renderer.render(scene, camera);
@@ -1158,6 +1158,7 @@
     for (var i = 0; i < n; i++) {
       if (bridgesOnly && (pl.flags[i] & 1) === 0) continue;
       if (!BLD.built[pl.fdid[i]]) continue;
+      if (WD.shown[i]) continue;               // 3.2: shown in detail with its real textures
       wanted++;
       var r = pl.rad[i], cy = pl.cy[i] * ex, dx = eye.x - pl.cx[i], dy = eye.y - cy, dz = eye.z - pl.cz[i];
       var dist = Math.sqrt(dx * dx + dy * dy + dz * dz), lim = Math.min(cfg2.view, Math.max(250, r * cfg2.k));
@@ -1415,19 +1416,21 @@
   // crowns sit with the minimap ground while autumn zones keep their colours
   var O_TINT = [0.9, 0.97, 0.86];
   var OU = { uOFocus: { value: null }, uOLim: { value: 300 }, uOSat: { value: 0.85 }, uOTint: { value: null } };
-  function oPatch(m, cut) {
+  function oPatch(m, cut, noFade) {
     m.onBeforeCompile = function (sh) {
       if (!OU.uOFocus.value) OU.uOFocus.value = new THREE.Vector3();
+      if (!OU.uOTint.value) OU.uOTint.value = new THREE.Vector3(O_TINT[0], O_TINT[1], O_TINT[2]);
+      if (noFade) { sh.uniforms.uOSat = OU.uOSat; sh.uniforms.uOTint = OU.uOTint; sh.fragmentShader = (cut ? '#define O_CUT\n' : '') + 'uniform float uOSat; uniform vec3 uOTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', O_MAP); return; }
       if (!OU.uOTint.value) OU.uOTint.value = new THREE.Vector3(O_TINT[0], O_TINT[1], O_TINT[2]);
       sh.uniforms.uOFocus = OU.uOFocus; sh.uniforms.uOLim = OU.uOLim; sh.uniforms.uOSat = OU.uOSat; sh.uniforms.uOTint = OU.uOTint;
       sh.vertexShader = 'uniform vec3 uOFocus; uniform float uOLim; varying float vOFade;\n' + sh.vertexShader.replace('#include <begin_vertex>', O_FADE_V);
       sh.fragmentShader = (cut ? '#define O_CUT\n' : '') + 'varying float vOFade; uniform float uOSat; uniform vec3 uOTint;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  ' + O_FADE_F).replace('#include <map_fragment>', O_MAP);
     };
-    m.customProgramCacheKey = function () { return cut ? 'o-cut' : 'o'; };
+    m.customProgramCacheKey = function () { return (cut ? 'o-cut' : 'o') + (noFade ? '-nf' : ''); };
   }
-  function oMaterial(b, te) {
+  function oMaterial(b, te, noFade) {
     var tex = te && te.state === 'ready' ? te.tex : null;
-    var key = (tex ? b.tex + '|' + b.wrap : 'rgb' + b.rgb) + '|' + b.kind + '|' + (b.two ? 1 : 0) + '|' + (b.unlit ? 1 : 0) + '|' + b.ref;
+    var key = (tex ? b.tex + '|' + b.wrap : 'rgb' + b.rgb) + '|' + b.kind + '|' + (b.two ? 1 : 0) + '|' + (b.unlit ? 1 : 0) + '|' + b.ref + (noFade ? '|nf' : '');
     var m = OBJ.mats[key];
     if (m) return m;
     var col = new THREE.Color(1, 1, 1);
@@ -1438,7 +1441,7 @@
     if (b.kind === 'add') m = new THREE.MeshBasicMaterial({ map: tex, color: col, side: side, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     else if (b.unlit) m = new THREE.MeshBasicMaterial({ map: tex, color: col, side: side, alphaTest: b.kind === 'cut' ? b.ref : 0 });
     else m = new THREE.MeshLambertMaterial({ map: tex, color: col, side: side, alphaTest: b.kind === 'cut' ? b.ref : 0 });
-    oPatch(m, b.kind === 'cut' && !!tex);
+    oPatch(m, b.kind === 'cut' && !!tex, noFade);
     OBJ.mats[key] = m;
     return m;
   }
@@ -1451,7 +1454,7 @@
     if (jl <= 0 || 8 + jl > buf.byteLength) return null;
     var meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jl)));
     var nv = meta.nv | 0, ni = meta.ni | 0, o = 8 + ((jl + 3) & ~3);
-    if (nv <= 0 || nv > 200000 || ni <= 0 || ni % 3 !== 0 || !Array.isArray(meta.batches)) return null;
+    if (nv <= 0 || nv > 2000000 || ni <= 0 || ni % 3 !== 0 || !Array.isArray(meta.batches)) return null;
     var need = o + nv * 12 + nv * 4 + nv * 8 + ni * (meta.idx16 ? 2 : 4);
     if (need > buf.byteLength) return null;
     var pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
@@ -1469,15 +1472,15 @@
     meta.batches.forEach(function (b, i) { g.addGroup(b.i0 | 0, b.n | 0, i); });
     return { meta: meta, geo: g, rad: rad, cy: (mn[1] + mx[1]) / 2, tris: ni / 3, bytes: nv * 24 + ni * (meta.idx16 ? 2 : 4), texKeys: [] };
   }
-  function oFetchModel(fdid, e) {
+  function oFetchModel(fdid, e, url, noFade) {
     e.state = 'loading'; OBJ.fetching++;
-    fetch(oUrl('m/' + fdid + '.m2b') + (e.rev ? '?r=' + e.rev : '')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+    fetch((url || oUrl('m/' + fdid + '.m2b')) + (e.rev ? '?r=' + e.rev : '')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
       var m = buf ? oParse(buf) : null;
       if (!m) { e.state = 'none'; if (buf) OBJ.errors++; return; }
       // its textures, then the materials (a texture that does not come is a stand-in colour)
       var waits = 0, done = function () {
         if (--waits > 0) return;
-        m.mats = m.meta.batches.map(function (b, i) { return oMaterial(b, m.tes[i]); });
+        m.mats = m.meta.batches.map(function (b, i) { return oMaterial(b, m.tes[i], noFade); });
         e.m = m; e.state = 'ready'; OBJ.mem += m.bytes; OBJ.loaded++; dirty = true;
       };
       m.tes = m.meta.batches.map(function (b) {
@@ -1502,11 +1505,11 @@
     fetch(oUrl('p/' + Math.floor(key / 64) + '_' + (key % 64) + '.bin')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
       if (!buf || buf.byteLength < 8) { T.state = 'none'; return; }
       var dv = new DataView(buf);
-      if (dv.getUint32(0, true) !== 0x3150324D) { T.state = 'none'; OBJ.errors++; return; }          // "M2P1"
+      if (dv.getUint32(0, true) !== 0x3250324D) { T.state = 'none'; OBJ.errors++; return; }          // "M2P2"
       var n = dv.getInt32(4, true);
-      if (n < 0 || 8 + n * 32 !== buf.byteLength) { T.state = 'none'; OBJ.errors++; return; }
-      T.n = n; T.fdid = new Int32Array(n); T.a = new Float32Array(n * 7);
-      for (var i = 0; i < n; i++) { var o = 8 + i * 32; T.fdid[i] = dv.getUint32(o, true); for (var k = 0; k < 7; k++) T.a[i * 7 + k] = dv.getFloat32(o + 4 + k * 4, true); }
+      if (n < 0 || 8 + n * 36 !== buf.byteLength) { T.state = 'none'; OBJ.errors++; return; }
+      T.n = n; T.fdid = new Int32Array(n); T.a = new Float32Array(n * 7); T.fl = new Uint8Array(n);
+      for (var i = 0; i < n; i++) { var o = 8 + i * 36; T.fdid[i] = dv.getUint32(o, true); for (var k = 0; k < 7; k++) T.a[i * 7 + k] = dv.getFloat32(o + 4 + k * 4, true); T.fl[i] = dv.getUint32(o + 32, true) & 255; }
       T.state = 'ready';
     }).catch(function () { T.state = 'none'; OBJ.errors++; }).then(function () { dirty = true; });
   }
@@ -1557,6 +1560,7 @@
         if (dx * dx + dy * dy + dz * dz > eye2) continue;
         var fd = T.fdid[i];
         if (!OBJ.built[fd]) continue;
+        if ((T.fl[i] & 1) && BLD.mode !== 'all') continue;          // a building's furnishing: only with its building
         inRange++;
         var e = OBJ.models[fd] || (OBJ.models[fd] = { state: 'idle', m: null, last: now });
         if (e.state === 'idle') { if (OBJ.fetching < OBJ.maxFetch) oFetchModel(fd, e); continue; }
@@ -1779,6 +1783,61 @@
     return { lim: OU.uGLim ? OU.uGLim.value : 0, tiles: st, shown: GD.shown, layers: GD.used, capacity: GD.cap, errors: GD.errors, made: GD.made, bright: GD.bright, uploads: GD.uploads || 0 };
   }
 
+  // ---- the detailed buildings near the spot you look at (3.2 cities): Medium and High swap a building's simplified one-colour shape for its full-detail outside
+  // with the real textures (WmoDetail: objects/w/<fdid>.m2b, made by the app on request: wneed -> wready). At most 16 at a time, nearest first; the simplified
+  // instance of a building shown in detail is left out of the buildings' pass (WD.shown).
+  var WD = { models: {}, meshes: {}, shown: {}, asked: 0, maxAsk: 2, maxShown: 16, drawn: 0, tris: 0 };
+  function wReady(m) {
+    var e = WD.models[m.fdid];
+    if (!e || e.state !== 'asked') return;
+    WD.asked--;
+    if (!m.ok) { e.state = 'none'; return; }
+    oFetchModel(m.fdid, e, oUrl('w/' + m.fdid + '.m2b'), true);
+  }
+  function updateCityDetail(now) {
+    var od = OD(), lim = od && OBJ.gpu ? od.ground : 0, pl = BLD.pl;
+    var want = {};
+    if (lim > 0 && pl && BLD.mode !== 'off' && OBJ.base) {
+      var fx = cam.tx, fz = cam.tz, eye = camera.position, cand = [];
+      if (Math.hypot(eye.x - fx, eye.y - cam.ty, eye.z - fz) <= lim * 8)
+        for (var i = 0; i < pl.n; i++) {
+          if (BLD.mode === 'bridges' && (pl.flags[i] & 1) === 0) continue;
+          var d = Math.hypot(pl.cx[i] - fx, pl.cz[i] - fz) - pl.rad[i];
+          if (d <= lim) cand.push({ i: i, d: d });
+        }
+      cand.sort(function (a, b) { return a.d - b.d; });
+      for (var c = 0; c < cand.length && c < WD.maxShown; c++) {
+        var ci = cand[c].i, fd = pl.fdid[ci], e = WD.models[fd] || (WD.models[fd] = { state: 'idle', m: null, last: now });
+        e.last = now;
+        if (e.state === 'idle' && WD.asked < WD.maxAsk) { e.state = 'asked'; WD.asked++; send({ t: 'wneed', fdid: fd }); }
+        if (e.state === 'ready') want[ci] = true;
+      }
+    }
+    // the meshes: made for the wanted ones, removed for the rest
+    var DEG = Math.PI / 180, ex = prefs.exag, tris = 0, n = 0;
+    Object.keys(want).forEach(function (k) {
+      var i = +k, fd = pl.fdid[i], e = WD.models[fd], mm = WD.meshes[i];
+      if (!mm || mm.geometry !== e.m.geo) {
+        if (mm) scene.remove(mm);
+        mm = WD.meshes[i] = new THREE.Mesh(e.m.geo, e.m.mats); mm.matrixAutoUpdate = false; mm.frustumCulled = false; scene.add(mm); mm.userData.ex = -1;
+      }
+      if (mm.userData.ex !== ex) {
+        mm.matrix.compose(new THREE.Vector3(pl.x[i], pl.y[i] * ex, pl.z[i]), new THREE.Quaternion().setFromEuler(new THREE.Euler(pl.rx[i] * DEG, pl.ry[i] * DEG, pl.rz[i] * DEG, 'YXZ')), new THREE.Vector3(pl.s[i], pl.s[i], pl.s[i]));
+        mm.matrixWorld.copy(mm.matrix); mm.userData.ex = ex;
+      }
+      tris += e.m.tris; n++;
+    });
+    Object.keys(WD.meshes).forEach(function (k) { if (!want[k]) { scene.remove(WD.meshes[k]); delete WD.meshes[k]; } });
+    WD.shown = want; WD.drawn = n; WD.tris = tris;
+    // models not wanted for a while are let go (their textures with them)
+    Object.keys(WD.models).forEach(function (k) { var e = WD.models[k]; if (e.state === 'ready' && now - e.last > 8000) { var used = false; Object.keys(WD.meshes).forEach(function (j) { if (pl && pl.fdid[j] === +k) used = true; }); if (!used) { oFreeModel(+k, e); e.state = 'idle'; } } });
+  }
+  function wClear() {
+    Object.keys(WD.meshes).forEach(function (k) { scene.remove(WD.meshes[k]); });
+    Object.keys(WD.models).forEach(function (k) { var e = WD.models[k]; if (e.m) oFreeModel(+k, e); });
+    WD.models = {}; WD.meshes = {}; WD.shown = {}; WD.asked = 0; WD.drawn = 0; WD.tris = 0;
+  }
+
   // ---- the probe: after a switch on (or up), the frame time is watched for 2 seconds once the models are in; slow -> one level down, said in a toast
   function oProbeStart() { OBJ.probe = { since: 0, frames: [], last: 0 }; }
   function oProbeFrame(now) {
@@ -1877,7 +1936,7 @@
     oSync(); dirty = true; lastSel2 = 0;
   }
   function objInit(b) {
-    oClear(); gClear();
+    wClear(); oClear(); gClear();
     OBJ.st = null; OBJ.built = {}; OBJ.tiles = {}; OBJ.level = 'off'; OBJ.base = ''; OBJ.errors = 0; OBJ.probe = null; OBJ.stepped = '';
     if (!b) return;
     OBJ.base = String(b.base || '');
@@ -1897,7 +1956,7 @@
       memMb: Math.round((OBJ.mem + OBJ.texMem) / 1048576 * 10) / 10, evicted: OBJ.evicted, errors: OBJ.errors, passes: OBJ.passes, gpu: OBJ.gpu, gpuWhy: OBJ.gpuWhy, probing: !!OBJ.probe, lastProbeMs: OBJ.lastProbeMs || 0, stepped: OBJ.stepped,
       card: OBJ.ui ? !OBJ.ui.card.hidden : false, cardText: OBJ.ui ? (function () { var t = OBJ.ui.card.querySelector('.bt') || OBJ.ui.card.querySelector('.bs'); return t ? t.textContent : ''; })() : '',
       buttons: OBJ.ui ? [].map.call(OBJ.ui.card.querySelectorAll('button'), function (b) { return b.textContent; }) : [], note: OBJ.ui && !OBJ.ui.note.hidden ? OBJ.ui.note.textContent : '', drawCalls: renderer ? renderer.info.render.calls : 0,
-      ground: groundInfo() };
+      ground: groundInfo(), cities: { shown: WD.drawn, tris: WD.tris, models: Object.keys(WD.models).filter(function (k) { return WD.models[k].state === 'ready'; }).length, asked: WD.asked } };
   }
 
   // ---------------------------------------------------------------- the live position layer ("me") in 3D: the trail draped over the ground, your dot, the events, Follow me
@@ -2225,6 +2284,7 @@
       case 'bstate': bldState(m); break;
       case 'ostate': objState(m); break;
       case 'gready': if (inited && typeof m.c === 'number' && typeof m.r === 'number') gReady(m); break;
+      case 'wready': if (inited && typeof m.fdid === 'number') wReady(m); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
       case 'me': if (inited) meMsg(m); break;
       case 'members': if (inited) membersMsg(m); break;
@@ -2433,7 +2493,7 @@
       if (sat != null) OU.uOSat.value = sat; if (r != null) OU.uOTint.value.set(r, g, b); dirty = true;
       return JSON.stringify({ sat: OU.uOSat.value, tint: OU.uOTint.value.toArray() });
     },
-    ground: function () { return JSON.stringify(groundInfo()); },
+    groundState: function () { return JSON.stringify(groundInfo()); },          // 3.2: the real ground's state (ground(lat, lng) below is the terrain height)
     groundBright: function (v) { GD.bright = v; Object.keys(GD.tiles).forEach(function (k) { var T = GD.tiles[k]; if (T.mat) T.mat.userData.g.uGBright.value = v; }); dirty = true; return v; },
     objectsProbe: function () { oProbeStart(); dirty = true; return 1; },
     // what is drawn at a point of the canvas (CSS pixels): the nearest tree / object whose box covers it on screen (the models' vertices are not kept

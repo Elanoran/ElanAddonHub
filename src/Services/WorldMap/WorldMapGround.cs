@@ -198,6 +198,51 @@ namespace ElansAddonHub.Services.WorldMap
             return data;
         }
 
+        // 3.2 cities: a building's detailed model (WmoDetail) and its textures; false = it cannot be made (the simplified shape stays)
+        public static bool MakeBuilding(int mapId, int fdid)
+        {
+            var objDir = WorldMapObjects.Dir(WorldMapCache.MapDir(mapId));
+            var path = WmoDetail.ModelFile(objDir, fdid);
+            if (File.Exists(path)) return new FileInfo(path).Length > 8;
+            var o = Get(mapId);
+            byte[] bytes;
+            lock (o.Gate)
+            {
+                o.Used = DateTime.UtcNow;
+                var rb = o.Src.Read(fdid); var root = rb == null ? null : WmoRoot.Parse(rb);
+                if (root == null || !root.Ok) return false;
+                o.Src.Prefetch(root.OutsideGroups().Select(gi => gi.Fdid).Concat(root.TextureFdid.Where(t => t > 0 && t <= int.MaxValue).Select(t => (int)t)));
+                var texOk = new Dictionary<int, bool>();
+                bool TexOk(int t)
+                {
+                    if (texOk.TryGetValue(t, out var ok)) return ok;
+                    var tf = WorldMapObjects.TextureFile(objDir, t);
+                    ok = File.Exists(tf);
+                    if (!ok) { var packed = ObjTexture.Pack(o.Src.ReadBlp(t, ObjTexture.MaxSize)); if (packed != null) { Write(tf, packed); ok = true; } }
+                    return texOk[t] = ok;
+                }
+                var mesh = WmoDetail.Make(root, gf => o.Src.Read(gf), TexOk, out int groups, out int skipped);
+                bytes = mesh.Drawable ? mesh.ToBytes() : (byte[])M2Mesh.Stub.Clone();
+                Util.Log("world map buildings detail " + fdid + ": " + groups + " groups (" + skipped + " not readable), " + mesh.Nv + " vertices, " + mesh.Idx.Count / 3 + " triangles, " + mesh.Batches.Count + " materials, " + bytes.Length / 1024 + " KB");
+            }
+            Write(path, bytes);
+            System.Threading.Interlocked.Increment(ref MadeForTest);
+            return bytes.Length > 8;
+        }
+
+        static void Write(string path, byte[] data)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                var tmp = path + "." + System.Threading.Thread.CurrentThread.ManagedThreadId + "." + Guid.NewGuid().ToString("N").Substring(0, 6) + ".tmp";
+                File.WriteAllBytes(tmp, data);
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(tmp, path);
+            }
+            catch (Exception e) { Util.Log("world map ground: " + e.Message); }
+        }
+
         // a tile's file and the files of all its textures (the page fetches them once it hears gready); false = the tile has none (the minimap stays)
         public static bool MakeTile(int mapId, int col, int row)
         {
