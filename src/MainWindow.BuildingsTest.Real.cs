@@ -24,6 +24,93 @@ namespace ElansAddonHub
             return s == null ? null : Json.Obj(s);
         }
 
+        // 3.1.1, the root's ties on the real files: the game lists many files twice with the same score and only one copy is on this disk. The same counts
+        // with the old choice (the first copy) and the new one (the local copy): the minimap tiles of both continents and Zephras Isle, the terrain textures
+        // (the tex0 files' MDID) and the WMO material textures of both continents; and the root index's size (only the ties' other copies are added)
+        void RootTieCounts(string real, List<WorldContinent> conts, CheckFn Check, List<string> notes)
+        {
+            var I = CultureInfo.InvariantCulture;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            using (var now = CascStorage.Open(real, "_classic_beta_"))
+            using (var was = CascStorage.Open(real, "_classic_beta_"))
+            {
+                now.UseRootIndex = true; was.UseRootIndex = true; was.PreferLocalOnTie = false;
+                now.ZeroFillEncrypted = true;
+                now.ResolveFileIds(new HashSet<int> { 1 }); was.ResolveFileIds(new HashSet<int> { 1 });
+                var swd = System.Diagnostics.Stopwatch.StartNew(); now.DecideAllTies(); long decideMs = swd.ElapsedMilliseconds;
+                string Mb(long b) => (b / 1048576.0).ToString("0.0", I) + " MB";
+                long oldBytes = was.RootIndexCount * 20L;     // what 3.1.0 kept: 4 bytes of id + 16 of key per id
+                notes.Add("note real root index: before (3.1.0: ids and keys) " + was.RootIndexCount.ToString("N0", I) + " ids, " + Mb(oldBytes) + ", built in " + was.RootIndexMs + " ms; after " + now.RootIndexCount.ToString("N0", I) + " ids, " + Mb(now.RootIndexBytes) + ", built in " + now.RootIndexMs
+                    + " ms; " + now.RootTies.ToString("N0", I) + " ids listed twice or more with the same best score, " + now.RootTiesTookLater.ToString("N0", I) + " of them take a later copy because the first is not on this disk (deciding all of them at once: " + decideMs + " ms; a reader decides only the ids it asks for)");
+                Check("real root ties (3.1.1): the root index keeps its ids (" + now.RootIndexCount.ToString("N0", I) + "), grows by its ties' other copies only (" + Mb(oldBytes) + " -> " + Mb(now.RootIndexBytes) + ") and only changes the choice of tied ids (" + now.RootTiesTookLater.ToString("N0", I) + " of " + now.RootTies.ToString("N0", I) + ")",
+                    now.RootIndexCount == was.RootIndexCount && now.RootIndexBytes < oldBytes + 8L * 1048576 && now.RootIndexCount > 100000 && now.RootTiesTookLater <= now.RootTies && was.RootTiesTookLater == 0);
+                bool Local(CascStorage c, Dictionary<int, byte[]> k, int id) { if (!k.TryGetValue(id, out var ck)) return false; var e = c.EncodingKeyFor(ck); return e != null && c.TryFind(e, out _); }
+                // a set of ids: how many resolve to a local copy with the old and with the new choice
+                Tuple<int, int, int> Count(IEnumerable<int> ids)
+                {
+                    var set = new HashSet<int>(ids.Where(i => i > 0));
+                    var kn = now.ResolveFileIds(set); var kw = was.ResolveFileIds(set);
+                    return Tuple.Create(set.Count, set.Count(i => Local(was, kw, i)), set.Count(i => Local(now, kn, i)));
+                }
+                byte[] Read(int id) { var k = now.ResolveFileIds(new HashSet<int> { id }); if (!k.TryGetValue(id, out var ck)) return null; try { return now.ReadByContentKey(ck); } catch (Exception) { return null; } }
+                string Tag(byte[] d, int p) => new string(new[] { (char)d[p + 3], (char)d[p + 2], (char)d[p + 1], (char)d[p] });
+                var lines = new List<string>(); bool ok = true; var fails = new List<string>();
+                foreach (var mid in new[] { 0, 1, 2991 })
+                {
+                    var c = conts.FirstOrDefault(x => x.MapId == mid);
+                    if (c == null || c.WdtFileDataId <= 0) { lines.Add("map " + mid + ": not in this game's world maps"); continue; }
+                    var wdt = WdtFile.Parse(Read(c.WdtFileDataId));
+                    if (!wdt.Ok) { lines.Add(c.Name + ": world table " + wdt.Problem); ok = false; continue; }
+                    var mm = Count(wdt.Tiles.Select(t => t.MinimapFdid));
+                    string line = c.Name + " (map " + mid + "): minimap tiles " + mm.Item2 + " -> " + mm.Item3 + " of " + mm.Item1;
+                    if (mm.Item3 < mm.Item2 || mm.Item3 < mm.Item1 * 9 / 10) { ok = false; fails.Add(c.Name + " minimaps"); }
+                    if (mid == 0 || mid == 1)
+                    {
+                        // the terrain textures: every tile's tex0 (its MDID chunk); the WMO material textures: every building placed in an obj0
+                        var tex = new HashSet<int>(); var wmos = new HashSet<int>(); byte[] buf = null; int tex0Read = 0;
+                        var tk = now.ResolveFileIds(new HashSet<int>(wdt.Tiles.SelectMany(t => new[] { t.Tex0Fdid, t.Obj0Fdid }).Where(i => i > 0)));
+                        foreach (var t in wdt.Tiles)
+                        {
+                            if (t.Tex0Fdid > 0 && tk.TryGetValue(t.Tex0Fdid, out var ck))
+                            {
+                                int n; try { n = now.ReadByContentKey(ck, ref buf); } catch (Exception) { n = -1; }
+                                if (n > 0) tex0Read++;
+                                for (int p = 0; n > 0 && p + 8 <= n;)
+                                {
+                                    int size = BitConverter.ToInt32(buf, p + 4); if (size < 0 || (long)p + 8 + size > n) break;
+                                    if (Tag(buf, p) == "MDID") for (int i = 0; i + 4 <= size; i += 4) tex.Add(BitConverter.ToInt32(buf, p + 8 + i));
+                                    p += 8 + size;
+                                }
+                            }
+                            if (t.Obj0Fdid > 0 && tk.TryGetValue(t.Obj0Fdid, out var ock))
+                            {
+                                byte[] ob; try { ob = now.ReadByContentKey(ock); } catch (Exception) { ob = null; }
+                                if (ob != null) foreach (var pl in AdtObjects.ParsePlacements(ob, out _)) if (!pl.HasNameIndex && pl.NameId > 0 && pl.NameId <= int.MaxValue) wmos.Add((int)pl.NameId);
+                            }
+                        }
+                        var wtex = new HashSet<int>();
+                        var wk = now.ResolveFileIds(wmos);
+                        foreach (var w in wmos)
+                        {
+                            if (!wk.TryGetValue(w, out var wck)) continue;
+                            byte[] wb; try { wb = now.ReadByContentKey(wck); } catch (Exception) { wb = null; }
+                            var r = wb == null ? null : WmoRoot.Parse(wb);
+                            if (r == null || !r.Ok) continue;
+                            foreach (var f in r.TextureFdid) if (f != 0 && f <= int.MaxValue) wtex.Add((int)f);
+                        }
+                        var tc = Count(tex); var wc = Count(wtex);
+                        line += "; terrain textures " + tc.Item2 + " -> " + tc.Item3 + " of " + tc.Item1 + " (from " + tex0Read + " tex0 files); WMO material textures " + wc.Item2 + " -> " + wc.Item3 + " of " + wc.Item1 + " (" + wmos.Count + " WMOs)";
+                        if (tc.Item3 < tc.Item2 || tc.Item1 < 100 || tc.Item3 < tc.Item1 * 9 / 10) { ok = false; fails.Add(c.Name + " terrain textures"); }
+                        if (wc.Item3 < wc.Item2 || wc.Item1 < 500 || wc.Item3 < wc.Item1 * 9 / 10) { ok = false; fails.Add(c.Name + " WMO textures"); }
+                    }
+                    lines.Add(line);
+                }
+                foreach (var l in lines) notes.Add("note real root ties (resolved and on disk, before -> after): " + l);
+                Check("real root ties (3.1.1): with the local copy of a tie, at least as many files resolve as before for every kind, and at least 90 % of the minimap tiles, terrain textures and WMO material textures of both continents (" + sw.ElapsedMilliseconds / 1000 + " s)",
+                    ok && lines.Count >= 2, string.Join(" | ", lines) + (fails.Count > 0 ? " | short: " + string.Join(", ", fails) : ""));
+            }
+        }
+
         async Task BuildingsRealChecks(string dir, string work, CheckFn Check, Func<string, string> P, List<string> notes)
         {
             var I = CultureInfo.InvariantCulture;
@@ -58,6 +145,7 @@ namespace ElansAddonHub
                 var conts = WorldMapService.Continents(idx);
                 var kal = conts.FirstOrDefault(c => c.MapId == 1); var ek = conts.FirstOrDefault(c => c.MapId == 0);
                 if (kal == null || ek == null) { notes.Add("skip real game files: no Kalimdor / Eastern Kingdoms world map in the tables"); return; }
+                RootTieCounts(real, conts, Check, notes);
 
                 // ---------------------------------------------------------------- the pictures and terrain the 3D page needs (the scratch folder builds them when asked to, or finds them)
                 foreach (var c in new[] { ek, kal })

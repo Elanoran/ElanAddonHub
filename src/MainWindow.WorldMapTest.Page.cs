@@ -87,7 +87,7 @@ namespace ElansAddonHub
                 WorldMapView.CopyDetailsForTest();
                 var prof = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 Check("failed tile: Copy details puts a plain report on the clipboard: the Outpost version, the continent, the tile with its reason, the page's state, the world map's recent log lines - and no user folder",
-                    clip != null && clip.Contains("Outpost: " + typeof(App).Assembly.GetName().Version.ToString(2)) && clip.Contains("Continent: Northland (map 0), 2D view") && clip.Contains("picture tile 31,31: missing in local storage - shown as hatched placeholder") && clip.Contains("2d page: started yes, ready yes")
+                    clip != null && clip.Contains("Outpost: " + typeof(App).Assembly.GetName().Version.ToString(2)) && clip.Contains("Continent: Northland (map 0), 2D view") && clip.Contains("picture tile 31,31: listed but not on disk - shown as hatched placeholder") && clip.Contains("2d page: started yes, ready yes")
                     && clip.Contains("Recent world map log lines") && !clip.ToLowerInvariant().Contains(prof.ToLowerInvariant()) && WorldMapView.Note.StartsWith("Details copied"), clip);
                 // the download finished: Retry reads it, the page is opened again with the real picture (a new revision in the tile addresses: nothing from the browser cache)
                 WorldMapService.TileSourceForTest = fdid => WmTile((fdid - 70000) % 64, (fdid - 70000) / 64);

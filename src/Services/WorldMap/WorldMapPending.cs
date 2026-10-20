@@ -22,11 +22,13 @@ namespace ElansAddonHub.Services.WorldMap
     {
         public int Col, Row;
         public string Part = "";          // "picture" (the minimap) | "terrain" (the root ADT)
-        public string Reason = "";        // "missing" (not in the local game storage yet) | "unreadable" (a read error)
+        // why (3.1.1: finer, for "Copy details"): "unlisted" (not in the game's file list at all) | "missing" (listed, but no copy of it is on this disk)
+        // | "locked" (on disk but key-locked / encrypted) | "unreadable" (on disk, a read error: damaged or cut off)
+        public string Reason = "";
         public string Detail = "";        // the read error, short
         public string Shown = "";         // what is drawn instead: "art" (continent map art) | "plain" (hatch) | "low" (WDL heights) | "flat" (hatched placeholder)
 
-        public string ReasonText => Reason == "unreadable" ? "read error" + (Detail.Length > 0 ? " (" + Detail + ")" : "") : "missing in local storage";
+        public string ReasonText => WorldMapPending.ReasonText(Reason, Detail);
         public string ShownText => Shown == "art" ? "continent map art" : Shown == "low" ? "low-detail heights (WDL)" : Shown == "flat" ? "flat placeholder" : "hatched placeholder";
 
         public Dictionary<string, object> ToJson() => new Dictionary<string, object> { ["c"] = Col, ["r"] = Row, ["part"] = Part, ["why"] = Reason, ["detail"] = Detail, ["shown"] = Shown };
@@ -38,9 +40,40 @@ namespace ElansAddonHub.Services.WorldMap
         }
     }
 
+    // a file a world map loader asked for and did not get, with why: "unlisted" or "missing" (PendingTile.Reason). Any other exception of a loader is a read error.
+    public sealed class FileNotThereException : IOException
+    {
+        public readonly string Reason;
+        public FileNotThereException(string reason, string what) : base(what + (reason == "unlisted" ? " is not in the game's file list" : " is listed but not on disk")) { Reason = reason; }
+    }
+
     public static class WorldMapPending
     {
         public const string MarkerExt = ".low";
+
+        // the reason in words (the same for every kind of file: a minimap tile, a terrain tile, a building, a texture)
+        public static string ReasonText(string reason, string detail)
+        {
+            string d = string.IsNullOrEmpty(detail) ? "" : " (" + detail + ")";
+            switch (reason)
+            {
+                case "unlisted": return "not in the game's file list";
+                case "missing": return "listed but not on disk";
+                case "locked": return "on disk but key-locked (encrypted)" + d;
+                case "unreadable": return "on disk but could not be read" + d;
+                default: return "not readable" + d;
+            }
+        }
+
+        // the reason of a loader's exception: a key-locked BLTE block (CascStorage: NotSupportedException "encrypted or unknown") or another read error
+        public static string ReasonOf(Exception e) => e is FileNotThereException f ? f.Reason : e is NotSupportedException ? "locked" : "unreadable";
+
+        // "27 listed but not on disk, 2 not in the game's file list": a count per reason, the most common first
+        public static string Summary(IEnumerable<string> reasons)
+        {
+            var g = reasons.GroupBy(r => r ?? "").OrderByDescending(x => x.Count()).ThenBy(x => x.Key, StringComparer.Ordinal);
+            return string.Join(", ", g.Select(x => x.Count().ToString(CultureInfo.InvariantCulture) + " " + ReasonText(x.Key, "")));
+        }
 
         // a read error made short and free of paths (it goes into the log, the manifest and "Copy details")
         public static string Short(Exception e)

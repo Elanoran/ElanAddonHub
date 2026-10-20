@@ -560,6 +560,7 @@ namespace ElansAddonHub
                 Continent = c?.Name ?? "", MapId = mapId, Mode = mode3d ? "3D" : "2D", Problem = lastProblem ?? (GlFallbackReason != null ? "3D view not available: " + GlFallbackReason : ""),
                 PictureTiles = man == null ? 0 : man.Adt + man.Missing, TerrainTiles = tman == null ? 0 : tman.Tiles + tman.Missing,
                 Pending = mapId >= 0 ? WorldMapService.PendingOf(mapId) : new List<PendingTile>(),
+                Buildings = mapId >= 0 ? WorldMapBuildings.UnreadText(WorldMapBuildings.ReadManifest(BuildingsService.DirOf(mapId))?.Unread) : "",
                 Page = (loadedPage ?? "none") + " page: started " + (pageHello ? "yes" : "no") + ", ready " + (PageReady ? "yes" : "no") + (TimeoutsForTest > 0 ? ", timed out " + TimeoutsForTest + "x" : "") + (GlOk ? ", WebGL ok" : ""),
                 PageErrors = pageErrors.ToList(),
             };

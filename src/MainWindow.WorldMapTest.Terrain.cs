@@ -187,7 +187,7 @@ namespace ElansAddonHub
                 var again = WorldMapService.BuildTerrain(5, "Testland", 7001, key, mapDir, null, zr, CancellationToken.None, null);
                 Check("terrain cache: building again reads the 30 finished tiles back from disk (nothing written; the two bad ones are tried once more)", again.Complete && again.Reused == 30 && again.Written == 0 && adtLoads - loads1 == 2, again.Reused + " " + (adtLoads - loads1));
                 var tman0 = WorldMapTerrain.ReadManifest(tdir);
-                Check("terrain cache (2.70): with no low-resolution heights (no WDL) the two bad tiles are pending placeholders: listed with their reason (missing in local storage / read error), a marker each, no height file (the 3D page draws a flat hatched placeholder there, never open sea)",
+                Check("terrain cache (2.70): with no low-resolution heights (no WDL) the two bad tiles are pending placeholders: listed with their reason (listed but not on disk / could not be read), a marker each, no height file (the 3D page draws a flat hatched placeholder there, never open sea)",
                     tman0 != null && tman0.Pending.Count == 2 && tman0.Pending.All(p => p.Shown == "flat" && p.Part == "terrain") && tman0.Pending.Any(p => p.Col == 35 && p.Row == 33 && p.Reason == "missing") && tman0.Pending.Any(p => p.Col == 34 && p.Row == 33 && p.Reason == "unreadable")
                     && File.Exists(WorldMapTerrain.MarkerFile(tdir, 35, 33)) && !File.Exists(WorldMapTerrain.TileFile(tdir, 35, 33)) && again.Holes == 2, tman0 == null ? "no manifest" : string.Join(",", tman0.Pending.Select(p => p.Col + "," + p.Row + " " + p.Reason + " " + p.Shown)));
 

@@ -16,7 +16,7 @@ namespace ElansAddonHub.Services.WorldMap
     // against where the Classic baseline puts the creatures of Molten Core, Blackfathom Deeps, Onyxia's Lair and Blackrock Depths (all inside the turned box,
     // none inside the unturned one). GlobalWmo carries it with the position moved by half the world on both ground axes, so the placement transform of the
     // ADT objects (WmoTransform.ToScene, then world x = 17066.67 - scene z, y = 17066.67 - scene x) gives exactly that.
-    public sealed class WdtTile { public int Col, Row; public int RootFdid, MinimapFdid, Obj0Fdid; }
+    public sealed class WdtTile { public int Col, Row; public int RootFdid, MinimapFdid, Obj0Fdid, Tex0Fdid; }
 
     public sealed class WdtFile
     {
@@ -86,10 +86,10 @@ namespace ElansAddonHub.Services.WorldMap
             for (int i = 0; i < Entries; i++)
             {
                 int o = maid + i * MaidEntry;
-                uint root = BitConverter.ToUInt32(d, o), obj0 = BitConverter.ToUInt32(d, o + 4), mm = BitConverter.ToUInt32(d, o + 28);
+                uint root = BitConverter.ToUInt32(d, o), obj0 = BitConverter.ToUInt32(d, o + 4), tex0 = BitConverter.ToUInt32(d, o + 12), mm = BitConverter.ToUInt32(d, o + 28);
                 if (root == 0 && mm == 0) continue;
                 if (mm > int.MaxValue || root > int.MaxValue) continue;
-                w.Tiles.Add(new WdtTile { Col = i % 64, Row = i / 64, RootFdid = (int)root, MinimapFdid = (int)mm, Obj0Fdid = obj0 > int.MaxValue ? 0 : (int)obj0 });
+                w.Tiles.Add(new WdtTile { Col = i % 64, Row = i / 64, RootFdid = (int)root, MinimapFdid = (int)mm, Obj0Fdid = obj0 > int.MaxValue ? 0 : (int)obj0, Tex0Fdid = tex0 > int.MaxValue ? 0 : (int)tex0 });
             }
             return w;
         }

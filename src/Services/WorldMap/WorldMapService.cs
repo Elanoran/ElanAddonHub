@@ -307,7 +307,11 @@ namespace ElansAddonHub.Services.WorldMap
                         if (kinds.Problem != null) Util.Log("world map terrain: " + kinds.Problem + "; the well-known liquid ids are used");
                     }
                     catch (Exception e) { Util.Log("world map terrain: liquid types: " + e.Message); }
-                    load = t => keys.TryGetValue(t.RootFdid, out var ck) ? c.ReadByContentKey(ck) : null;
+                    load = t =>
+                    {
+                        if (!keys.TryGetValue(t.RootFdid, out var ck)) throw new FileNotThereException("unlisted", "the terrain file");
+                        return c.ReadByContentKey(ck) ?? throw new FileNotThereException("missing", "the terrain file");
+                    };
                     // the low-resolution heights (one small file): the stand-in of a tile whose own terrain file is not readable yet
                     if (wf.WdlFdid > 0)
                     {
@@ -363,9 +367,8 @@ namespace ElansAddonHub.Services.WorldMap
                     var c = casc; var k = keys;
                     tileOf = fid =>
                     {
-                        if (!k.TryGetValue(fid, out var ck)) return null;
-                        var blp = c.ReadByContentKey(ck);
-                        if (blp == null) return null;
+                        if (!k.TryGetValue(fid, out var ck)) throw new FileNotThereException("unlisted", "the minimap tile");
+                        var blp = c.ReadByContentKey(ck) ?? throw new FileNotThereException("missing", "the minimap tile");
                         var px = Blp.Decode(blp, out int w, out int h);
                         return new MapRender.TileImage { Bgra = px, Width = w, Height = h };
                     };

@@ -23,6 +23,7 @@ namespace ElansAddonHub.Services.WorldMap
             public string Problem = "";                            // what failed, in plain words ("" = nothing failed)
             public int PictureTiles, TerrainTiles;
             public List<PendingTile> Pending = new List<PendingTile>();
+            public string Buildings = "";                          // 3.1.1: the 3D buildings' files the last build could not read, with why (WorldMapBuildings.UnreadText)
             public string Page = "";                               // the page's state: hello / ready / timed out ...
             public List<string> PageErrors = new List<string>();
         }
@@ -81,6 +82,10 @@ namespace ElansAddonHub.Services.WorldMap
             var pics = i.Pending.Where(p => p.Part == "picture").ToList(); var ter = i.Pending.Where(p => p.Part == "terrain").ToList();
             sb.AppendLine("Pictures: " + i.PictureTiles.ToString(I) + " map tiles, " + pics.Count.ToString(I) + " shown with a stand-in");
             sb.AppendLine("Terrain: " + i.TerrainTiles.ToString(I) + " tiles, " + ter.Count(p => p.Shown == "low").ToString(I) + " at low detail, " + ter.Count(p => p.Shown != "low").ToString(I) + " placeholders");
+            // 3.1.1: why, per kind of file - "listed but not on disk" is a game still downloading; "not in the game's file list" or "could not be read" is something else
+            if (pics.Count > 0) sb.AppendLine("Why (minimap tiles): " + WorldMapPending.Summary(pics.Select(p => p.Reason)));
+            if (ter.Count > 0) sb.AppendLine("Why (height tiles): " + WorldMapPending.Summary(ter.Select(p => p.Reason)));
+            if (!string.IsNullOrEmpty(i.Buildings)) sb.AppendLine("3D buildings, not readable in their last build: " + i.Buildings);
             if (i.Pending.Count > 0)
             {
                 sb.AppendLine("Not readable yet (" + i.Pending.Count.ToString(I) + "):");
