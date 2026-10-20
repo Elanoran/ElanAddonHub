@@ -108,7 +108,10 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
         [DataMember(Name = "pixelOff")] public bool PixelOff { get; set; }              // true = don't read the addon's status strip from the screen
-        [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; } // false = YouTube links in chat show a preview card (fetches the thumbnail + title from YouTube)
+        // Old switch: still read so older settings files load as before, but ignored. Its default (false) meant "previews on", so a saved
+        // false can't tell "I chose automatic previews" from "I never touched it"; everyone now starts with click to load (VideoPreviewsAuto).
+        [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; }
+        [DataMember(Name = "videoPreviewsAuto")] public bool VideoPreviewsAuto { get; set; } // false (default) = a YouTube link in chat fetches its thumbnail + title only after a click on "Load preview"; true = by itself
         [DataMember(Name = "eventsStripOff")] public bool EventsStripOff { get; set; }      // false (default) = the next events show in a strip above the Lodge chat
         // the filter chips above the Calendar: which kinds are hidden (all false = everything shown). "Show in-game WoW events" (WowEventsOff) stays the master switch for the three WoW kinds.
         [DataMember(Name = "calHideLodge")] public bool CalHideLodge { get; set; }

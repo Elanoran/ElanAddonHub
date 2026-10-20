@@ -1278,13 +1278,22 @@ namespace ElansAddonHub.Lodge
             else if (!LodgeFiles.TryOpen(f.LocalPath)) { SetNote("Not opened: only pictures, text and PDF files open from here.", true); noteUntil = DateTime.UtcNow.AddSeconds(6); }
         }
 
-        // ---- YouTube: the preview card plays in the overlay; a click on the URL text itself does the same (or opens the browser when previews are off)
+        // ---- YouTube: the preview card plays in the overlay; a click on the URL text itself does the same (or opens the browser while no preview is loaded)
         void Video_Click(object sender, MouseButtonEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is VideoVM v)) return;
             e.Handled = true;
             VideoPlayer.Open(v.Link, v.Title, v.Channel);
         }
+
+        // "Load preview" on a click-to-load card: fetches this one video's thumbnail + title (playing it stays a separate click)
+        void VideoLoad_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is VideoVM v)) return;
+            e.Handled = true;
+            v.Load();
+        }
+        public void VideoLoadClickForTest(VideoVM v) => VideoLoad_Click(new FrameworkElement { Tag = v }, new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
         YouTubeLink LinkUnder(object sender, MouseEventArgs e)
         {
@@ -1342,7 +1351,7 @@ namespace ElansAddonHub.Lodge
             if (l != null)
             {
                 if (tb.Tag is MessageVM m && m.Video?.Thumb != null) VideoPlayer.Open(l, m.Video.Title, m.Video.Channel);   // a preview exists: same overlay as the card
-                else VideoViewer.OpenInBrowser(l);                                             // previews off / unavailable video: the browser
+                else VideoViewer.OpenInBrowser(l);                                             // preview not loaded / unavailable video: the browser
                 return;
             }
             var url = WebLinkUnder(sender, e);

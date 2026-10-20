@@ -12,11 +12,12 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub.Lodge
 {
-    // A YouTube link found in a chat message. Pure client side: the id is parsed from the text, the thumbnail and the
-    // title come from YouTube only while "Show video previews" is on.
+    // A YouTube link found in a chat message. Pure client side: the id is parsed from the text; the thumbnail and the
+    // title come from YouTube only after a click on "Load preview", or by themselves when "Load YouTube previews automatically" is on.
     public sealed class YouTubeLink
     {
         public string Id { get; set; }
+        public string Host { get; set; } = "youtube.com";   // the link's domain as shown on the click-to-load card (www. / m. dropped)
         public int StartSeconds { get; set; }           // from t= / start=, 0 = from the beginning
         public string WatchUrl => "https://www.youtube.com/watch?v=" + Id + (StartSeconds > 0 ? "&t=" + StartSeconds + "s" : "");
         public string PlainWatchUrl => "https://www.youtube.com/watch?v=" + Id;   // what oEmbed gets (no time)
@@ -37,9 +38,10 @@ namespace ElansAddonHub.Lodge
         static readonly Regex IdRx = new Regex(@"^[A-Za-z0-9_-]{11}$", RegexOptions.Compiled);
         static readonly Regex TimeRx = new Regex(@"^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        // "Show video previews" (Settings > Privacy): set by the Lodge session; off = no link is parsed for a card and nothing is fetched
-        public static Func<bool> Enabled = () => true;
-        public static bool PreviewsOn => Enabled != null && Enabled();
+        // "Load YouTube previews automatically" (Settings > Privacy): set by the Lodge session. Off (the default) = a link gets a small
+        // card with its domain and a "Load preview" button and nothing is fetched until that click; on = every card loads by itself.
+        public static Func<bool> AutoLoad = () => false;
+        public static bool AutoLoadOn => AutoLoad != null && AutoLoad();
 
         // the network, replaceable so the selftest runs offline: thumbnail bytes for an id, title / channel for an id (null = not available)
         public static Func<string, Task<byte[]>> ThumbSource = FetchThumb;
@@ -49,6 +51,8 @@ namespace ElansAddonHub.Lodge
         static readonly ConcurrentDictionary<string, Task<VideoMeta>> metas = new ConcurrentDictionary<string, Task<VideoMeta>>();
 
         public static void ClearCaches() { thumbs.Clear(); metas.Clear(); }
+        // this id's preview was already asked for in this session (a click on another card of the same video): showing it again costs no request
+        public static bool Requested(string id) => thumbs.ContainsKey(id);
 
         // ---------------------------------------------------------------- parsing
 
@@ -103,7 +107,8 @@ namespace ElansAddonHub.Lodge
                 var frag = ParseQuery(u.Fragment.TrimStart('#'));
                 if (!frag.TryGetValue("t", out t)) frag.TryGetValue("start", out t);
             }
-            return new YouTubeLink { Id = id, StartSeconds = ParseTime(t) };
+            var shown = host.StartsWith("www.") ? host.Substring(4) : host.StartsWith("m.") ? host.Substring(2) : host;
+            return new YouTubeLink { Id = id, StartSeconds = ParseTime(t), Host = shown };
         }
 
         // 90, 90s, 1m30s, 1h2m3s -> seconds (0 when it makes no sense)
@@ -199,13 +204,20 @@ namespace ElansAddonHub.Lodge
         public string Id => Link.Id;
         ImageSource thumb;
         string title, channel;
-        bool failed;
+        bool failed, started;
         public VideoVM(YouTubeLink link) { Link = link; }
 
-        public ImageSource Thumb { get => thumb; private set { if (Set(ref thumb, value)) { Raise(nameof(CardVisibility)); } } }
+        public ImageSource Thumb { get => thumb; private set { if (Set(ref thumb, value)) { Raise(nameof(CardVisibility)); Raise(nameof(PromptVisibility)); } } }
         public string Title { get => title; private set { if (Set(ref title, value)) { Raise(nameof(InfoVisibility)); Raise(nameof(ThumbRadius)); } } }
         public string Channel { get => channel; private set => Set(ref channel, value); }
         public bool Failed => failed;
+        public bool Started => started;
+        // click to load: before the click only the domain and a "Load preview" button show (nothing fetched); it stays while loading
+        // ("Loading..."), and goes once the thumbnail is there or the video turned out unavailable (then the plain link stays)
+        public Visibility PromptVisibility => thumb == null && !failed ? Visibility.Visible : Visibility.Collapsed;
+        public string Domain => Link.Host;
+        public string LoadText => started ? "Loading..." : "Load preview";
+        public bool LoadEnabled => !started;
         // the card shows once the thumbnail is there; an unavailable video never gets one (plain link only)
         public Visibility CardVisibility => thumb != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility InfoVisibility => !string.IsNullOrEmpty(title) ? Visibility.Visible : Visibility.Collapsed;
@@ -214,12 +226,16 @@ namespace ElansAddonHub.Lodge
         public string ToolTipText => string.IsNullOrEmpty(title) ? "Play the video" : title;
 
         // thumbnail and title load independently; both come from the per-id caches, off the UI thread
+        // (once per card: a second call is ignored)
         public async void Load()
         {
+            if (started) return;
+            started = true;
+            Raise(nameof(Started)); Raise(nameof(LoadText)); Raise(nameof(LoadEnabled));
             var t = YouTube.Thumb(Id);
             var m = YouTube.Meta(Id);
             var img = await t;
-            if (img == null) { failed = true; return; }   // unavailable: no card, the plain link stays
+            if (img == null) { OnUi(() => { failed = true; Raise(nameof(PromptVisibility)); }); return; }   // unavailable: no card, the plain link stays
             OnUi(() => Thumb = img);
             var meta = await m;
             if (meta != null) OnUi(() => { Title = meta.Title; Channel = meta.Channel; Raise(nameof(ChannelVisibility)); Raise(nameof(ToolTipText)); });

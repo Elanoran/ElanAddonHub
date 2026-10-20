@@ -629,7 +629,7 @@
             <TextBlock Text="Fetched from other sites" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Only what you switch on. Off = the Outpost never contacts these sites by itself." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show video previews" Tag="A YouTube link in the Lodge chat shows its thumbnail, title and channel, and plays in a window here. To do that the Outpost asks youtube.com and i.ytimg.com (YouTube sees your IP address). Off = links stay plain text, nothing is fetched, and a click opens the link in your browser.">
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Load YouTube previews automatically (YouTube sees your address)" Tag="Off (the default) = a YouTube link in the Lodge chat shows a small card with a &quot;Load preview&quot; button, and nothing is fetched until you click it. On = every link shows its thumbnail, title and channel by itself: the Outpost asks youtube.com and i.ytimg.com, so YouTube sees your IP address for every video posted. Either way a video only plays when you click it, in a window here.">
                 <CheckBox x:Name="PvVideo" Style="{StaticResource Switch}" Click="Privacy_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>

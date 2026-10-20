@@ -11,8 +11,8 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub
 {
-    // YouTube previews in the Lodge chat: id parser, navigation allowlist, the card (fake thumbnail + oEmbed source, no network) and the
-    // Privacy switch. ELANSHUB_VIDEO_SHOTS=<dir> (with --selftest) instead runs against the real YouTube with NDNTLFXB7xo and saves
+    // YouTube previews in the Lodge chat: id parser, navigation allowlist, click to load, the card (fake thumbnail + oEmbed source, no network)
+    // and the Privacy switch. ELANSHUB_VIDEO_SHOTS=<dir> (with --selftest) instead runs against the real YouTube with NDNTLFXB7xo and saves
     // chat-video-chat.png / chat-video-overlay.png there.
     public partial class MainWindow
     {
@@ -40,7 +40,7 @@ namespace ElansAddonHub
             bool ok = true;
             void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             var oldThumb = YouTube.ThumbSource; var oldMeta = YouTube.MetaSource;
-            bool oldOff = settings.VideoPreviewsOff;
+            bool oldAuto = settings.VideoPreviewsAuto;
             try
             {
                 const string id = "dQw4w9WgXcQ";
@@ -99,11 +99,12 @@ namespace ElansAddonHub
 
                 // ---- the card, with a fake thumbnail + oEmbed source (no network)
                 var thumbCalls = new List<string>(); var metaCalls = new List<string>();
-                const string idNoMeta = "AAAAAAAAAA1", idGone = "BBBBBBBBBB2", idShort = "CCCCCCCCCC3";
+                const string idNoMeta = "AAAAAAAAAA1", idGone = "BBBBBBBBBB2", idShort = "CCCCCCCCCC3", idClick = "DDDDDDDDDD4";
+                int Calls(string i) { lock (thumbCalls) lock (metaCalls) return thumbCalls.Count(x => x == i) + metaCalls.Count(x => x == i); }
+                int AllCalls() { lock (thumbCalls) lock (metaCalls) return thumbCalls.Count + metaCalls.Count; }
                 YouTube.ClearCaches();
                 YouTube.ThumbSource = i => { lock (thumbCalls) thumbCalls.Add(i); return Task.FromResult(i == idGone ? null : FakeThumb((byte)(i[0] * 3))); };
-                YouTube.MetaSource = i => { lock (metaCalls) metaCalls.Add(i); return Task.FromResult(i == id || i == idShort ? new VideoMeta { Title = "Never Gonna Give You Up (Official Video)", Channel = "Rick Astley" } : null); };
-                settings.VideoPreviewsOff = false;
+                YouTube.MetaSource = i => { lock (metaCalls) metaCalls.Add(i); return Task.FromResult(i == id || i == idShort || i == idClick ? new VideoMeta { Title = "Never Gonna Give You Up (Official Video)", Channel = "Rick Astley" } : null); };
                 Session.Disconnect();
                 TabLodge.IsChecked = true;
                 LodgePage.ShowChatForTest();
@@ -112,19 +113,50 @@ namespace ElansAddonHub
                 Session.Select(gen);
                 var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 string Frame(string mid, string text) => "{\"t\":\"msg\",\"channel\":\"general\",\"id\":" + Q(mid) + ",\"at\":" + now + ",\"from\":\"Bob\",\"fromId\":2,\"text\":" + Q(text) + "}";
+                var list = Session.MessagesOf("general");
+
+                // ---- click to load (the default): nothing goes to YouTube until "Load preview" is clicked, then exactly that one preview
+                settings.VideoPreviewsAuto = false;
+                Session.FeedForTest(Frame("ytc1", "click to load https://www.youtube.com/watch?v=" + idClick));
+                Session.FeedForTest(Frame("ytc2", "same video, other message https://youtu.be/" + idClick));
+                var c1 = list.First(m => m.Id == "ytc1"); var c2 = list.First(m => m.Id == "ytc2");
+                await Task.Delay(500);
+                Check("click to load: a chat with YouTube links makes no request to YouTube by itself", AllCalls() == 0);
+                Check("click to load: a small card with the link's domain and \"Load preview\", no picture", c1.VideoPromptVisibility == Visibility.Visible && c1.VideoVisibility == Visibility.Collapsed
+                    && c1.Video.Domain == "youtube.com" && c2.Video.Domain == "youtu.be" && c1.Video.LoadText == "Load preview" && c1.Video.LoadEnabled && !c1.Video.Started);
+                await ShotWait(300);
+                Snapshot(Path.Combine(dir, "11-video-click-to-load.png"));
+                LodgePage.VideoLoadClickForTest(c1.Video);
+                for (int i = 0; i < 40 && c1.Video.Title == null; i++) await Task.Delay(100);
+                await Task.Delay(300);
+                Check("click to load: the click fetches exactly that one preview (1 thumbnail + 1 title request)", AllCalls() == 2
+                    && thumbCalls.Count(x => x == idClick) == 1 && metaCalls.Count(x => x == idClick) == 1);
+                Check("click to load: after the click the full card shows (thumbnail + title), the button is gone", c1.VideoVisibility == Visibility.Visible && c1.VideoPromptVisibility == Visibility.Collapsed
+                    && c1.Video.Thumb != null && c1.Video.Title.StartsWith("Never Gonna"));
+                Check("click to load: loading the preview does not open the player", !LodgePage.VideoPlayerForTest.IsOpen);
+                Check("click to load: another message keeps its own button", c2.VideoPromptVisibility == Visibility.Visible && !c2.Video.Started);
+                LodgePage.VideoLoadClickForTest(c1.Video);
+                Session.FeedForTest(Frame("ytc3", "posted again later https://youtu.be/" + idClick));
+                for (int i = 0; i < 30 && list.First(m => m.Id == "ytc3").VideoVisibility != Visibility.Visible; i++) await Task.Delay(100);
+                Check("click to load: a second click / a later post of a loaded video makes no new request", AllCalls() == 2 && list.First(m => m.Id == "ytc3").VideoVisibility == Visibility.Visible);
+                Check("click to load: an old settings file (videoPreviewsOff false) still starts click to load", Util.FromJson<Settings>("{\"videoPreviewsOff\":false}")?.VideoPreviewsAuto == false
+                    && Util.FromJson<Settings>("{\"videoPreviewsAuto\":true}")?.VideoPreviewsAuto == true);
+
+                // ---- automatic previews on: as before, every card loads by itself
+                settings.VideoPreviewsAuto = true;
                 Session.FeedForTest(Frame("yt1", "this boss fight guide is great https://www.youtube.com/watch?v=" + id + "&t=90"));
                 Session.FeedForTest(Frame("yt2", "no title for this one https://youtu.be/" + idNoMeta));
                 Session.FeedForTest(Frame("yt3", "deleted video https://youtu.be/" + idGone));
                 Session.FeedForTest(Frame("yt4", "plain message without a link"));
-                var list = Session.MessagesOf("general");
                 var m1 = list.First(m => m.Id == "yt1"); var m2 = list.First(m => m.Id == "yt2"); var m3 = list.First(m => m.Id == "yt3"); var m4 = list.First(m => m.Id == "yt4");
-                for (int i = 0; i < 40 && (m1.Video?.Title == null || m2.Video?.Thumb == null || thumbCalls.Count < 3); i++) await Task.Delay(100);
+                for (int i = 0; i < 40 && (m1.Video?.Title == null || m2.Video?.Thumb == null || thumbCalls.Count < 4); i++) await Task.Delay(100);
                 await Task.Delay(300);
-                Check("card: thumbnail + title + channel arrive (async)", m1.VideoVisibility == Visibility.Visible && m1.Video.Thumb != null && m1.Video.Title.StartsWith("Never Gonna") && m1.Video.Channel == "Rick Astley");
+                Check("auto: no click needed, every link fetches its preview", Calls(id) == 2 && Calls(idNoMeta) == 2 && thumbCalls.Contains(idGone));
+                Check("card: thumbnail + title + channel arrive (async)", m1.VideoVisibility == Visibility.Visible && m1.VideoPromptVisibility == Visibility.Collapsed && m1.Video.Thumb != null && m1.Video.Title.StartsWith("Never Gonna") && m1.Video.Channel == "Rick Astley");
                 Check("card: the start time is kept for the player", m1.Video.Link.StartSeconds == 90);
                 Check("card: oEmbed failed -> thumbnail only, no title", m2.VideoVisibility == Visibility.Visible && m2.Video.Thumb != null && string.IsNullOrEmpty(m2.Video.Title) && m2.Video.InfoVisibility == Visibility.Collapsed);
-                Check("card: unavailable video -> no card, link text stays", m3.VideoVisibility == Visibility.Collapsed && m3.Text.Contains(idGone) && m3.Video?.Thumb == null);
-                Check("card: message without a link has none", m4.Video == null && m4.VideoVisibility == Visibility.Collapsed);
+                Check("card: unavailable video -> no card, link text stays", m3.VideoVisibility == Visibility.Collapsed && m3.VideoPromptVisibility == Visibility.Collapsed && m3.Text.Contains(idGone) && m3.Video?.Thumb == null);
+                Check("card: message without a link has none", m4.Video == null && m4.VideoVisibility == Visibility.Collapsed && m4.VideoPromptVisibility == Visibility.Collapsed);
                 Session.FeedForTest(Frame("yt5", "again https://youtu.be/" + id));
                 await Task.Delay(300);
                 Check("cache: the same id is fetched once per session (thumbnail + oEmbed)", thumbCalls.Count(x => x == id) == 1 && metaCalls.Count(x => x == id) == 1
@@ -139,28 +171,30 @@ namespace ElansAddonHub
                 m4.Text = "never mind";
                 Check("edit: removing it drops the card", m4.Video == null && m4.VideoVisibility == Visibility.Collapsed);
 
-                // ---- Settings > Privacy > Show video previews
+                // ---- Settings > Privacy > Load YouTube previews automatically
                 ShowTab("settings"); SettingsPage.Show("privacy");
                 await ShotWait(300);
                 Snapshot(Path.Combine(dir, "11-video-privacy.png"));
-                Check("setting: default on, the switch shows it", !new Settings().VideoPreviewsOff && ((System.Windows.Controls.CheckBox)SettingsPage.FindName("PvVideo")).IsChecked == true);
+                var sw = (System.Windows.Controls.CheckBox)SettingsPage.FindName("PvVideo");
+                Check("setting: default off (click to load), the switch shows the setting", !new Settings().VideoPreviewsAuto && sw.IsChecked == true
+                    && sw.Parent is System.Windows.Controls.HeaderedContentControl row && (row.Header as string ?? "").StartsWith("Load YouTube previews automatically"));
                 SettingsPage.ToggleForTest("PvVideo");
-                Check("setting: switching it off is stored", settings.VideoPreviewsOff);
-                Check("setting off: existing cards are gone, links stay as text", list.Where(m => m.Text != null && m.Text.Contains("youtu")).All(m => m.Video == null && m.VideoVisibility == Visibility.Collapsed)
-                    && m1.Text.Contains(id));
-                int before = thumbCalls.Count + metaCalls.Count;
+                Check("setting: switching it off is stored", !settings.VideoPreviewsAuto && sw.IsChecked == false);
+                Check("setting off: cards already loaded stay (nothing new is fetched for them)", m1.VideoVisibility == Visibility.Visible && m1.Text.Contains(id));
+                int before = AllCalls();
                 YouTube.ClearCaches();
                 Session.FeedForTest(Frame("yt6", "off: https://youtu.be/" + idShort));
                 await Task.Delay(500);
-                Check("setting off: a new message fetches nothing from YouTube", thumbCalls.Count + metaCalls.Count == before && list.First(m => m.Id == "yt6").Video == null);
-                Check("setting off: the link text is still detected for a click (opens the browser)", list.First(m => m.Id == "yt6").VideoLink?.Id == idShort);
+                var m6 = list.First(m => m.Id == "yt6");
+                Check("setting off: a new message fetches nothing from YouTube, shows \"Load preview\"", AllCalls() == before && m6.VideoPromptVisibility == Visibility.Visible && m6.VideoVisibility == Visibility.Collapsed);
+                Check("setting off: the link text is still detected for a click (opens the browser)", m6.VideoLink?.Id == idShort);
                 SettingsPage.ToggleForTest("PvVideo");
-                for (int i = 0; i < 30 && m1.Video?.Title == null; i++) await Task.Delay(100);
-                Check("setting on again: cards come back", !settings.VideoPreviewsOff && m1.VideoVisibility == Visibility.Visible && m1.Video.Title != null);
+                for (int i = 0; i < 30 && m6.Video?.Title == null; i++) await Task.Delay(100);
+                Check("setting on again: waiting cards load by themselves", settings.VideoPreviewsAuto && m6.VideoVisibility == Visibility.Visible && m6.Video.Title != null && Calls(idShort) >= 2);
                 ShowTab("lodge");
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
-            finally { YouTube.ThumbSource = oldThumb; YouTube.MetaSource = oldMeta; settings.VideoPreviewsOff = oldOff; YouTube.ClearCaches(); }
+            finally { YouTube.ThumbSource = oldThumb; YouTube.MetaSource = oldMeta; settings.VideoPreviewsAuto = oldAuto; YouTube.ClearCaches(); }
             return "video preview selftest: " + (ok ? "PASSED" : "FAILED") + "\r\n  " + string.Join("\r\n  ", notes);
         }
 
@@ -170,6 +204,7 @@ namespace ElansAddonHub
             try
             {
                 Directory.CreateDirectory(outDir);
+                settings.VideoPreviewsAuto = true;   // the shots show the full card
                 Session.Disconnect();
                 TabLodge.IsChecked = true;
                 LodgePage.ShowChatForTest();
