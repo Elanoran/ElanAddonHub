@@ -5,6 +5,7 @@ Keep one `## x.y.z` section per hub version. This file is also shown in the Outp
 
 ## 3.1.2
 - **Knows Lodge server 2.31.2.** Only the Guild Master can add a device to an existing member's account, and the member is always told - with a way to remove it.
+- **Lodge server 2.31.2:** Officers only see the devices of lower ranks; the Guild Master still sees all.
 - When someone else adds a device to your account, the Outpost shows it as a notice and in Settings > Lodge, Your devices ("A new device ... was added to your account by ..."), with a Remove button. Your device list also says who added a device. Officers no longer get "Send a new device link" for people who are already in; the Guild Master is told that the member will be informed.
 
 ## 3.1.1

@@ -477,7 +477,7 @@ public class InviteTests
         var (bob, sbob) = r.Connect(T.BobCode, false);
         await r.Ask(bob, sbob, new { t = "admin.devices" });
         var all = sbob.Of("admin.devices").Last()["devices"]!.AsArray();
-        Assert.Equal(2, all.Count);
+        Assert.Equal(dMia.Id, (string?)all.Single()!["id"]);                     // 2.31.2 (L8): only the member's, not the Guild Master's
         await r.Ask(bob, sbob, new { t = "device.revoke", id = ownerDev.Device!.Id });
         Assert.NotNull(r.Auth.CheckToken(ownerDev.Token!));                      // owner's: refused
         await r.Ask(bob, sbob, new { t = "device.revoke", id = dMia.Id });
@@ -978,5 +978,40 @@ public class InviteTests
         Assert.Equal(1, NoticesOf(r, "Mia"));
         r.Auth.Leave("Mia");
         Assert.Equal(0, NoticesOf(r, "Mia"));
+    }
+
+    // ---------------------------------------------------------------- 2.31.2 (L8): an officer sees only lower ranks' devices
+
+    [Fact]
+    public async Task An_officer_sees_only_lower_ranks_devices_the_owner_sees_all()
+    {
+        using var r = new Rig();
+        T.WriteCodes(r.Cfg, $"Elan:{T.ElanCode}:owner", $"Bob:{T.BobCode}:officer", "Mia:synthetic0mia00code0000000000003:member", "Oli:synthetic0oli00code0000000000004:officer");
+        var dElan = r.Auth.ExchangeCode(Ip, T.ElanCode, "Elan-PC", "e1").Device!;
+        var dBob = r.Auth.ExchangeCode(Ip, T.BobCode, "Bob-PC", "b1").Device!;
+        var dOli = r.Auth.ExchangeCode(Ip, "synthetic0oli00code0000000000004", "Oli-PC", "o1").Device!;
+        var dMia = r.Auth.ExchangeCode(Ip, "synthetic0mia00code0000000000003", "Mia-PC", "m1").Device!;
+        var (_, guestSecret) = r.Auth.CreateInvite("guest", "", "guest", "Bob");
+        var dGuest = r.Auth.ExchangeInvite(Ip, guestSecret, "Guest-PC", "g1").Device!;
+        List<string> Ids(ClosableSock s) => s.Of("admin.devices").Last()["devices"]!.AsArray().Select(x => (string)x!["id"]!).ToList();
+
+        var (bob, sbob) = r.Connect(T.BobCode, false);
+        await r.Ask(bob, sbob, new { t = "admin.devices" });
+        Assert.Equal(new[] { dGuest.Id, dMia.Id }.OrderBy(x => x), Ids(sbob).OrderBy(x => x));          // not Elan's, not Oli's, not his own
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Elan" });
+        Assert.Empty(Ids(sbob));
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Oli" });
+        Assert.Empty(Ids(sbob));
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Mia" });
+        Assert.Equal(new[] { dMia.Id }, Ids(sbob));
+        Assert.DoesNotContain(sbob.Of("admin.devices"), f => f.ToJsonString().Contains("Elan-PC") || f.ToJsonString().Contains("Oli-PC"));
+        await r.Ask(bob, sbob, new { t = "device.list" });                                               // his own: always
+        Assert.Equal(new[] { dBob.Id }, sbob.Of("devices").Last()["devices"]!.AsArray().Select(x => (string)x!["id"]!));
+        await r.Ask(bob, sbob, new { t = "device.revoke", id = dGuest.Id });                              // the answer after a revoke is filtered too
+        Assert.Equal(new[] { dMia.Id }, Ids(sbob));
+
+        var (elan, selan) = r.Connect(T.ElanCode, false);
+        await r.Ask(elan, selan, new { t = "admin.devices" });
+        Assert.Equal(new[] { dElan.Id, dBob.Id, dOli.Id, dMia.Id }.OrderBy(x => x), Ids(selan).OrderBy(x => x));
     }
 }

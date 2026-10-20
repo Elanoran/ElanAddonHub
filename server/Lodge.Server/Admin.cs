@@ -174,8 +174,20 @@ public class AdminModule : IModule
             : LodgeJson.Build(new AdminDevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write);
     }
 
-    Task SendDevices(Member me, string type, string name) =>
-        hub.Send(me, DeviceList(me, type, name, hub.Auth.ListDevices(string.IsNullOrWhiteSpace(name) ? null : name)));
+    Task SendDevices(Member me, string type, string name)
+    {
+        var list = hub.Auth.ListDevices(string.IsNullOrWhiteSpace(name) ? null : name);
+        return hub.Send(me, DeviceList(me, type, name, type == LodgeMsg.AdminDevices ? list.Where(d => MaySeeDevice(me, d)) : list));
+    }
+
+    // 2.31.2: admin.devices - the Guild Master sees every device; an officer only those of ranks below their own (members, guests), never the
+    // Guild Master's or another officer's (nor their coarse addresses). Everyone sees their own through device.list.
+    bool MaySeeDevice(Member me, DeviceInfo d)
+    {
+        if (Roles.Level(me.Role) >= Roles.Level("owner")) return true;
+        var theirs = d.Guest ? "guest" : hub.Auth.ListPersonal().FirstOrDefault(p => Names.Same(p.Name, d.Name)).Role ?? d.Role;
+        return Roles.Level(theirs) < Roles.Level(me.Role);
+    }
 
     // device.list: your own devices. device.revoke {id}: sign one out - yours, or (officer+) a lower-ranked member's.
     async Task<bool> HandleDevice(Member me, string type, JsonObject m)

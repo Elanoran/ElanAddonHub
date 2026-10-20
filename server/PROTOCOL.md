@@ -309,7 +309,7 @@ A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server
 ### WebSocket (client to server)
 
 - `admin.invite.create` `{kind: "person"|"guest", name, role, hours (1-720; 0 = server default 168), uses (guest, 1-50)}` - owner and officer (officers: ranks below their own, and only for a name that doesn't exist yet; for an existing name the invite adds a device with that person's current rank - the Guild Master only since 2.31.2, an officer gets `error` `{code: "owner-only"}`; see the 2.31.2 additions)
-- `admin.invites` · `admin.invite.revoke` `{id}` · `admin.devices` `{name?}` - owner and officer
+- `admin.invites` · `admin.invite.revoke` `{id}` · `admin.devices` `{name?}` - owner and officer (2.31.2: an officer's `admin.devices` lists only the devices of ranks below their own - members, veterans, guests; the Guild Master sees all; your own are always in `devices`)
 - `device.list` - your own devices (a guest sees only theirs) · `device.revoke` `{id}` - your own, or a lower rank's (owner: anyone's)
 - `admin.retire` `{name, force?}` - owner: the person's permanent code stops working (`admin.members` entries carry `hasCode` and `devices`)
 

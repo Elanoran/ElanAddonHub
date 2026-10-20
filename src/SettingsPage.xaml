@@ -848,7 +848,7 @@
             </ContentControl>
 
             <TextBlock Text="Devices" Style="{StaticResource HeadTight}" Margin="4,12,0,2" />
-            <TextBlock Text="Every signed-in device. Signing one out disconnects it at once; they can join again with a new invite." Style="{StaticResource Note}" />
+            <TextBlock Text="Every signed-in device (officers see those of lower ranks). Signing one out disconnects it at once; they can join again with a new invite." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12">
               <StackPanel>
                 <TextBlock x:Name="AllDevicesEmpty" Style="{StaticResource Text.Secondary}" Margin="0,12" Text="No devices yet." />
