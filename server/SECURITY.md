@@ -165,6 +165,8 @@ longer lets a backslash into a name.
 - Clients sending more than the budgets get messages dropped, and after sustained flooding a close with
   "Too many messages - slow down". Normal hub use stays far below.
 - New invite codes are 32 hex characters (hub 2.x accepts any length of 6+ letters/digits). Existing codes work.
+- `install.sh` / `lodge-update` build as the unprivileged user `lodge-build` in `/var/cache/lodge-build` from the
+  committed tree (`git archive`); only copying the finished app into `/opt/lodge` runs as root (2.31.1).
 - The codes file stays `lodge:lodge 0640` in the data folder (the service edits it for the Guild Master panel);
   `lodge.env` stays `root:lodge 0640`. `install.sh` adds `codes.lock` (`lodge:lodge 0660`) and leaves systemd
   drop-ins alone.

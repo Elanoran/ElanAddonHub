@@ -36,11 +36,24 @@ chown lodge:lodge "$DATA_DIR"
 chmod 750 "$DATA_DIR"
 
 echo "== Building"
-rm -rf "$APP_DIR.new"
+# 2.31.1: the build never runs as root. Restoring packages and compiling can run code from the repo and its dependencies,
+# so it happens as the unprivileged user lodge-build in its own folder; root only copies the finished app into place.
+# The source is the committed tree (git archive of HEAD: server/ and shared/), never stray files in the checkout.
+BUILD_USER=lodge-build
+BUILD_HOME=/var/cache/lodge-build
+id "$BUILD_USER" >/dev/null 2>&1 || useradd --system --home-dir "$BUILD_HOME" --shell /usr/sbin/nologin "$BUILD_USER"
+install -d -o "$BUILD_USER" -g "$BUILD_USER" -m 750 "$BUILD_HOME"
+rm -rf "$BUILD_HOME/src" "$BUILD_HOME/out" "$APP_DIR.new"
+install -d -o "$BUILD_USER" -g "$BUILD_USER" -m 750 "$BUILD_HOME/src"
+git -C "$REPO_DIR" archive HEAD server shared | tar -x -C "$BUILD_HOME/src"
+chown -R "$BUILD_USER:$BUILD_USER" "$BUILD_HOME/src"
 # from server/ so its global.json (any 10.0.x SDK) applies, not the repo root's (the Windows app's SDK pin)
-cd "$REPO_DIR/server"
-DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet publish "$REPO_DIR/server/Lodge.Server" -c Release -r linux-x64 \
-  --self-contained true -p:PublishSingleFile=true -o "$APP_DIR.new" --nologo -v q
+runuser -u "$BUILD_USER" -- env -i PATH="$PATH" HOME="$BUILD_HOME" DOTNET_CLI_HOME="$BUILD_HOME" NUGET_PACKAGES="$BUILD_HOME/nuget" \
+  DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 \
+  bash -c 'cd "$1/src/server" && dotnet publish Lodge.Server -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o "$1/out" --nologo -v q' _ "$BUILD_HOME"
+[ -f "$BUILD_HOME/out/lodge" ] || { echo "install.sh: the build did not produce $BUILD_HOME/out/lodge - nothing was changed" >&2; exit 1; }
+cp -a "$BUILD_HOME/out" "$APP_DIR.new"
+chown -R root:root "$APP_DIR.new"
 rm -rf "$APP_DIR.old"
 if [ -d "$APP_DIR" ]; then mv "$APP_DIR" "$APP_DIR.old"; fi
 mv "$APP_DIR.new" "$APP_DIR"

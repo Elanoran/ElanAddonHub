@@ -1,7 +1,12 @@
 # Deploying and operating the Lodge server (Ubuntu, systemd)
 
 Layout: source checkout `/opt/lodge-src`, build `/opt/lodge`, data `/var/lib/lodge`, config `/etc/lodge/lodge.env`,
-backups `/var/backups/lodge`. Reverse proxy: see [reverse-proxy.md](reverse-proxy.md).
+backups `/var/backups/lodge`, build folder `/var/cache/lodge-build`.
+
+**The build never runs as root (2.31.1).** `install.sh` (and so `lodge-update`) exports the committed `server/` and `shared/`
+files into `/var/cache/lodge-build` and builds there as the unprivileged system user `lodge-build` (created on the first run);
+package restore and compiling can't touch the rest of the machine. Root only copies the finished app into `/opt/lodge`.
+The first build after this change restores the NuGet packages again into that folder (a little slower once). Reverse proxy: see [reverse-proxy.md](reverse-proxy.md).
 
 ## One-time install (also updates the tools below)
 
