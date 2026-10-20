@@ -7,9 +7,9 @@ crash it, fill its memory or disk, fake who said something, or reach anything on
 Cairn notices and Outpost releases are signed, and only a valid signature is accepted). The sections below describe the protections,
 newest at the bottom; "Current protections" sums them up.
 
-**Reporting a problem.** Please don't put the details of a security problem in a public issue. Open an
-[issue](https://github.com/Elanoran/ElanAddonHub/issues) that only says you have a security problem to report, and we'll arrange a private
-way to send the details. We fix what we can confirm and credit you in the changelog if you like.
+**Reporting a problem.** Please don't put the details of a security problem in a public issue. Report it privately
+through GitHub instead: [Report a vulnerability](https://github.com/Elanoran/ElanAddonHub/security/advisories/new) (the repository's
+Security tab); only the maintainer sees it. We fix what we can confirm and credit you in the changelog if you like.
 
 ## 2.2.0 hardening (from the security review of 1.4.0)
 
