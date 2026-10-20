@@ -560,7 +560,7 @@ namespace ElansAddonHub.Lodge
             try
             {
                 var s = Session.Settings;
-                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s), NameBox.Text);
+                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceIdFor(s, url), NameBox.Text);
                 if (!res.Ok)
                 {
                     if (res.Reason == "name-required") NameCaption.Text = NameCaptionOwner;

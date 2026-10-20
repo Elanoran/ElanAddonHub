@@ -211,6 +211,23 @@ namespace ElansAddonHub
             check("store: Clear forgets both", !LodgeCredentials.Load(st, out _, out _));
             var id1 = LodgeCredentials.DeviceId(st); var id2 = LodgeCredentials.DeviceId(st);
             check("store: the device id is random, made once and stable", id1 == id2 && id1.Length == 32 && id1 != LodgeCredentials.DeviceId(new Settings()));
+            // 3.1.2 (L3): each Lodge gets its own id; the Lodge this PC was already in keeps the old one
+            var fresh = new Settings { LodgeDeviceId = id1 };
+            var a1 = LodgeCredentials.DeviceIdFor(fresh, "https://example.org/lodge"); var b1 = LodgeCredentials.DeviceIdFor(fresh, "https://other.example/lodge");
+            check("device id: two different Lodges get different ids, neither is the stored id", a1 != b1 && a1 != id1 && b1 != id1 && a1.Length == 32 && b1.Length == 32
+                && a1.All(ch => "0123456789abcdef".IndexOf(ch) >= 0), a1 + " / " + b1);
+            check("device id: the same Lodge always gets the same id, however its address is written",
+                a1 == LodgeCredentials.DeviceIdFor(fresh, "https://example.org/lodge") && a1 == LodgeCredentials.DeviceIdFor(fresh, "example.org/lodge/")
+                && a1 == LodgeCredentials.DeviceIdFor(fresh, "https://EXAMPLE.org:443/lodge") && a1 != LodgeCredentials.DeviceIdFor(fresh, "https://example.org/lodge2"));
+            check("device id: another PC (another stored id) gives the same Lodge a different id", a1 != LodgeCredentials.DeviceIdFor(new Settings { LodgeDeviceId = "0123456789abcdef0123456789abcdef" }, "https://example.org/lodge"));
+            var existing = new Settings { LodgeDeviceId = id1, LodgeUrl = "https://example.org/lodge", LodgeTokenProtected = SettingsStore.Protect(TokA) };
+            var keep = LodgeCredentials.DeviceIdFor(existing, "https://example.org/lodge");
+            check("device id: a Lodge this PC was already signed in to keeps the id it was sent before", keep == id1 && existing.LodgeDeviceIdLegacyUrl == "https://example.org/lodge" && existing.LodgeDeviceIdPerLodge);
+            existing.LodgeUrl = "https://other.example/lodge";
+            check("device id: ...a new Lodge joined afterwards gets its own, and the old Lodge still the old one",
+                LodgeCredentials.DeviceIdFor(existing, "https://other.example/lodge") == b1 && LodgeCredentials.DeviceIdFor(existing, "https://example.org/lodge") == id1);
+            var noCred = new Settings { LodgeDeviceId = id1, LodgeUrl = "https://example.org/lodge" };
+            check("device id: an address without a saved sign-in is not 'already known'", LodgeCredentials.DeviceIdFor(noCred, "https://example.org/lodge") == a1 && noCred.LodgeDeviceIdLegacyUrl == null);
             check("store: the device name defaults to the PC name and can be changed", LodgeCredentials.DeviceName(new Settings()) == Environment.MachineName && LodgeCredentials.DeviceName(new Settings { LodgeDeviceName = "  Deck  " }) == "Deck");
         }
 
@@ -316,7 +333,7 @@ namespace ElansAddonHub
             await Task.Delay(100);
             check("join: a good invite stores the token (DPAPI) and no code", LodgeCredentials.Load(s, out var cred, out var isTok) && cred == TokA && isTok && !LodgeCredentials.HasCode(s));
             check("join: ...connects with the token", Session.Connected && Session.UsingToken && s.LodgeUrl == "http://127.0.0.1:9/lodge" && s.LodgeName == "Nova");
-            check("join: ...with this PC's name and id sent", okBody != null && okBody.Contains("Quest-PC") && okBody.Contains(LodgeCredentials.DeviceId(s)));
+            check("join: ...with this PC's name and its id for this Lodge sent (3.1.2: per Lodge)", okBody != null && okBody.Contains("Quest-PC") && okBody.Contains(LodgeCredentials.DeviceIdFor(s, "http://127.0.0.1:9/lodge")));
             Session.Disconnect();
 
             // an old permanent code in an older link still joins the old way

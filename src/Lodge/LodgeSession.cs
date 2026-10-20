@@ -118,6 +118,7 @@ namespace ElansAddonHub.Lodge
         public LodgeSession(Settings settings)
         {
             Settings = settings;
+            LodgeCredentials.MigrateDeviceId(settings);     // 3.1.2: before anything can change the saved Lodge (per-Lodge device ids)
             Groups = new MemberGroups(Members, () => CanSeeInvisible, settings);
             LfgVM.Clock = () => Clock(); LfgVM.MyName = () => Me?.Name; LfgVM.IAmOfficer = () => CanModerate;
             ItemKnowledge.WowRoot = () => settings.WowRoot;

@@ -91,6 +91,10 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lodgeToken")] public string LodgeTokenProtected { get; set; }
         [DataMember(Name = "lodgeDevice")] public string LodgeDeviceName { get; set; }          // shown in "Your devices"; the PC name unless changed
         [DataMember(Name = "lodgeDeviceId")] public string LodgeDeviceId { get; set; }          // random, made once; lets a re-join replace this device instead of adding another
+        // 3.1.2: each Lodge gets its own id derived from LodgeDeviceId (LodgeCredentials.DeviceIdFor). The one Lodge this PC was already signed in to
+        // before 3.1.2 keeps the plain id it knows (so its re-joins still replace the old device); set once, when the rule first ran.
+        [DataMember(Name = "lodgeDeviceIdLegacyUrl")] public string LodgeDeviceIdLegacyUrl { get; set; }
+        [DataMember(Name = "lodgeDeviceIdPerLodge")] public bool LodgeDeviceIdPerLodge { get; set; }
         [DataMember(Name = "lodgeUpgradeNo")] public string LodgeUpgradeDeclined { get; set; }  // lodge address for which "Upgrade this device" was dismissed
         [DataMember(Name = "lodgeName")] public string LodgeName { get; set; }
         [DataMember(Name = "lodgeManualConnect")] public bool LodgeManualConnect { get; set; } // false = connect when the hub starts

@@ -150,7 +150,7 @@ namespace ElansAddonHub.Lodge
             var url = LodgeAddress;
             var code = SettingsStore.Unprotect(Settings.LodgeCodeProtected);
             if (url == null || string.IsNullOrEmpty(code)) return "There is no saved code to upgrade";
-            var res = await InviteExchange.Exchange(url, null, code, LodgeCredentials.DeviceName(Settings), LodgeCredentials.DeviceId(Settings));
+            var res = await InviteExchange.Exchange(url, null, code, LodgeCredentials.DeviceName(Settings), LodgeCredentials.DeviceIdFor(Settings, url));
             if (!res.Ok) return res.Message;
             // the saved code stays until the server welcomes the new token
             Connect(url, res.Token, true, new PendingCredential

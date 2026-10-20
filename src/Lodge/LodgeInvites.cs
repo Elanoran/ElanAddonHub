@@ -271,6 +271,43 @@ namespace ElansAddonHub.Lodge
             return s.LodgeDeviceId;
         }
 
+        // 3.1.2: the id this PC gives one Lodge when it joins (POST /exchange). Each Lodge gets its own, so two Lodges can't tell they have the
+        // same PC: HMAC-SHA256(key = the stored random id, message = the Lodge's normalized address), the first 128 bits in hex - 32 characters
+        // like the stored id (the Lodge takes any id up to 64 characters; it only uses it so a re-join from this PC replaces its old device).
+        // The Lodge this PC was already signed in to before 3.1.2 keeps the plain id it has always been sent.
+        public static string DeviceIdFor(Settings s, string lodgeUrl)
+        {
+            MigrateDeviceId(s);
+            var key = DeviceId(s);
+            if (!string.IsNullOrEmpty(s.LodgeDeviceIdLegacyUrl) && InviteLinks.SameOrigin(s.LodgeDeviceIdLegacyUrl, lodgeUrl)) return key;
+            return PerLodgeId(key, lodgeUrl);
+        }
+
+        public static string PerLodgeId(string key, string lodgeUrl)
+        {
+            using var h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(key ?? ""));
+            var mac = h.ComputeHash(Encoding.UTF8.GetBytes(AddressForId(lodgeUrl)));
+            return Convert.ToHexString(mac, 0, 16).ToLowerInvariant();
+        }
+
+        // scheme://host[:port]/path - the host lower-case (punycode), the default port and a trailing slash left out, so one Lodge is one address
+        public static string AddressForId(string lodgeUrl)
+        {
+            var norm = LodgeSession.NormalizeUrl(lodgeUrl ?? "") ?? "";
+            if (!Uri.TryCreate(norm, UriKind.Absolute, out var u)) return norm.ToLowerInvariant();
+            var path = u.AbsolutePath.TrimEnd('/');
+            return u.Scheme.ToLowerInvariant() + "://" + u.IdnHost.ToLowerInvariant() + (u.IsDefaultPort ? "" : ":" + u.Port) + path;
+        }
+
+        // once: a PC that already had a saved sign-in (and so had sent its plain id) keeps that id for that one Lodge
+        public static void MigrateDeviceId(Settings s)
+        {
+            if (s == null || s.LodgeDeviceIdPerLodge) return;
+            s.LodgeDeviceIdPerLodge = true;
+            if (!string.IsNullOrEmpty(s.LodgeDeviceId) && !string.IsNullOrWhiteSpace(s.LodgeUrl) && (HasToken(s) || HasCode(s)))
+                s.LodgeDeviceIdLegacyUrl = s.LodgeUrl;
+        }
+
         public static string DeviceName(Settings s) =>
             string.IsNullOrWhiteSpace(s.LodgeDeviceName) ? SafeMachineName() : s.LodgeDeviceName.Trim();
 
