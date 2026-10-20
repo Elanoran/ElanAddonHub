@@ -1393,6 +1393,7 @@
     '#ifdef USE_MAP',
     '  vec4 oTex = texture2D( map, vUv );',
     '  oTex.rgb = pow( oTex.rgb, vec3( 2.2 ) );',
+    '  oTex.rgb = mix( vec3( dot( oTex.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), oTex.rgb, uOSat ) * uOTint;',
     '  #ifdef O_CUT',
     '    vec2 oSz = vec2( textureSize( map, 0 ) ); vec2 oDx = dFdx( vUv * oSz ), oDy = dFdy( vUv * oSz );',
     '    oTex.a *= 1.0 + 0.12 * max( 0.0, 0.5 * log2( max( dot( oDx, oDx ), dot( oDy, oDy ) ) ) );',
@@ -1409,13 +1410,18 @@
     '#endif',
     '  vOFade = clamp( ( uOLim - distance( oAt.xz, uOFocus.xz ) ) / ( uOLim * 0.25 ), 0.0, 1.0 );'].join('\n');
   var O_FADE_F = 'if ( vOFade < 0.999 && fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) ) > vOFade ) discard;';
-  var OU = { uOFocus: { value: null }, uOLim: { value: 300 } };
+  // the look of the models' own textures next to the minimap ground (the game lights them with each zone's own light colours, which this page does not have):
+  // saturation and a tint (linear). Chosen with the owner on Goldshire and Redridge (3.2): a little less saturated and slightly greener, so Elwynn's yellow
+  // crowns sit with the minimap ground while autumn zones keep their colours
+  var O_TINT = [0.9, 0.97, 0.86];
+  var OU = { uOFocus: { value: null }, uOLim: { value: 300 }, uOSat: { value: 0.85 }, uOTint: { value: null } };
   function oPatch(m, cut) {
     m.onBeforeCompile = function (sh) {
       if (!OU.uOFocus.value) OU.uOFocus.value = new THREE.Vector3();
-      sh.uniforms.uOFocus = OU.uOFocus; sh.uniforms.uOLim = OU.uOLim;
+      if (!OU.uOTint.value) OU.uOTint.value = new THREE.Vector3(O_TINT[0], O_TINT[1], O_TINT[2]);
+      sh.uniforms.uOFocus = OU.uOFocus; sh.uniforms.uOLim = OU.uOLim; sh.uniforms.uOSat = OU.uOSat; sh.uniforms.uOTint = OU.uOTint;
       sh.vertexShader = 'uniform vec3 uOFocus; uniform float uOLim; varying float vOFade;\n' + sh.vertexShader.replace('#include <begin_vertex>', O_FADE_V);
-      sh.fragmentShader = (cut ? '#define O_CUT\n' : '') + 'varying float vOFade;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  ' + O_FADE_F).replace('#include <map_fragment>', O_MAP);
+      sh.fragmentShader = (cut ? '#define O_CUT\n' : '') + 'varying float vOFade; uniform float uOSat; uniform vec3 uOTint;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  ' + O_FADE_F).replace('#include <map_fragment>', O_MAP);
     };
     m.customProgramCacheKey = function () { return cut ? 'o-cut' : 'o'; };
   }
@@ -2240,7 +2246,38 @@
     objectsClick: function (id) { var b = OBJ.ui && OBJ.ui.card.querySelector('[data-a="' + id + '"]'); if (b) b.click(); return !!b; },
     objectsCap: function (mb) { OBJ.capOverride = mb; dirty = true; return 1; },
     objectsGpu: function (ok, why) { OBJ.gpu = !!ok; OBJ.gpuWhy = ok ? '' : String(why || 'a test'); oSync(); return OBJ.gpu; },
+    // the look values (OU) for tuning: saturation and tint (r, g, b, linear); returns them
+    objectsLook: function (sat, r, g, b) {
+      if (!OU.uOTint.value) OU.uOTint.value = new THREE.Vector3(O_TINT[0], O_TINT[1], O_TINT[2]);
+      if (sat != null) OU.uOSat.value = sat; if (r != null) OU.uOTint.value.set(r, g, b); dirty = true;
+      return JSON.stringify({ sat: OU.uOSat.value, tint: OU.uOTint.value.toArray() });
+    },
     objectsProbe: function () { oProbeStart(); dirty = true; return 1; },
+    // what is drawn at a point of the canvas (CSS pixels): the nearest tree / object whose box covers it on screen (the models' vertices are not kept
+    // in the page once they are on the graphics card, so this goes by the box), with its parts (batches) and their materials
+    objectsPick: function (px, py) {
+      if (!renderer || !camera) return 'null';
+      var r = canvas.getBoundingClientRect(), m4 = new THREE.Matrix4(), c = new THREE.Vector3(), edge = new THREE.Vector3(), best = null;
+      Object.keys(OBJ.buckets).forEach(function (k) {
+        var bk = OBJ.buckets[k], e = OBJ.models[k]; if (!bk.mesh.visible || !e || !e.m) return;
+        var mn = e.m.meta.min, mx = e.m.meta.max;
+        for (var j = 0; j < bk.mesh.count; j++) {
+          bk.mesh.getMatrixAt(j, m4);
+          c.set((mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2).applyMatrix4(m4);
+          var d = c.distanceTo(camera.position), rad = e.m.rad * new THREE.Vector3().setFromMatrixScale(m4).x;
+          edge.copy(c).add(camera.up.clone().multiplyScalar(rad));
+          var sc = c.clone().project(camera), se = edge.project(camera);
+          if (sc.z > 1) continue;
+          var sx = (sc.x + 1) / 2 * r.width, sy = (1 - sc.y) / 2 * r.height, sr = Math.hypot(((se.x + 1) / 2 * r.width) - sx, ((1 - se.y) / 2 * r.height) - sy);
+          if (Math.hypot(px - sx, py - sy) <= sr && (!best || d < best.d)) best = { d: d, fd: +k, j: j, at: [Math.round(c.x), Math.round(c.y), Math.round(c.z)], screenR: Math.round(sr) };
+        }
+      });
+      if (!best) return JSON.stringify({ hit: false });
+      var e2 = OBJ.models[best.fd];
+      return JSON.stringify({ hit: true, fdid: best.fd, instance: best.j, dist: Math.round(best.d), at: best.at, screenR: best.screenR, size: [e2.m.meta.min, e2.m.meta.max],
+        parts: e2.m.meta.batches.map(function (b, i) { var mt = e2.m.mats[i], te = e2.m.tes[i];
+          return { kind: b.kind, tex: b.tex, unlit: b.unlit, two: b.two, n: b.n, mat: mt.type, blend: mt.blending, color: mt.color.getHexString(), texFormat: te && te.tex ? (te.tex.isCompressedTexture ? te.tex.format : 'rgba') : null }; }) });
+    },
     xz2ll: xz2ll, ll2xz: ll2xz, groundXZ: function (x, z) { return groundY(x, z); }, distToZ: distToZ, zToDist: zToDist,
     holes: function () { return JSON.stringify({ n: Object.keys(holeMap).length, drawn: !!(holeMesh && holeMesh.parent), rev: cfg && cfg.rev || 0 }); }
   };
