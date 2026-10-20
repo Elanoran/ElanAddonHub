@@ -203,6 +203,8 @@ namespace ElansAddonHub.Services.WorldMap
         byte[] ReadTexture(int fdid);                 // a texture reduced to what the average colour needs (a small mip level); null = not in the install
         bool LaterCopy(int fdid) => false;            // the file is read from a later copy of a tie in the game's root (CascStorage.TookLaterCopy)
         Dictionary<string, int> Unread() => null;     // the files this source could not give, "<kind>:<reason>" (kind building | texture, reason as PendingTile.Reason) -> count
+        // 3.2 (trees & objects): a whole texture from the first mip level that fits maxSize down (ObjTexture.Trim); null = not in the install / not readable
+        byte[] ReadBlp(int fdid, int maxSize) => ObjTexture.TrimBytes(Read(fdid), maxSize);
     }
 
     public sealed class CascBuildingSource : IBuildingSource
@@ -258,6 +260,19 @@ namespace ElansAddonHub.Services.WorldMap
             }
             catch (Exception e) { Note(unread, "texture", WorldMapPending.ReasonOf(e)); return null; }
         }
+        // only the header and the mip levels that are used are read from the disk (a 2048 px texture's first level alone is 2 - 4 MB)
+        public byte[] ReadBlp(int fdid, int maxSize)
+        {
+            if (!Key(fdid, out var ck)) { Note(unread, "texture", "unlisted"); return null; }
+            try
+            {
+                bool any = false;
+                var b = ObjTexture.Trim((o, n) => { var r = casc.ReadRangeByContentKey(ck, o, n); any |= r != null; return r; }, maxSize);
+                if (b == null) Note(unread, "texture", any ? "unreadable" : "missing");
+                return b;
+            }
+            catch (Exception e) { Note(unread, "texture", WorldMapPending.ReasonOf(e)); return null; }
+        }
         public void Dispose() { casc.Dispose(); }
     }
 
@@ -278,6 +293,7 @@ namespace ElansAddonHub.Services.WorldMap
         }
         public byte[] Read(int fdid) => Get(fdid, "building");
         public byte[] ReadTexture(int fdid) => Get(fdid, "texture");
+        public byte[] ReadBlp(int fdid, int maxSize) => ObjTexture.TrimBytes(Get(fdid, "texture"), maxSize);
         public bool LaterCopy(int fdid) => Later != null && Later(fdid);
         public Dictionary<string, int> Unread() { lock (unread) return new Dictionary<string, int>(unread); }
         public void Dispose() { }

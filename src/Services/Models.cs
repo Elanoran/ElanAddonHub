@@ -137,6 +137,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "worldMap3dDetail")] public string WorldMap3dDetail { get; set; }          // 3D detail: low | medium (null = the default) | high
         [DataMember(Name = "worldMapExag2")] public double WorldMapExag { get; set; }                 // 3D height scale, 0.5 to 1.5 (0 = the default, 1 = true height); "worldMapExag2" so the old 1-3 choice starts again at 1
         [DataMember(Name = "worldMap3dBuildings")] public string WorldMap3dBuildings { get; set; }          // 3D buildings: off (null = the default) | bridges | all
+        [DataMember(Name = "worldMap3dObjects")] public string WorldMap3dObjects { get; set; }              // 3.2 trees & objects (experimental): off (null = the default) | low | medium | high
         [DataMember(Name = "worldMapLivePos")] public bool WorldMapLivePos { get; set; }              // Settings > "Show my live position on the world map" (off by default; needs the Hub's opt-in in game). The trail itself is never saved.
         [DataMember(Name = "worldMapFollow")] public bool WorldMapFollow { get; set; }                // the live layer's "Follow me" switch
         [DataMember(Name = "shareLivePosWithLodge")] public bool ShareLivePosWithLodge { get; set; }  // 2.97: Settings > "Share my map position with the Lodge" (off by default; Lodge 2.30 feature "liveposition")

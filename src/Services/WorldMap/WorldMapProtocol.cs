@@ -26,6 +26,8 @@ namespace ElansAddonHub.Services.WorldMap
     //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height scale (0.5-1.5, 1 = true height) the person chose
     //                 buildings {mode}                    (3D page) the Buildings switch: off | bridges | all
     //                 bbuild {mode} | bpause | bresume | bcancel   (3D page) the card and the progress line: Build now, Pause, Resume, Cancel
+    //                 objects {level}                     (3D page, 3.2) the Trees & objects switch: off | low | medium | high (also when the page steps it down by itself)
+    //                 obuild | opause | oresume | ocancel  (3D page, 3.2) its card and progress line: Build now, Pause, Resume, Cancel
     //                 error {msg}                         a script error in the page (logged and kept for "Copy details"; at most a few per page)
     //                 howto                               the live layer's "How to turn it on" link: the app opens its how-to card
     //                 follow {on}                         the live layer's "Follow me" switch (remembered in the settings)
@@ -36,7 +38,7 @@ namespace ElansAddonHub.Services.WorldMap
     //                 me {state, ...}                      the live position layer (see Me below), at most once a second
     //                 members {list}                      the Lodge members who share their position with me (see Members below), at most once a second
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap, MemberFollow }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap, MemberFollow, Objects, OBuild, OPause, OResume, OCancel }
 
     public sealed class WorldMapMessage
     {
@@ -165,6 +167,16 @@ namespace ElansAddonHub.Services.WorldMap
                 case "bpause": m.Type = WorldMapMessageType.BPause; return m;
                 case "bresume": m.Type = WorldMapMessageType.BResume; return m;
                 case "bcancel": m.Type = WorldMapMessageType.BCancel; return m;
+                case "objects":
+                    {
+                        var lv = d.Str("level");
+                        if (!(lv == "off" || lv == "low" || lv == "medium" || lv == "high")) { refusal = "objects: level off, low, medium or high"; return null; }
+                        m.Type = WorldMapMessageType.Objects; m.Detail = lv; return m;
+                    }
+                case "obuild": m.Type = WorldMapMessageType.OBuild; return m;
+                case "opause": m.Type = WorldMapMessageType.OPause; return m;
+                case "oresume": m.Type = WorldMapMessageType.OResume; return m;
+                case "ocancel": m.Type = WorldMapMessageType.OCancel; return m;
                 case "howto": m.Type = WorldMapMessageType.HowTo; return m;
                 case "showmap": m.Type = WorldMapMessageType.ShowMap; return m;
                 case "mfollow":

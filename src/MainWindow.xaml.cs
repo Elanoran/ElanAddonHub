@@ -433,6 +433,8 @@ namespace ElansAddonHub
             await RealSec("instancesreal", InstancesRealTest);
             if (Begin("buildings")) { result += "\r\n" + await BuildingsTest(dir); End(); }
             await RealSec("buildingsreal", BuildingsRealTest);
+            if (Begin("objects")) { result += "\r\n" + await ObjectsTest(dir); End(); }
+            await RealSec("objectsreal", ObjectsRealTest);
             if (Begin("dungeonmaps")) { result += "\r\n" + await DungeonMapsTest(dir); End(); }
             await RealSec("dungeonmapsreal", DungeonMapsRealTest);
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }

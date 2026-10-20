@@ -17,6 +17,18 @@ namespace ElansAddonHub.Services.WorldMap
         public bool HasNameIndex;
     }
 
+    // One M2 placement (an MDDF record of an obj0 ADT): a tree, a rock, a fence. Position in the scene's axes, as for WmoPlacement.
+    public sealed class M2Placement
+    {
+        public uint NameId;                  // the model's FileDataID (flag 0x40); otherwise an index into MMID/MMDX (HasNameIndex)
+        public uint UniqueId;
+        public float X, Y, Z;
+        public float RotX, RotY, RotZ;       // degrees
+        public float Scale = 1f;             // uint16 / 1024
+        public ushort Flags;
+        public bool HasNameIndex;
+    }
+
     // ============================================================================================================================
     // The object ADT (obj0) of a map tile, read for its WMO placements only. Written from wowdev.wiki/ADT/v18 and checked on the real obj0 files of build
     // 1.60.1.70338: a sequence of chunks (4-byte tag stored reversed on disk: "FDOM" for MODF, 4-byte size, data). MODF is 64 bytes per record:
@@ -69,6 +81,48 @@ namespace ElansAddonHub.Services.WorldMap
                 res.Add(w);
             }
             return res;
+        }
+
+        // ---------------------------------------------------------------- M2 placements (trees, rocks, fences, carts: the "doodads" of the tile)
+        // MDDF is 36 bytes per record: uint32 nameId, uint32 uniqueId, float position[3], float rotation[3] (degrees), uint16 scale (1024 = 1.0), uint16 flags.
+        // Flag 0x40: nameId is the model's FileDataID (every record of the Forever client); without it nameId indexes MMID/MMDX (a name, which needs the
+        // listfile): such records are flagged HasNameIndex and left out, as for the WMOs.
+        public const int MddfRecord = 36;
+        public const ushort MddfNameIsFdid = 0x40;
+
+        public static List<M2Placement> ParseDoodads(byte[] d, out string problem)
+        {
+            problem = null;
+            var res = new List<M2Placement>();
+            if (d == null || d.Length < 16) { problem = "the object file is empty or cut off"; return res; }
+            for (int p = 0; p + 8 <= d.Length;)
+            {
+                int size = BitConverter.ToInt32(d, p + 4);
+                if (size < 0 || (long)p + 8 + size > d.Length) break;
+                if (Is(d, p, "MDDF"))
+                    for (int q = p + 8; q + MddfRecord <= p + 8 + size; q += MddfRecord)
+                    {
+                        var m = new M2Placement
+                        {
+                            NameId = BitConverter.ToUInt32(d, q), UniqueId = BitConverter.ToUInt32(d, q + 4),
+                            X = F(d, q + 8), Y = F(d, q + 12), Z = F(d, q + 16), RotX = F(d, q + 20), RotY = F(d, q + 24), RotZ = F(d, q + 28),
+                            Flags = BitConverter.ToUInt16(d, q + 34),
+                        };
+                        int sc = BitConverter.ToUInt16(d, q + 32);
+                        m.Scale = sc == 0 ? 1f : sc / 1024f;
+                        m.HasNameIndex = (m.Flags & MddfNameIsFdid) == 0;
+                        if (!Sane(m)) continue;
+                        res.Add(m);
+                    }
+                p += 8 + size;
+            }
+            return res;
+        }
+
+        public static bool Sane(M2Placement m)
+        {
+            return Fin(m.X) && Fin(m.Y) && Fin(m.Z) && Fin(m.RotX) && Fin(m.RotY) && Fin(m.RotZ)
+                && m.NameId != 0 && m.NameId <= int.MaxValue && m.Scale > 0.01f && m.Scale < 64f && m.X > -1 && m.X < 34200 && m.Z > -1 && m.Z < 34200;
         }
 
         static float F(byte[] d, int o) => BitConverter.ToSingle(d, o);

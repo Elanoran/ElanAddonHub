@@ -50,12 +50,14 @@ namespace ElansAddonHub
                 DungeonPlans.RootOverride = savedPRoot; DungeonPlans.SourceForTest = savedPSrc; DungeonPlans.AutoSeconds = savedPAuto; DungeonPlans.Enabled = savedPEn; DungeonPlans.WowRoot = savedPWow; DungeonPlans.ResetForTest();
                 MapRender.DirOverride = savedMapDir; MapRender.TileSourceForTest = savedMapTiles; MapRender.ForgetFailuresForTest(); IconStore.WowRoot = savedIcon;
                 BuildingsService.SourceForTest = null; BuildingsService.GroundForTest = null; BuildingsService.ModelDelayMsForTest = 0; BuildingsService.ResetForTest();
+                ObjectsService.SourceForTest = null; ObjectsService.ModelDelayMsForTest = 0; ObjectsService.ResetForTest();
                 ClassicAtlas.Use(null);
                 try { ResetAtlasForTest(); } catch (Exception) { }
             }
             return (ok ? name + ": ok" : name + ": FAILED") + "\r\n" + string.Join("\r\n", notes);
         }
 
+        Task<string> ObjectsRealTest(string dir) => RealSection("objectsreal", dir, (d, work, Check, P, notes) => ObjectsRealChecks(d, work, Check, P, notes));
         Task<string> BuildingsRealTest(string dir) => RealSection("buildingsreal", dir, (d, work, Check, P, notes) => BuildingsRealChecks(d, work, Check, P, notes));
         Task<string> InstancesRealTest(string dir) => RealSection("instancesreal", dir, (d, work, Check, P, notes) => InstancesRealChecks(d, work, Check, P, notes));
         Task<string> DungeonMapsRealTest(string dir) => RealSection("dungeonmapsreal", dir, (d, work, Check, P, notes) => DmRealChecks(d, work, Check, notes));

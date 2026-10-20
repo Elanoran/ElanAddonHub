@@ -180,19 +180,22 @@ namespace ElansAddonHub.Services.WorldMap
             }
         }
 
-        static IBuildingSource OpenSource(Job j, out List<WdtTile> tiles)
+        static IBuildingSource OpenSource(Job j, out List<WdtTile> tiles) => OpenSourceFor(j.MapId, SourceForTest, out tiles);
+
+        // the game files of a continent (or a test's stand-in) and its tiles; shared with ObjectsService (3.2)
+        internal static IBuildingSource OpenSourceFor(int mapId, Func<IBuildingSource> forTest, out List<WdtTile> tiles)
         {
-            if (SourceForTest != null)
+            if (forTest != null)
             {
-                var wf = WdtFile.Parse(WorldMapService.WdtSourceForTest?.Invoke(j.MapId));
+                var wf = WdtFile.Parse(WorldMapService.WdtSourceForTest?.Invoke(mapId));
                 if (!wf.Ok) throw new InvalidDataException(wf.Problem);
                 tiles = wf.Tiles.Where(t => t.RootFdid != 0).ToList();
                 tiles = WdtFile.WithoutStrays(tiles, 12, null);
-                return SourceForTest();
+                return forTest();
             }
             var root = WorldMapService.WowRoot();
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) throw new IOException("the WoW folder is not set");
-            var cont = WorldMapService.Continent(Maps.MapData.Index, j.MapId);
+            var cont = WorldMapService.Continent(Maps.MapData.Index, mapId);
             if (cont == null) throw new IOException("the game has no world map for this continent");
             var casc = CascStorage.Open(root, WorldMapService.Flavor() ?? "_classic_beta_");
             try

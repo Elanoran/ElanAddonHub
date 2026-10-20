@@ -123,6 +123,10 @@ body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
 .v3r .seg.wide button { flex: 1; padding: 3px 4px; font-size: 11px; white-space: nowrap; }
 .v3b { margin: 4px 0 2px; padding: 8px 9px; border: 1px solid var(--panel-line); border-radius: 8px; background: rgba(255, 255, 255, .05); font-size: 12px; line-height: 1.4; }
 .v3b[hidden] { display: none; }
+.v3set .exp { font-style: normal; font-size: 10px; color: var(--text-dim); border: 1px solid var(--panel-line); border-radius: 6px; padding: 0 4px; margin-left: 4px; }
+.v3n { font-size: 11px; color: var(--text-dim); margin: 2px 0 4px; }
+.v3n[hidden] { display: none; }
+.seg button:disabled { opacity: .45; cursor: default; }
 .v3b .bt { color: var(--text); }
 .v3b .bs { color: var(--text-dim); margin-top: 3px; }
 .v3b .bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .14); margin-top: 7px; overflow: hidden; }

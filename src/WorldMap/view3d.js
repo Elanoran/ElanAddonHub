@@ -767,6 +767,7 @@
       '<div class="v3r"><button type="button" id="v3north">North up</button><button type="button" id="v3fit">Whole continent</button></div>';
     body.appendChild(s);
     bldPanel(s);
+    objPanel(s);
     p.appendChild(h); p.appendChild(body); hud.appendChild(p);
     ['mousedown', 'wheel', 'click', 'dblclick', 'contextmenu'].forEach(function (ev) { p.addEventListener(ev, function (e) { e.stopPropagation(); }); });
     function syncPrefs() {
@@ -960,8 +961,9 @@
     var need = dirty || inFlight > 0;
     if (!need) { if (now - fpsT0 > 2000) { fpsT0 = now; fpsFrames = 0; } return; }
     dirty = false; frameN++;
+    oProbeFrame(now);
     updateCamera();
-    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateBuildings(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
+    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateBuildings(now); updateObjects(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
     var shown = updateOverlays();
     shimmer(now);
     renderer.render(scene, camera);
@@ -1013,7 +1015,7 @@
     var c = document.createElement('canvas'); c.width = c.height = 4; var g = c.getContext('2d'); g.fillStyle = '#' + ('000000' + seaColor.toString(16)).slice(-6); g.fillRect(0, 0, 4, 4);
     seaTex = new THREE.CanvasTexture(c); seaTex.encoding = THREE.sRGBEncoding;
     // the guard: a lost WebGL context is told to the app, which falls back to the flat map
-    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); send({ t: 'webgl', ok: false, why: 'the graphics context was lost', renderer: glInfo.slice(0, 100) }); });
+    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); if (OBJ.level !== 'off') send({ t: 'objects', level: 'off' }); send({ t: 'webgl', ok: false, why: 'the graphics context was lost', renderer: glInfo.slice(0, 100) }); });
     send({ t: 'webgl', ok: true, why: software ? 'software rendering' : '', renderer: glInfo.slice(0, 100) });
     if (software && !prefs.__user) { prefs.detail = 'low'; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, software ? 1 : D().dpr));
@@ -1308,6 +1310,408 @@
     }
     out.sort(function (a, b) { return a.d - b.d; });
     return out.slice(0, max || 10);
+  }
+
+  // ---------------------------------------------------------------- trees & objects (M2s): "Trees & objects (experimental)" Off / Low / Medium / High (3.2)
+  // The app (WorldMapObjectsHost) reads the continent's M2 models (trees, rocks, fences, carts) with their real textures into <map>/objects: tiles.bin, p/<col>_<row>.bin (32 bytes per
+  // placement), m/<FileDataID>.m2b (M2Mesh: positions, normals, uvs, indices, one batch per texture / material) and t/<FileDataID>.mtx (ObjTexture: the game's DXT blocks with every mip
+  // level, or RGBA). The page only fetches what the app listed as finished (ostate.all / ostate.fresh). Each pass (with the tiles, every 120 ms) takes the placements of the tiles near the
+  // camera, keeps those within the level's distance of the eye and in the view, and draws them with one InstancedMesh per model (one draw call per visible batch). Beyond the distance
+  // the minimap's painted trees carry the look, so a zoomed-out view costs the same as with the switch Off.
+  // Leaves are cut-outs (alpha test); the alpha is raised in the far mip levels so a canopy does not thin out at a distance. Textures are uploaded as stored (no sRGB format needed:
+  // the colour is turned linear in the shader). Additive parts (glows) draw without depth writes; modulate parts and parts hidden in the first frame were left out by the app.
+  // Needs WebGL 2 and s3tc (every Windows GPU WebView2 runs on has both); without them the switch says why and stays Off. A probe after switching on watches the frame time
+  // for 2 seconds and steps one level down when it is slow; a lost graphics context switches it Off (saved) before the app falls back to the flat map.
+  var ODETAIL = { low: { dist: 150, memMb: 96 }, medium: { dist: 300, memMb: 192 }, high: { dist: 600, memMb: 384 } };
+  var OLEVELS = ['off', 'low', 'medium', 'high'];
+  var OBJ = { level: 'off', base: '', st: null, built: {}, tiles: {}, T: {}, models: {}, texs: {}, mats: {}, buckets: {}, fetching: 0, maxFetch: 6, mem: 0, texMem: 0, drawn: 0, tris: 0, inRange: 0,
+    errors: 0, loaded: 0, texLoaded: 0, evicted: 0, passes: 0, gpu: null, gpuWhy: '', probe: null, stepped: '', ui: null, capOverride: null, s3tc: null };
+  var oM = null, oQ = null, oE = null, oP = null, oS = null, oSph = null;
+  function OD() { return ODETAIL[OBJ.level] || null; }
+  function oUrl(p) { return OBJ.base + '/' + p; }
+  // the graphics check: WebGL 2 and s3tc; software rendering is too slow for this
+  function oGpuCheck() {
+    if (OBJ.gpu !== null) return OBJ.gpu;
+    if (!renderer) { OBJ.gpu = false; OBJ.gpuWhy = 'there is no 3D view'; return false; }
+    var gl = renderer.getContext();
+    OBJ.s3tc = gl.getExtension('WEBGL_compressed_texture_s3tc');
+    if (!renderer.capabilities.isWebGL2) OBJ.gpuWhy = 'this graphics card has no WebGL 2';
+    else if (!OBJ.s3tc) OBJ.gpuWhy = 'this graphics card cannot read compressed textures (s3tc)';
+    else if (software) OBJ.gpuWhy = 'the 3D view runs on software rendering here';
+    OBJ.gpu = !OBJ.gpuWhy;
+    return OBJ.gpu;
+  }
+
+  // ---- the textures
+  function oTexParse(buf) {
+    var dv = new DataView(buf);
+    if (buf.byteLength < 12 || dv.getUint32(0, true) !== 0x3158544D) return null;          // "MTX1"
+    var w = dv.getUint16(4, true), h = dv.getUint16(6, true), fmt = dv.getUint8(8), n = dv.getUint8(9), p = 12, lv = [];
+    if (w < 1 || h < 1 || w > 4096 || h > 4096 || n < 1 || n > 16) return null;
+    for (var k = 0; k < n; k++) {
+      if (p + 4 > buf.byteLength) return null;
+      var len = dv.getInt32(p, true); p += 4;
+      if (len <= 0 || p + len > buf.byteLength) return null;
+      lv.push({ data: new Uint8Array(buf, p, len), width: Math.max(1, w >> k), height: Math.max(1, h >> k) }); p += (len + 3) & ~3;
+    }
+    var t, bytes = 0;
+    lv.forEach(function (l) { bytes += l.data.length; });
+    if (fmt === 0) {
+      if (lv[0].data.length !== w * h * 4) return null;
+      t = new THREE.DataTexture(lv[0].data, w, h, THREE.RGBAFormat); t.generateMipmaps = true; bytes = bytes * 4 / 3;
+    } else {
+      var f = fmt === 1 ? THREE.RGB_S3TC_DXT1_Format : fmt === 2 ? THREE.RGBA_S3TC_DXT1_Format : fmt === 3 ? THREE.RGBA_S3TC_DXT3_Format : fmt === 5 ? THREE.RGBA_S3TC_DXT5_Format : null;
+      if (f === null) return null;
+      t = new THREE.CompressedTexture(lv, w, h, f); t.generateMipmaps = false;
+    }
+    t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.anisotropy = D().aniso; t.flipY = false; t.needsUpdate = true;
+    return { tex: t, bytes: bytes };
+  }
+  function oTexture(fdid, wrap) {
+    var key = fdid + '|' + wrap, e = OBJ.texs[key];
+    if (e) { e.refs++; return e; }
+    e = OBJ.texs[key] = { state: 'loading', tex: null, bytes: 0, refs: 1, waiters: [] };
+    fetch(oUrl('t/' + fdid + '.mtx')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      var r = buf ? oTexParse(buf) : null;
+      if (!r) { e.state = 'none'; if (buf) OBJ.errors++; }
+      else {
+        r.tex.wrapS = (wrap & 1) ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping; r.tex.wrapT = (wrap & 2) ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+        e.tex = r.tex; e.bytes = r.bytes; e.state = 'ready'; OBJ.texMem += r.bytes; OBJ.texLoaded++;
+      }
+    }).catch(function () { e.state = 'none'; OBJ.errors++; }).then(function () { var w = e.waiters; e.waiters = []; w.forEach(function (f) { f(); }); dirty = true; });
+    return e;
+  }
+  function oTexRelease(key) {
+    var e = OBJ.texs[key]; if (!e) return;
+    if (--e.refs > 0) return;
+    if (e.tex) { try { e.tex.dispose(); } catch (x) { } OBJ.texMem -= e.bytes; }
+    delete OBJ.texs[key];
+  }
+
+  // ---- the materials: the scene's lights and fog; the colour turned linear here (the textures are uploaded as stored), leaves raised in the far mips
+  var O_MAP = [
+    '#ifdef USE_MAP',
+    '  vec4 oTex = texture2D( map, vUv );',
+    '  oTex.rgb = pow( oTex.rgb, vec3( 2.2 ) );',
+    '  #ifdef O_CUT',
+    '    vec2 oSz = vec2( textureSize( map, 0 ) ); vec2 oDx = dFdx( vUv * oSz ), oDy = dFdy( vUv * oSz );',
+    '    oTex.a *= 1.0 + 0.12 * max( 0.0, 0.5 * log2( max( dot( oDx, oDx ), dot( oDy, oDy ) ) ) );',
+    '  #endif',
+    '  diffuseColor *= oTex;',
+    '#endif'].join('\n');
+  // the edge of the level's circle around the spot you look at fades out over its last quarter: a fine screen dither (no sorting, works with the cut-outs)
+  var O_FADE_V = [
+    '#include <begin_vertex>',
+    '#ifdef USE_INSTANCING',
+    '  vec3 oAt = ( modelMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz;',
+    '#else',
+    '  vec3 oAt = ( modelMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz;',
+    '#endif',
+    '  vOFade = clamp( ( uOLim - distance( oAt.xz, uOFocus.xz ) ) / ( uOLim * 0.25 ), 0.0, 1.0 );'].join('\n');
+  var O_FADE_F = 'if ( vOFade < 0.999 && fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) ) > vOFade ) discard;';
+  var OU = { uOFocus: { value: null }, uOLim: { value: 300 } };
+  function oPatch(m, cut) {
+    m.onBeforeCompile = function (sh) {
+      if (!OU.uOFocus.value) OU.uOFocus.value = new THREE.Vector3();
+      sh.uniforms.uOFocus = OU.uOFocus; sh.uniforms.uOLim = OU.uOLim;
+      sh.vertexShader = 'uniform vec3 uOFocus; uniform float uOLim; varying float vOFade;\n' + sh.vertexShader.replace('#include <begin_vertex>', O_FADE_V);
+      sh.fragmentShader = (cut ? '#define O_CUT\n' : '') + 'varying float vOFade;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  ' + O_FADE_F).replace('#include <map_fragment>', O_MAP);
+    };
+    m.customProgramCacheKey = function () { return cut ? 'o-cut' : 'o'; };
+  }
+  function oMaterial(b, te) {
+    var tex = te && te.state === 'ready' ? te.tex : null;
+    var key = (tex ? b.tex + '|' + b.wrap : 'rgb' + b.rgb) + '|' + b.kind + '|' + (b.two ? 1 : 0) + '|' + (b.unlit ? 1 : 0) + '|' + b.ref;
+    var m = OBJ.mats[key];
+    if (m) return m;
+    var col = new THREE.Color(1, 1, 1);
+    if (!tex) { var c = b.rgb >= 0 ? b.rgb : 0x8a7a60; col.setRGB(((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255); col.convertSRGBToLinear(); }
+    // the scene's lights add up to about 1.25 on a face turned to the sun (made for the minimap pictures, which are darker): the models' own textures are brought down to match
+    if (b.kind !== 'add' && !b.unlit) col.multiplyScalar(0.78);
+    var side = b.two ? THREE.DoubleSide : THREE.FrontSide;
+    if (b.kind === 'add') m = new THREE.MeshBasicMaterial({ map: tex, color: col, side: side, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    else if (b.unlit) m = new THREE.MeshBasicMaterial({ map: tex, color: col, side: side, alphaTest: b.kind === 'cut' ? b.ref : 0 });
+    else m = new THREE.MeshLambertMaterial({ map: tex, color: col, side: side, alphaTest: b.kind === 'cut' ? b.ref : 0 });
+    oPatch(m, b.kind === 'cut' && !!tex);
+    OBJ.mats[key] = m;
+    return m;
+  }
+
+  // ---- a model file
+  function oParse(buf) {
+    var dv = new DataView(buf);
+    if (buf.byteLength < 12 || dv.getUint32(0, true) !== 0x3142324D) return null;          // "M2B1"
+    var jl = dv.getInt32(4, true);
+    if (jl <= 0 || 8 + jl > buf.byteLength) return null;
+    var meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jl)));
+    var nv = meta.nv | 0, ni = meta.ni | 0, o = 8 + ((jl + 3) & ~3);
+    if (nv <= 0 || nv > 200000 || ni <= 0 || ni % 3 !== 0 || !Array.isArray(meta.batches)) return null;
+    var need = o + nv * 12 + nv * 4 + nv * 8 + ni * (meta.idx16 ? 2 : 4);
+    if (need > buf.byteLength) return null;
+    var pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
+    var nor = new Int8Array(buf, o, nv * 4); o += nv * 4;
+    var uv = new Float32Array(buf, o, nv * 2); o += nv * 8;
+    var idx = meta.idx16 ? new Uint16Array(buf, o, ni) : new Uint32Array(buf, o, ni);
+    var g = new THREE.BufferGeometry();
+    var free = function () { this.array = null; };
+    var a = new THREE.BufferAttribute(pos, 3), n = new THREE.BufferAttribute(nor, 4, true), u = new THREE.BufferAttribute(uv, 2), ix = new THREE.BufferAttribute(idx, 1);
+    [a, n, u, ix].forEach(function (x) { x.onUpload(free); });
+    // the normal is 4 signed bytes (the 4th is padding): three reads the first 3 of a 4-wide attribute as the normal
+    g.setAttribute('position', a); g.setAttribute('normal', n); g.setAttribute('uv', u); g.setIndex(ix);
+    var mn = meta.min || [0, 0, 0], mx = meta.max || [0, 0, 0];
+    var rad = Math.max(1, Math.sqrt(Math.pow(mx[0] - mn[0], 2) + Math.pow(mx[1] - mn[1], 2) + Math.pow(mx[2] - mn[2], 2)) / 2);
+    meta.batches.forEach(function (b, i) { g.addGroup(b.i0 | 0, b.n | 0, i); });
+    return { meta: meta, geo: g, rad: rad, cy: (mn[1] + mx[1]) / 2, tris: ni / 3, bytes: nv * 24 + ni * (meta.idx16 ? 2 : 4), texKeys: [] };
+  }
+  function oFetchModel(fdid, e) {
+    e.state = 'loading'; OBJ.fetching++;
+    fetch(oUrl('m/' + fdid + '.m2b') + (e.rev ? '?r=' + e.rev : '')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      var m = buf ? oParse(buf) : null;
+      if (!m) { e.state = 'none'; if (buf) OBJ.errors++; return; }
+      // its textures, then the materials (a texture that does not come is a stand-in colour)
+      var waits = 0, done = function () {
+        if (--waits > 0) return;
+        m.mats = m.meta.batches.map(function (b, i) { return oMaterial(b, m.tes[i]); });
+        e.m = m; e.state = 'ready'; OBJ.mem += m.bytes; OBJ.loaded++; dirty = true;
+      };
+      m.tes = m.meta.batches.map(function (b) {
+        if (!(b.tex > 0)) return null;
+        var te = oTexture(b.tex, b.wrap | 0); m.texKeys.push(b.tex + '|' + (b.wrap | 0));
+        if (te.state === 'loading') { waits++; te.waiters.push(done); }
+        return te;
+      });
+      waits++; done();
+    }).catch(function () { e.state = 'none'; OBJ.errors++; }).then(function () { OBJ.fetching--; dirty = true; });
+  }
+  function oFreeModel(fdid, e) {
+    var b = OBJ.buckets[fdid];
+    if (b) { scene.remove(b.mesh); b.mesh.dispose(); delete OBJ.buckets[fdid]; }
+    if (e.m) { e.m.geo.dispose(); OBJ.mem -= e.m.bytes; e.m.texKeys.forEach(oTexRelease); e.m = null; }
+    e.state = 'idle';
+  }
+
+  // ---- the placements of a tile
+  function oLoadTile(key, T) {
+    T.state = 'loading';
+    fetch(oUrl('p/' + Math.floor(key / 64) + '_' + (key % 64) + '.bin')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      if (!buf || buf.byteLength < 8) { T.state = 'none'; return; }
+      var dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x3150324D) { T.state = 'none'; OBJ.errors++; return; }          // "M2P1"
+      var n = dv.getInt32(4, true);
+      if (n < 0 || 8 + n * 32 !== buf.byteLength) { T.state = 'none'; OBJ.errors++; return; }
+      T.n = n; T.fdid = new Int32Array(n); T.a = new Float32Array(n * 7);
+      for (var i = 0; i < n; i++) { var o = 8 + i * 32; T.fdid[i] = dv.getUint32(o, true); for (var k = 0; k < 7; k++) T.a[i * 7 + k] = dv.getFloat32(o + 4 + k * 4, true); }
+      T.state = 'ready';
+    }).catch(function () { T.state = 'none'; OBJ.errors++; }).then(function () { dirty = true; });
+  }
+
+  function oHideAll() {
+    Object.keys(OBJ.buckets).forEach(function (k) { var b = OBJ.buckets[k]; b.mesh.visible = false; b.mesh.count = 0; });
+    OBJ.drawn = 0; OBJ.tris = 0; OBJ.inRange = 0;
+  }
+  function oClear() {
+    Object.keys(OBJ.models).forEach(function (k) { oFreeModel(+k, OBJ.models[k]); });
+    Object.keys(OBJ.texs).forEach(function (k) { var e = OBJ.texs[k]; if (e.tex) try { e.tex.dispose(); } catch (x) { } });
+    Object.keys(OBJ.mats).forEach(function (k) { OBJ.mats[k].dispose(); });
+    OBJ.models = {}; OBJ.texs = {}; OBJ.mats = {}; OBJ.buckets = {}; OBJ.T = {}; OBJ.mem = 0; OBJ.texMem = 0; OBJ.drawn = 0; OBJ.tris = 0;
+  }
+
+  // ---- the pass
+  function updateObjects(now) {
+    if (!renderer || !scene) return;
+    var od = OD();
+    if (!od || !oGpuCheck() || !OBJ.base) { if (OBJ.drawn > 0 || OBJ.inRange > 0) oHideAll(); return; }
+    if (!oM) { oM = new THREE.Matrix4(); oQ = new THREE.Quaternion(); oE = new THREE.Euler(0, 0, 0, 'YXZ'); oP = new THREE.Vector3(); oS = new THREE.Vector3(); oSph = new THREE.Sphere(new THREE.Vector3(), 1); }
+    OBJ.passes++;
+    // the level's circle is around the spot you look at (the camera's target), so a normal map view shows the trees there; a camera further than 8 x the
+    // circle from a tree does not draw it (it would be a speck). The shader fades the circle's edge (OU).
+    var eye = camera.position, ex = prefs.exag, lim = od.dist, DEG = Math.PI / 180, fx = cam.tx, fz = cam.tz, eyeLim = lim * 8;
+    if (!OU.uOFocus.value) OU.uOFocus.value = new THREE.Vector3();
+    OU.uOFocus.value.set(fx, 0, fz); OU.uOLim.value = lim;
+    var fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    // the eye's height over the ground limits what is in range at all (looking down from far above, nothing is)
+    var lists = {}, inRange = 0, keepTiles = {};
+    var c0 = Math.floor((fx - lim) / TY), c1 = Math.floor((fx + lim) / TY), r0 = Math.floor((fz - lim) / TY), r1 = Math.floor((fz + lim) / TY);
+    for (var c = Math.max(0, c0); c <= Math.min(63, c1); c++) for (var r = Math.max(0, r0); r <= Math.min(63, r1); r++) {
+      var key = c * 64 + r;
+      if (!OBJ.tiles[key]) continue;
+      // the tile's square against the distance (on the ground plane; the height is checked per placement)
+      var nx = clamp(fx, c * TY, (c + 1) * TY), nz = clamp(fz, r * TY, (r + 1) * TY);
+      if (Math.hypot(nx - fx, nz - fz) > lim) continue;
+      keepTiles[key] = true;
+      var T = OBJ.T[key] || (OBJ.T[key] = { state: 'idle' });
+      if (T.state === 'idle') { oLoadTile(key, T); continue; }
+      if (T.state !== 'ready') continue;
+      T.last = now;
+      var a = T.a, lim2 = lim * lim, eye2 = eyeLim * eyeLim;
+      for (var i = 0; i < T.n; i++) {
+        var px = a[i * 7], py = a[i * 7 + 1] * ex, pz = a[i * 7 + 2], gx = px - fx, gz = pz - fz;
+        if (gx * gx + gz * gz > lim2) continue;
+        var dx = px - eye.x, dy = py - eye.y, dz = pz - eye.z;
+        if (dx * dx + dy * dy + dz * dz > eye2) continue;
+        var fd = T.fdid[i];
+        if (!OBJ.built[fd]) continue;
+        inRange++;
+        var e = OBJ.models[fd] || (OBJ.models[fd] = { state: 'idle', m: null, last: now });
+        if (e.state === 'idle') { if (OBJ.fetching < OBJ.maxFetch) oFetchModel(fd, e); continue; }
+        if (e.state !== 'ready') continue;
+        var s = a[i * 7 + 6];
+        oSph.center.set(px, py + e.m.cy * s, pz); oSph.radius = e.m.rad * s + 1;
+        if (!fr.intersectsSphere(oSph)) continue;
+        e.last = now;
+        (lists[fd] || (lists[fd] = [])).push(T, i);
+      }
+    }
+    // one InstancedMesh per model; its matrices: the placement (position with the height exaggeration, rotation YXZ as the buildings, uniform scale)
+    var drawn = 0, tris = 0, used = {};
+    Object.keys(lists).forEach(function (fdk) {
+      var l = lists[fdk], fd = +fdk, e = OBJ.models[fd], b = OBJ.buckets[fd], cnt = l.length / 2;
+      if (!b || b.cap < cnt) {
+        if (b) { scene.remove(b.mesh); b.mesh.dispose(); }
+        var cap = Math.max(8, Math.ceil(cnt * 1.5));
+        var mesh = new THREE.InstancedMesh(e.m.geo, e.m.mats, cap);
+        mesh.frustumCulled = false; mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(mesh); b = OBJ.buckets[fd] = { mesh: mesh, cap: cap };
+      }
+      for (var j = 0; j < cnt; j++) {
+        var T = l[j * 2], i = l[j * 2 + 1], a = T.a, o = i * 7;
+        oP.set(a[o], a[o + 1] * ex, a[o + 2]); oE.set(a[o + 3] * DEG, a[o + 4] * DEG, a[o + 5] * DEG, 'YXZ'); oQ.setFromEuler(oE); oS.set(a[o + 6], a[o + 6], a[o + 6]);
+        oM.compose(oP, oQ, oS); b.mesh.setMatrixAt(j, oM);
+      }
+      b.mesh.count = cnt; b.mesh.visible = true; b.mesh.instanceMatrix.needsUpdate = true;
+      used[fd] = true; drawn += cnt; tris += cnt * e.m.tris;
+    });
+    Object.keys(OBJ.buckets).forEach(function (k) { if (!used[k]) { var b = OBJ.buckets[k]; b.mesh.visible = false; b.mesh.count = 0; } });
+    OBJ.drawn = drawn; OBJ.tris = tris; OBJ.inRange = inRange;
+    // tiles far behind are let go; models not drawn for a while go when over the memory cap
+    Object.keys(OBJ.T).forEach(function (k) { var T = OBJ.T[k]; if (!keepTiles[k] && T.state !== 'loading' && now - (T.last || 0) > 4000) delete OBJ.T[k]; });
+    var capB = (OBJ.capOverride != null ? OBJ.capOverride : od.memMb) * 1048576;
+    if (OBJ.mem + OBJ.texMem > capB) {
+      var ents = Object.keys(OBJ.models).filter(function (k) { var e = OBJ.models[k]; return e.state === 'ready' && !used[k] && now - e.last > 2500; }).sort(function (x, y) { return OBJ.models[x].last - OBJ.models[y].last; });
+      for (var v = 0; v < ents.length && OBJ.mem + OBJ.texMem > capB * 0.85; v++) { oFreeModel(+ents[v], OBJ.models[ents[v]]); OBJ.evicted++; }
+    }
+    if (OBJ.fetching > 0) dirty = true;
+    oProbeTick(now);
+  }
+
+  // ---- the probe: after a switch on (or up), the frame time is watched for 2 seconds once the models are in; slow -> one level down, said in a toast
+  function oProbeStart() { OBJ.probe = { since: 0, frames: [], last: 0 }; }
+  function oProbeFrame(now) {
+    var p = OBJ.probe; if (!p || !p.since) return;
+    if (document.visibilityState !== 'visible') { p.frames = []; p.last = 0; return; }        // a hidden page's frames say nothing
+    if (p.last) p.frames.push(now - p.last);
+    p.last = now; dirty = true;                       // drawn every frame while it measures
+  }
+  function oProbeTick(now) {
+    var p = OBJ.probe; if (!p || !OD()) return;
+    if (!p.since) { if (OBJ.fetching === 0 && OBJ.drawn > 0) { p.since = now; dirty = true; } return; }
+    if (now - p.since < 2000 || p.frames.length < 20) return;
+    var f = p.frames.slice().sort(function (x, y) { return x - y; }), med = f[Math.floor(f.length / 2)];
+    OBJ.probe = null; OBJ.lastProbeMs = Math.round(med * 10) / 10;
+    if (med > 34) {
+      var i = OLEVELS.indexOf(OBJ.level), down = OLEVELS[Math.max(0, i - 1)];
+      OBJ.stepped = OBJ.level + '>' + down;
+      toast(down === 'off' ? 'Trees & objects are switched off: the 3D view got too slow with them (' + Math.round(med) + ' ms a frame).'
+        : 'Trees & objects stepped down to ' + down.charAt(0).toUpperCase() + down.slice(1) + ': the 3D view got slow (' + Math.round(med) + ' ms a frame).', false);
+      oSwitch(down, true);
+    }
+  }
+
+  // ---- the panel: the switch and the card
+  function objPanel(s) {
+    var row = el('div', 'v3r bl', '<span>Trees &amp; objects <i class="exp">experimental</i></span>');
+    var seg = el('div', 'v3r'); seg.innerHTML = '<span class="seg wide" id="v3obj"><button type="button" data-o="off">Off</button><button type="button" data-o="low">Low</button><button type="button" data-o="medium">Medium</button><button type="button" data-o="high">High</button></span>';
+    var note = el('div', 'v3n'); note.hidden = true;
+    var card = el('div', 'v3b'); card.hidden = true;
+    s.appendChild(row); s.appendChild(seg); s.appendChild(note); s.appendChild(card);
+    [].forEach.call(seg.querySelectorAll('button'), function (b) { b.addEventListener('click', function () { oSwitch(b.getAttribute('data-o')); }); });
+    OBJ.ui = { seg: seg, card: card, note: note };
+    oSync();
+  }
+  function oSwitch(level, auto) {
+    if (OLEVELS.indexOf(level) < 0 || level === OBJ.level) return;
+    if (level !== 'off' && !oGpuCheck()) { oSync(); return; }
+    var up = OLEVELS.indexOf(level) > OLEVELS.indexOf(OBJ.level);
+    OBJ.level = level; dirty = true; lastSel2 = 0;
+    if (level === 'off') { oHideAll(); OBJ.probe = null; }
+    else if (up && !auto) oProbeStart();
+    oSync();
+    send({ t: 'objects', level: level });
+  }
+  function oSync() {
+    if (!OBJ.ui) return;
+    var ok = !renderer || oGpuCheck();
+    [].forEach.call(OBJ.ui.seg.querySelectorAll('button'), function (b) {
+      var lv = b.getAttribute('data-o'), on = lv === OBJ.level;
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = !ok && lv !== 'off';
+    });
+    OBJ.ui.note.hidden = ok; OBJ.ui.note.textContent = ok ? '' : 'Not available: ' + OBJ.gpuWhy + '.';
+    oCard();
+  }
+  function oCard() {
+    if (!OBJ.ui) return;
+    var c = OBJ.ui.card, st = OBJ.st, ph = st ? st.phase : 'idle', html = '', cls = 'v3b', acts = [];
+    if (OBJ.level === 'off' || !st) { c.hidden = true; c.innerHTML = ''; return; }
+    if (ph === 'scanning') html = '<div class="bt">Counting the trees and objects...</div><div class="bs">This only looks at where they stand.</div>';
+    else if (ph === 'ask') {
+      html = '<div class="bt">' + esc(st.card || 'Show trees and objects in 3D.') + '</div><div class="bs">Experimental: they need a capable graphics card. Nothing is uploaded and nothing is written to the WoW folder.</div>';
+      acts = [{ id: 'build', text: st.done > 0 ? 'Continue' : 'Build now', primary: true }, { id: 'later', text: 'Not now' }];
+    } else if (ph === 'building' || ph === 'paused') {
+      var pct = st.total > 0 ? Math.min(100, st.done * 100 / st.total) : 0;
+      html = '<div class="bt">' + esc(st.text || '') + '</div><div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+      acts = [{ id: ph === 'paused' ? 'resume' : 'pause', text: ph === 'paused' ? 'Resume' : 'Pause' }, { id: 'cancel', text: 'Cancel' }];
+    } else if (ph === 'done') {
+      html = '<div class="bs">' + fmtN(st.placements) + ' trees and objects &middot; ' + (st.bytes > 0 ? (st.bytes / 1048576).toFixed(st.bytes < 10485760 ? 1 : 0) + ' MB on disk' : 'ready') + '</div>';
+    } else if (ph === 'error') {
+      cls += ' err'; html = '<div class="bt">' + esc(st.error || 'The trees and objects could not be read.') + '</div>'; acts = [{ id: 'build', text: 'Try again', primary: true }];
+    } else { c.hidden = true; c.innerHTML = ''; return; }
+    c.className = cls; c.innerHTML = html + (acts.length ? '<div class="ba"></div>' : '');
+    var ba = c.querySelector('.ba');
+    acts.forEach(function (a) {
+      var b = el('button', a.primary ? 'pri' : '', esc(a.text)); b.type = 'button'; b.setAttribute('data-a', a.id);
+      b.addEventListener('click', function () {
+        if (a.id === 'build') send({ t: 'obuild' });
+        else if (a.id === 'later') oSwitch('off');
+        else if (a.id === 'pause') send({ t: 'opause' });
+        else if (a.id === 'resume') send({ t: 'oresume' });
+        else if (a.id === 'cancel') send({ t: 'ocancel' });
+      });
+      ba.appendChild(b);
+    });
+    c.hidden = false;
+  }
+  function oKeys(list, into) { (list || []).forEach(function (k) { if (typeof k === 'number' && k >= 0 && k < 4096) into[k] = true; }); }
+  // the app's state message
+  function objState(m) {
+    OBJ.st = m;
+    var lv = OLEVELS.indexOf(m.level) >= 0 ? m.level : 'off';
+    if (lv !== OBJ.level) { OBJ.level = lv; if (lv === 'off') oHideAll(); }
+    if (m.all) { OBJ.built = {}; m.all.forEach(function (id) { OBJ.built[id] = true; }); }
+    if (m.fresh) m.fresh.forEach(function (id) { OBJ.built[id] = true; var e = OBJ.models[id]; if (e && e.state !== 'loading' && e.state !== 'idle') { var rev = (e.rev || 0) + 1; oFreeModel(id, e); e.rev = rev; } });
+    if (m.tiles) { OBJ.tiles = {}; oKeys(m.tiles, OBJ.tiles); }
+    oSync(); dirty = true; lastSel2 = 0;
+  }
+  function objInit(b) {
+    oClear();
+    OBJ.st = null; OBJ.built = {}; OBJ.tiles = {}; OBJ.level = 'off'; OBJ.base = ''; OBJ.errors = 0; OBJ.probe = null; OBJ.stepped = '';
+    if (!b) return;
+    OBJ.base = String(b.base || '');
+    OBJ.level = OLEVELS.indexOf(b.level) >= 0 ? b.level : 'off';
+    (b.models || []).forEach(function (id) { OBJ.built[id] = true; });
+    oKeys(b.tiles, OBJ.tiles);
+    // a saved level this graphics card cannot draw is put back to Off (and saved), with the reason in the panel
+    if (OBJ.level !== 'off' && renderer && !oGpuCheck()) { OBJ.level = 'off'; send({ t: 'objects', level: 'off' }); }
+  }
+  function objInfo() {
+    var ready = 0, loading = 0; Object.keys(OBJ.models).forEach(function (k) { var s = OBJ.models[k].state; if (s === 'ready') ready++; else if (s === 'loading') loading++; });
+    var meshes = 0, visible = 0; Object.keys(OBJ.buckets).forEach(function (k) { meshes++; if (OBJ.buckets[k].mesh.visible) visible++; });
+    var tiles = 0; Object.keys(OBJ.T).forEach(function (k) { if (OBJ.T[k].state === 'ready') tiles++; });
+    var st = OBJ.st || {};
+    return { level: OBJ.level, phase: st.phase || '', base: OBJ.base, built: Object.keys(OBJ.built).length, tilesListed: Object.keys(OBJ.tiles).length, tilesLoaded: tiles, inRange: OBJ.inRange, drawn: OBJ.drawn, tris: OBJ.tris,
+      modelsReady: ready, modelsLoading: loading, meshes: meshes, visibleMeshes: visible, textures: Object.keys(OBJ.texs).length, texLoaded: OBJ.texLoaded, materials: Object.keys(OBJ.mats).length,
+      memMb: Math.round((OBJ.mem + OBJ.texMem) / 1048576 * 10) / 10, evicted: OBJ.evicted, errors: OBJ.errors, passes: OBJ.passes, gpu: OBJ.gpu, gpuWhy: OBJ.gpuWhy, probing: !!OBJ.probe, lastProbeMs: OBJ.lastProbeMs || 0, stepped: OBJ.stepped,
+      card: OBJ.ui ? !OBJ.ui.card.hidden : false, cardText: OBJ.ui ? (function () { var t = OBJ.ui.card.querySelector('.bt') || OBJ.ui.card.querySelector('.bs'); return t ? t.textContent : ''; })() : '',
+      buttons: OBJ.ui ? [].map.call(OBJ.ui.card.querySelectorAll('button'), function (b) { return b.textContent; }) : [], note: OBJ.ui && !OBJ.ui.note.hidden ? OBJ.ui.note.textContent : '', drawCalls: renderer ? renderer.info.render.calls : 0 };
   }
 
   // ---------------------------------------------------------------- the live position layer ("me") in 3D: the trail draped over the ground, your dot, the events, Follow me
@@ -1633,6 +2037,7 @@
       case 'layerinfo': setCount(m.id, m.state === 'loading' ? '...' : m.state === 'empty' ? 'none' : String(m.count == null ? '' : m.count)); if (m.note && panelRows[m.id]) panelRows[m.id].row.title = m.note; break;
       case 'toast': toast(m.text, m.ok); break;
       case 'bstate': bldState(m); break;
+      case 'ostate': objState(m); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
       case 'me': if (inited) meMsg(m); break;
       case 'members': if (inited) membersMsg(m); break;
@@ -1655,6 +2060,7 @@
     Object.keys(meshes).forEach(function (k) { var mm = meshes[k]; if (mm.mesh) { scene.remove(mm.mesh); mm.mesh.geometry.dispose(); } clearWater(mm); if (mm.mat) mm.mat.dispose(); }); meshes = {}; waterActive = 0; waterLoaded = 0; waterFailed = 0;
     Object.keys(tex).forEach(function (k) { var e = tex[k]; if (e.tex && !e.shared) try { e.tex.dispose(); } catch (x) { } }); tex = {}; canvasTexCount = 0;
     bldInit(m.buildings);
+    objInit(m.objects);
     Object.keys(pointLayers).forEach(function (k) { scene.remove(pointLayers[k].obj); pointLayers[k].obj.geometry.dispose(); }); pointLayers = {};
     Object.keys(lineLayers).forEach(function (k) { scene.remove(lineLayers[k].group); }); lineLayers = {};
     Object.keys(ringLayers).forEach(function (k) { ringLayers[k].zones.forEach(function (z) { scene.remove(z.obj); z.obj.geometry.dispose(); }); }); ringLayers = {};
@@ -1829,6 +2235,12 @@
     buildingClick: function (id) { var b = BLD.ui && BLD.ui.card.querySelector('[data-a="' + id + '"]'); if (b) b.click(); return !!b; },
     buildingCap: function (mb) { BLD.capOverride = mb; dirty = true; return 1; },
     buildingMode: function (mode) { bSwitch(mode); return BLD.mode; },
+    objects: function () { return JSON.stringify(objInfo()); },
+    objectsLevel: function (lv, auto) { oSwitch(lv, !!auto); return OBJ.level; },
+    objectsClick: function (id) { var b = OBJ.ui && OBJ.ui.card.querySelector('[data-a="' + id + '"]'); if (b) b.click(); return !!b; },
+    objectsCap: function (mb) { OBJ.capOverride = mb; dirty = true; return 1; },
+    objectsGpu: function (ok, why) { OBJ.gpu = !!ok; OBJ.gpuWhy = ok ? '' : String(why || 'a test'); oSync(); return OBJ.gpu; },
+    objectsProbe: function () { oProbeStart(); dirty = true; return 1; },
     xz2ll: xz2ll, ll2xz: ll2xz, groundXZ: function (x, z) { return groundY(x, z); }, distToZ: distToZ, zToDist: zToDist,
     holes: function () { return JSON.stringify({ n: Object.keys(holeMap).length, drawn: !!(holeMesh && holeMesh.parent), rev: cfg && cfg.rev || 0 }); }
   };

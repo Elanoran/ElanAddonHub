@@ -415,6 +415,7 @@ namespace ElansAddonHub
             WorldMapCacheRow.Tag = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine() + " Made from your game files, read-only; nothing is uploaded.";
             ClearWorldMapButton.IsEnabled = !busy && ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
             UpdateBuildingsLine();
+            UpdateObjectsLine();
             UpdateLearnedFlightsLine();
         }
 
@@ -454,6 +455,24 @@ namespace ElansAddonHub
                 System.Windows.Automation.AutomationProperties.SetName(b, "Remove the 3D buildings of " + r.Name);
                 b.Click += (s, e) => { ElansAddonHub.Services.WorldMap.BuildingsService.Remove(id); UpdateBuildingsLine(); };
                 WorldMapBuildingsButtons.Children.Add(b);
+            }
+        }
+
+        // 3.2 "trees & objects": the same per continent (read from the game files again the next time the switch asks)
+        public void UpdateObjectsLineForTest() => UpdateObjectsLine();
+        void UpdateObjectsLine()
+        {
+            var rows = ElansAddonHub.Services.WorldMap.ObjectsService.Rows();
+            WorldMapObjectsRow.Tag = ElansAddonHub.Services.WorldMap.ObjectsService.StatusLine();
+            WorldMapObjectsButtons.Children.Clear();
+            foreach (var r in rows)
+            {
+                var id = r.MapId;
+                var b = new Button { Style = (Style)FindResource("Button.M"), Content = "Remove " + r.Name + " (" + ElansAddonHub.Services.WorldMap.WorldMapCache.SizeText(r.Bytes) + ")", HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(8, WorldMapObjectsButtons.Children.Count == 0 ? 0 : 6, 0, 0) };
+                System.Windows.Automation.AutomationProperties.SetName(b, "Remove the trees and objects of " + r.Name);
+                b.Click += (s, e) => { ElansAddonHub.Services.WorldMap.ObjectsService.Remove(id); UpdateObjectsLine(); };
+                WorldMapObjectsButtons.Children.Add(b);
             }
         }
 
