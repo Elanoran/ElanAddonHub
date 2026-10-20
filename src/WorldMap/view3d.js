@@ -963,7 +963,7 @@
     dirty = false; frameN++;
     oProbeFrame(now);
     updateCamera();
-    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateBuildings(now); updateObjects(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
+    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateBuildings(now); updateObjects(now); updateGround(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
     var shown = updateOverlays();
     shimmer(now);
     renderer.render(scene, camera);
@@ -1322,7 +1322,7 @@
   // the colour is turned linear in the shader). Additive parts (glows) draw without depth writes; modulate parts and parts hidden in the first frame were left out by the app.
   // Needs WebGL 2 and s3tc (every Windows GPU WebView2 runs on has both); without them the switch says why and stays Off. A probe after switching on watches the frame time
   // for 2 seconds and steps one level down when it is slow; a lost graphics context switches it Off (saved) before the app falls back to the flat map.
-  var ODETAIL = { low: { dist: 150, memMb: 96 }, medium: { dist: 300, memMb: 192 }, high: { dist: 600, memMb: 384 } };
+  var ODETAIL = { low: { dist: 150, memMb: 96, ground: 0 }, medium: { dist: 300, memMb: 192, ground: 300 }, high: { dist: 600, memMb: 384, ground: 600 } };
   var OLEVELS = ['off', 'low', 'medium', 'high'];
   var OBJ = { level: 'off', base: '', st: null, built: {}, tiles: {}, T: {}, models: {}, texs: {}, mats: {}, buckets: {}, fetching: 0, maxFetch: 6, mem: 0, texMem: 0, drawn: 0, tris: 0, inRange: 0,
     errors: 0, loaded: 0, texLoaded: 0, evicted: 0, passes: 0, gpu: null, gpuWhy: '', probe: null, stepped: '', ui: null, capOverride: null, s3tc: null };
@@ -1600,6 +1600,185 @@
     oProbeTick(now);
   }
 
+  // ---------------------------------------------------------------- the real ground near the spot you look at (3.2, the Trees & objects levels Medium and High)
+  // The app makes a tile's ground file when it is first asked for (GroundService: objects/g/<col>_<row>.bin, objects/gt/<fdid>.bin; see WorldMapGround.cs for the
+  // format). Within the level's ground distance of the spot you look at, a terrain tile wears a second material: the minimap picture's Lambert, patched to paint
+  // each chunk with its up-to-4 game textures blended by the game's alpha maps (8 repeats per chunk, as the lab found matched the game), times the game's vertex
+  // colours, fading to the picture over the last quarter of the distance. Textures share one array (256 px layers, grown when full); a tile's alpha maps and
+  // colours are its own small textures. A chunk without ground keeps the picture.
+  var GD = { tiles: {}, arr: null, arrData: null, cap: 0, layerOf: {}, used: 0, texs: {}, loading: 0, maxLoad: 3, shown: 0, errors: 0, made: 0, bright: 0.8 };
+  var G_FS = [
+    '#ifdef USE_MAP',
+    '  vec4 gMini = texture2D( map, vUv );',
+    '  vec3 gCol = gMini.rgb;',
+    '  vec2 gTl = vGW.xz / 533.3333333 - uGTile;',
+    '  float gF = smoothstep( uGLim * 0.75, uGLim, distance( vGW.xz, uOFocus.xz ) );',
+    '  if ( gF < 1.0 ) {',
+    '    vec2 gC = clamp( floor( gTl * 16.0 ), 0.0, 15.0 ); vec2 gLoc = gTl * 16.0 - gC;',
+    '    vec4 gIds = floor( texelFetch( uGL, ivec2( gC ), 0 ) * 255.0 + 0.5 );',
+    '    if ( gIds.x < 253.5 ) {',
+    '      vec3 gA = texture( uGA, ( gC * 64.0 + clamp( gLoc * 64.0, 0.5, 63.5 ) ) / 1024.0 ).rgb;',
+    '      vec4 gW = vec4( max( 0.0, 1.0 - ( gA.r + gA.g + gA.b ) ), gA );',
+    '      if ( gIds.y > 254.5 ) gW.y = 0.0; if ( gIds.z > 254.5 ) gW.z = 0.0; if ( gIds.w > 254.5 ) gW.w = 0.0;',
+    '      gW /= max( 1e-4, gW.x + gW.y + gW.z + gW.w );',
+    '      vec2 gT = gTl * 128.0; vec2 gDx = dFdx( gT ), gDy = dFdy( gT );',
+    '      vec3 gS = gW.x * textureGrad( uGT, vec3( gT, gIds.x ), gDx, gDy ).rgb;',
+    '      if ( gW.y > 0.0 ) gS += gW.y * textureGrad( uGT, vec3( gT, gIds.y ), gDx, gDy ).rgb;',
+    '      if ( gW.z > 0.0 ) gS += gW.z * textureGrad( uGT, vec3( gT, gIds.z ), gDx, gDy ).rgb;',
+    '      if ( gW.w > 0.0 ) gS += gW.w * textureGrad( uGT, vec3( gT, gIds.w ), gDx, gDy ).rgb;',
+    '      gS = pow( gS, vec3( 2.2 ) ) * clamp( texture( uGC, ( gTl * 128.0 + 0.5 ) / 129.0 ).rgb * ( 255.0 / 127.0 ), 0.0, 2.0 ) * uGBright;',
+    '      gCol = mix( gS, gMini.rgb, gF );',
+    '    }',
+    '  }',
+    '  diffuseColor.rgb *= gCol;',
+    '#endif'].join('\n');
+  function gMaterial(T, m) {
+    var mat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: m.mat.map });
+    var u = { uGTile: { value: new THREE.Vector2(T.c, T.r) }, uGA: { value: T.alpha }, uGL: { value: T.layers }, uGC: { value: T.color }, uGT: { value: GD.arr }, uGBright: { value: GD.bright } };
+    mat.userData.g = u;
+    mat.onBeforeCompile = function (sh) {
+      if (!OU.uOFocus.value) OU.uOFocus.value = new THREE.Vector3();
+      Object.keys(u).forEach(function (k) { sh.uniforms[k] = u[k]; });
+      sh.uniforms.uOFocus = OU.uOFocus; sh.uniforms.uGLim = OU.uGLim;
+      sh.vertexShader = 'varying vec3 vGW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+      sh.fragmentShader = 'precision highp sampler2DArray;\nvarying vec3 vGW; uniform vec2 uGTile; uniform sampler2D uGA; uniform sampler2D uGL; uniform sampler2D uGC; uniform sampler2DArray uGT; uniform float uGBright; uniform vec3 uOFocus; uniform float uGLim;\n'
+        + sh.fragmentShader.replace('#include <map_fragment>', G_FS);
+    };
+    mat.customProgramCacheKey = function () { return 'g'; };
+    return mat;
+  }
+
+  // ---- the texture array: one 256 px layer per ground texture; grown (copied) when full, at most 192 layers
+  function gArray(need) {
+    if (GD.arr && need <= GD.cap) return GD.arr;
+    var cap = Math.min(192, Math.max(32, GD.cap * 2, need)), px = 256 * 256 * 4;
+    var data = new Uint8Array(cap * px);
+    if (GD.arrData) data.set(GD.arrData.subarray(0, Math.min(GD.arrData.length, data.length)));
+    var a = new THREE.DataArrayTexture(data, 256, 256, cap);
+    a.format = THREE.RGBAFormat; a.wrapS = a.wrapT = THREE.RepeatWrapping; a.minFilter = THREE.LinearMipmapLinearFilter; a.magFilter = THREE.LinearFilter; a.generateMipmaps = true; a.anisotropy = D().aniso; a.needsUpdate = true;
+    if (GD.arr) GD.arr.dispose();
+    GD.arr = a; GD.arrData = data; GD.cap = cap;
+    Object.keys(GD.tiles).forEach(function (k) { var T = GD.tiles[k]; if (T.mat) T.mat.userData.g.uGT.value = a; });
+    return a;
+  }
+  async function gInflate(u8) {
+    var s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+  // a ground texture's layer (fetched once); -1 while it comes, 255 when it cannot
+  function gLayer(fdid) {
+    var e = GD.texs[fdid];
+    if (e) return e.layer;
+    if (GD.used >= 192) return 255;
+    e = GD.texs[fdid] = { layer: -1 };
+    fetch(OBJ.base + '/gt/' + fdid + '.bin').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      if (!buf || buf.byteLength < 12) { e.layer = 255; return null; }
+      var dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x5447324D || dv.getUint16(4, true) !== 256 || dv.getUint16(6, true) !== 256) { e.layer = 255; GD.errors++; return null; }     // "M2GT"
+      return gInflate(new Uint8Array(buf, 8)).then(function (px) {
+        if (px.length !== 256 * 256 * 4 || GD.used >= 192) { e.layer = 255; GD.errors++; return; }
+        var L = GD.used++; gArray(GD.used); GD.arrData.set(px, L * 256 * 256 * 4); GD.arrDirty = true; e.layer = L; dirty = true;
+      });
+    }).catch(function () { e.layer = 255; GD.errors++; }).then(function () { gTilesWaiting(); });
+    return -1;
+  }
+  // tiles whose textures came: their layer table is filled in
+  function gTilesWaiting() {
+    Object.keys(GD.tiles).forEach(function (k) {
+      var T = GD.tiles[k]; if (T.state !== 'textures') return;
+      var ids = T.fdids.map(gLayer); if (ids.some(function (x) { return x < 0; })) return;
+      var lt = new Uint8Array(16 * 16 * 4);
+      for (var i = 0; i < 1024; i++) { var s = T.slots[i]; lt[i] = s === 254 ? 254 : s === 255 || s >= ids.length ? 255 : ids[s]; }
+      for (var c = 0; c < 256; c++) if (lt[c * 4] === 255) lt[c * 4] = 254;           // a chunk whose first texture could not be read keeps the picture
+      T.layers = new THREE.DataTexture(lt, 16, 16, THREE.RGBAFormat); T.layers.magFilter = T.layers.minFilter = THREE.NearestFilter; T.layers.needsUpdate = true;
+      T.state = 'ready'; GD.made++; dirty = true;
+    });
+  }
+  // ask the app to make the tile's files (gneed); its answer (gready) starts the fetch. Asked at most once a tile, a few at a time.
+  function gAsk(key, T) { T.state = 'asked'; GD.loading++; send({ t: 'gneed', c: T.c, r: T.r }); }
+  function gReady(m) {
+    var T = GD.tiles[m.c * 64 + m.r];
+    if (!T || T.state !== 'asked') return;
+    GD.loading--;
+    if (!m.ok) { T.state = 'none'; return; }
+    gLoadTile(m.c * 64 + m.r, T);
+  }
+  function gLoadTile(key, T) {
+    T.state = 'loading'; GD.loading++;
+    fetch(OBJ.base + '/g/' + T.c + '_' + T.r + '.bin').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      if (!buf || buf.byteLength < 16) { T.state = 'none'; return; }
+      var dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x3247324D) { T.state = 'none'; GD.errors++; return; }      // "M2G2"
+      var n = dv.getUint16(12, true), o = 16; T.fdids = [];
+      for (var i = 0; i < n; i++) { T.fdids.push(dv.getUint32(o, true)); o += 4; }
+      T.slots = new Uint8Array(buf.slice(o, o + 1024)); o += 1024;
+      var al = dv.getInt32(o, true); o += 4; var aZ = new Uint8Array(buf, o, al); o += al;
+      var cl = dv.getInt32(o, true); o += 4; var cZ = new Uint8Array(buf, o, cl);
+      return Promise.all([gInflate(aZ), gInflate(cZ)]).then(function (r) {
+        var a3 = r[0], c3 = r[1];
+        if (a3.length !== 1024 * 1024 * 3 || c3.length !== 129 * 129 * 3) { T.state = 'none'; GD.errors++; return; }
+        var a4 = new Uint8Array(1024 * 1024 * 4), c4 = new Uint8Array(129 * 129 * 4);
+        var N = 1024 * 1024;      // planar: layer 1, then 2, then 3
+        for (var p = 0, q = 0; p < N; p++, q += 4) { a4[q] = a3[p]; a4[q + 1] = a3[N + p]; a4[q + 2] = a3[2 * N + p]; a4[q + 3] = 255; }
+        for (var p2 = 0, q2 = 0; p2 < c3.length; p2 += 3, q2 += 4) { c4[q2] = c3[p2]; c4[q2 + 1] = c3[p2 + 1]; c4[q2 + 2] = c3[p2 + 2]; c4[q2 + 3] = 255; }
+        T.alpha = new THREE.DataTexture(a4, 1024, 1024, THREE.RGBAFormat); T.alpha.magFilter = T.alpha.minFilter = THREE.LinearFilter; T.alpha.needsUpdate = true;
+        T.color = new THREE.DataTexture(c4, 129, 129, THREE.RGBAFormat); T.color.magFilter = T.color.minFilter = THREE.LinearFilter; T.color.needsUpdate = true;
+        T.state = 'textures'; gArray(1);
+        T.fdids.forEach(gLayer); gTilesWaiting();
+      });
+    }).catch(function () { T.state = 'none'; GD.errors++; }).then(function () { GD.loading--; dirty = true; });
+  }
+  function gFreeTile(key, T) {
+    var m = meshes[key];
+    if (m && m.mesh && T.mat && m.mesh.material === T.mat) m.mesh.material = m.mat;
+    if (T.mat) T.mat.dispose(); if (T.alpha) T.alpha.dispose(); if (T.color) T.color.dispose(); if (T.layers) T.layers.dispose();
+    delete GD.tiles[key];
+  }
+  function gClear() {
+    GD.loading = 0;
+    Object.keys(GD.tiles).forEach(function (k) { gFreeTile(k, GD.tiles[k]); });
+    if (GD.arr) GD.arr.dispose();
+    GD.arr = null; GD.arrData = null; GD.cap = 0; GD.layerOf = {}; GD.used = 0; GD.texs = {}; GD.shown = 0;
+  }
+  // the pass (with the trees): which tiles wear the ground; tiles far behind let it go
+  function updateGround(now) {
+    var od = OD(), lim = od && OBJ.gpu ? od.ground : 0;
+    var fx = cam.tx, fz = cam.tz, eye = camera.position, shown = 0, keep = {};
+    if (!OU.uGLim) OU.uGLim = { value: lim };
+    OU.uGLim.value = lim;
+    var far = lim > 0 && Math.hypot(eye.x - fx, eye.y - cam.ty, eye.z - fz) > lim * 8;
+    Object.keys(meshes).forEach(function (k) {
+      var m = meshes[k]; if (!m.mesh) return;
+      var t = m.t, nx = clamp(fx, t.c * TY, (t.c + 1) * TY), nz = clamp(fz, t.r * TY, (t.r + 1) * TY);
+      var near = lim > 0 && !far && OBJ.base && Math.hypot(nx - fx, nz - fz) <= lim;
+      var T = GD.tiles[k];
+      if (near) {
+        keep[k] = true;
+        if (!T) T = GD.tiles[k] = { c: t.c, r: t.r, state: 'idle', last: now };
+        T.last = now;
+        if (T.state === 'idle' && GD.loading < GD.maxLoad) gAsk(k, T);
+        if (T.state === 'ready' && m.mat.map) {
+          if (!T.mat) T.mat = gMaterial(T, m);
+          if (T.mat.map !== m.mat.map) { T.mat.map = m.mat.map; T.mat.needsUpdate = true; }
+          if (m.mesh.material !== T.mat) m.mesh.material = T.mat;
+          shown++;
+          return;
+        }
+      }
+      if (T && T.mat && m.mesh.material === T.mat) m.mesh.material = m.mat;
+    });
+    Object.keys(GD.tiles).forEach(function (k) { var T = GD.tiles[k]; if (!keep[k] && T.state !== 'loading' && T.state !== 'asked' && now - (T.last || 0) > 5000) gFreeTile(k, T); });
+    GD.shown = shown;
+    // the array goes to the graphics card whole (with its mip levels): new textures are sent together, at most every 400 ms (one upload per texture made
+    // frames of 100 ms while a new area came in)
+    if (GD.arrDirty && GD.arr && now - (GD.uploaded || 0) > 400) { GD.arr.needsUpdate = true; GD.arrDirty = false; GD.uploaded = now; GD.uploads = (GD.uploads || 0) + 1; }
+    if (GD.loading > 0 || GD.arrDirty) dirty = true;
+  }
+  function groundInfo() {
+    var st = {}; Object.keys(GD.tiles).forEach(function (k) { var s = GD.tiles[k].state; st[s] = (st[s] || 0) + 1; });
+    return { lim: OU.uGLim ? OU.uGLim.value : 0, tiles: st, shown: GD.shown, layers: GD.used, capacity: GD.cap, errors: GD.errors, made: GD.made, bright: GD.bright, uploads: GD.uploads || 0 };
+  }
+
   // ---- the probe: after a switch on (or up), the frame time is watched for 2 seconds once the models are in; slow -> one level down, said in a toast
   function oProbeStart() { OBJ.probe = { since: 0, frames: [], last: 0 }; }
   function oProbeFrame(now) {
@@ -1625,8 +1804,8 @@
 
   // ---- the panel: the switch and the card
   function objPanel(s) {
-    var row = el('div', 'v3r bl', '<span>Trees &amp; objects <i class="exp">experimental</i></span>');
-    var seg = el('div', 'v3r'); seg.innerHTML = '<span class="seg wide" id="v3obj"><button type="button" data-o="off">Off</button><button type="button" data-o="low">Low</button><button type="button" data-o="medium">Medium</button><button type="button" data-o="high">High</button></span>';
+    var row = el('div', 'v3r bl', '<span>Trees &amp; ground <i class="exp">experimental</i></span>');
+    var seg = el('div', 'v3r'); seg.innerHTML = '<span class="seg wide" id="v3obj"><button type="button" data-o="off" title="The minimap ground and the buildings, as before">Off</button><button type="button" data-o="low" title="Trees and objects within 150 yards of the spot you look at">Low</button><button type="button" data-o="medium" title="Trees, objects and the real ground within 300 yards of the spot you look at">Medium</button><button type="button" data-o="high" title="Trees, objects and the real ground within 600 yards (a capable graphics card)">High</button></span>';
     var note = el('div', 'v3n'); note.hidden = true;
     var card = el('div', 'v3b'); card.hidden = true;
     s.appendChild(row); s.appendChild(seg); s.appendChild(note); s.appendChild(card);
@@ -1698,7 +1877,7 @@
     oSync(); dirty = true; lastSel2 = 0;
   }
   function objInit(b) {
-    oClear();
+    oClear(); gClear();
     OBJ.st = null; OBJ.built = {}; OBJ.tiles = {}; OBJ.level = 'off'; OBJ.base = ''; OBJ.errors = 0; OBJ.probe = null; OBJ.stepped = '';
     if (!b) return;
     OBJ.base = String(b.base || '');
@@ -1717,7 +1896,8 @@
       modelsReady: ready, modelsLoading: loading, meshes: meshes, visibleMeshes: visible, textures: Object.keys(OBJ.texs).length, texLoaded: OBJ.texLoaded, materials: Object.keys(OBJ.mats).length,
       memMb: Math.round((OBJ.mem + OBJ.texMem) / 1048576 * 10) / 10, evicted: OBJ.evicted, errors: OBJ.errors, passes: OBJ.passes, gpu: OBJ.gpu, gpuWhy: OBJ.gpuWhy, probing: !!OBJ.probe, lastProbeMs: OBJ.lastProbeMs || 0, stepped: OBJ.stepped,
       card: OBJ.ui ? !OBJ.ui.card.hidden : false, cardText: OBJ.ui ? (function () { var t = OBJ.ui.card.querySelector('.bt') || OBJ.ui.card.querySelector('.bs'); return t ? t.textContent : ''; })() : '',
-      buttons: OBJ.ui ? [].map.call(OBJ.ui.card.querySelectorAll('button'), function (b) { return b.textContent; }) : [], note: OBJ.ui && !OBJ.ui.note.hidden ? OBJ.ui.note.textContent : '', drawCalls: renderer ? renderer.info.render.calls : 0 };
+      buttons: OBJ.ui ? [].map.call(OBJ.ui.card.querySelectorAll('button'), function (b) { return b.textContent; }) : [], note: OBJ.ui && !OBJ.ui.note.hidden ? OBJ.ui.note.textContent : '', drawCalls: renderer ? renderer.info.render.calls : 0,
+      ground: groundInfo() };
   }
 
   // ---------------------------------------------------------------- the live position layer ("me") in 3D: the trail draped over the ground, your dot, the events, Follow me
@@ -2044,6 +2224,7 @@
       case 'toast': toast(m.text, m.ok); break;
       case 'bstate': bldState(m); break;
       case 'ostate': objState(m); break;
+      case 'gready': if (inited && typeof m.c === 'number' && typeof m.r === 'number') gReady(m); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
       case 'me': if (inited) meMsg(m); break;
       case 'members': if (inited) membersMsg(m); break;
@@ -2252,6 +2433,8 @@
       if (sat != null) OU.uOSat.value = sat; if (r != null) OU.uOTint.value.set(r, g, b); dirty = true;
       return JSON.stringify({ sat: OU.uOSat.value, tint: OU.uOTint.value.toArray() });
     },
+    ground: function () { return JSON.stringify(groundInfo()); },
+    groundBright: function (v) { GD.bright = v; Object.keys(GD.tiles).forEach(function (k) { var T = GD.tiles[k]; if (T.mat) T.mat.userData.g.uGBright.value = v; }); dirty = true; return v; },
     objectsProbe: function () { oProbeStart(); dirty = true; return 1; },
     // what is drawn at a point of the canvas (CSS pixels): the nearest tree / object whose box covers it on screen (the models' vertices are not kept
     // in the page once they are on the graphics card, so this goes by the box), with its parts (batches) and their materials

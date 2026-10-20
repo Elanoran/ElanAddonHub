@@ -192,7 +192,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/Atlas/(CairnData|AtlasQuery\.(Cairn|Nodes|Creature|Item))\.cs$", "worldmap");      // 2.93: the Cairn's places on the maps (MainWindow.WorldMapTest.Cairn.cs)
             R(@"^src/MainWindow\.WorldMapTest\.Islands\.cs$", "worldmapreal");      // its real Zephras Isle part (the sea colour check)    // the how-to cards (the live position's), the live position wiring
             R(@"^src/(Services/WorldMap/(Wmo\w+|AdtObjects|WorldMapBuildings\w*)|MainWindow\.BuildingsTest(\.(?!Real)\w+)?|SettingsPage(\.xaml)?)\.cs$", "buildings", "worldmap");
-            R(@"^src/(Services/WorldMap/(M2Mesh|ObjTexture|AdtObjects|WorldMapObjects\w*|WorldMapBuildings(Service)?)|MainWindow\.ObjectsTest(\.(?!Real)\w+)?)\.cs$", "objects", "worldmap");
+            R(@"^src/(Services/WorldMap/(M2Mesh|ObjTexture|Tex0File|WorldMapGround|AdtObjects|WorldMapObjects\w*|WorldMapBuildings(Service)?)|MainWindow\.ObjectsTest(\.(?!Real)\w+)?)\.cs$", "objects", "worldmap");
             R(@"^src/WorldMap/(view3d\.js|worldmap\.css)$", "objects");
             R(@"^src/(Services/Atlas/AtlasInstances\.cs|AtlasPage\.Entrance\.cs|MainWindow\.InstancesTest(\.(?!Real\.|Audit\.)\w+)?\.cs)$", "instances", "atlaspage", "atlasbrowse");
             R(@"^src/Services/(InventoryData|IconStore|IconSheet|Blp|Casc|CharPortrait|LuaData|ZoneNames)\.cs$", "inventory");

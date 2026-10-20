@@ -815,7 +815,8 @@ namespace ElansAddonHub
             c.WebResourceRequested += (o, e) =>
             {
                 var u = e.Request.Uri ?? "";
-                if (u.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || u.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) || IsOwnUrl(u)) return;
+                if (u.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || u.StartsWith("blob:", StringComparison.OrdinalIgnoreCase)) return;
+                if (IsOwnUrl(u)) return;
                 BlockedForTest++; if (BlockedUrlsForTest.Count < 20) BlockedUrlsForTest.Add(u);
                 e.Response = c.Environment.CreateWebResourceResponse(null, 403, "Blocked", "");
             };
@@ -948,6 +949,15 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.Objects: case WorldMapMessageType.OBuild: case WorldMapMessageType.OPause: case WorldMapMessageType.OResume: case WorldMapMessageType.OCancel:
                     if (mode3d) obj.Handle(m, mapId);
+                    break;
+                case WorldMapMessageType.GNeed:
+                    // 3.2: the real ground of a tile near the spot the page looks at: made from the game files now (once; then kept), then the page is told
+                    if (mode3d && mapId >= 0)
+                    {
+                        int gm = mapId, gc = m.Col, gr = m.Row;
+                        Task.Run(() => { try { return GroundService.MakeTile(gm, gc, gr); } catch (Exception ex) { Util.Log("world map ground: " + ex.Message); return false; } })
+                            .ContinueWith(t => Dispatcher.BeginInvoke(new Action(() => { if (mapId == gm) Post(Json.Write(new Dictionary<string, object> { ["t"] = "gready", ["c"] = gc, ["r"] = gr, ["ok"] = t.Result })); })));
+                    }
                     break;
                 case WorldMapMessageType.Prefs:
                     if (Settings != null) { Settings.WorldMap3dDetail = m.Detail; Settings.WorldMapExag = Math.Round(m.Exag, 1); SaveSettings?.Invoke(); }

@@ -199,6 +199,43 @@ namespace ElansAddonHub
                 Check("setting: a saved level is one of the four, anything else is Off", WorldMapObjects.Normalize("high") == "high" && WorldMapObjects.Normalize(null) == "off" && WorldMapObjects.Normalize("ULTRA") == "off");
             });
 
+            // ---- the real ground (3.2): tex0 layers and alpha maps, the root's vertex colours, the tile file, a ground texture, the page's request
+            Part("ground", () =>
+            {
+                byte[] Chunk(string tag, byte[] data) { var r = new byte[8 + data.Length]; for (int i = 0; i < 4; i++) r[i] = (byte)tag[3 - i]; BitConverter.GetBytes(data.Length).CopyTo(r, 4); data.CopyTo(r, 8); return r; }
+                byte[] Cat(params byte[][] parts) { var l = new List<byte>(); foreach (var p in parts) l.AddRange(p); return l.ToArray(); }
+                // chunk 0: two layers, textures 11 (base) and 12, layer 1's alpha RLE: fill 64 x 64 with 200 (32 runs of 128)
+                var rle = new List<byte>(); for (int i = 0; i < 32; i++) { rle.Add(0x80 | 127); rle.Add(200); rle.Add(0x80 | 1); rle.Add(200); }
+                var mcly = new byte[32]; BitConverter.GetBytes(0).CopyTo(mcly, 0); BitConverter.GetBytes(1).CopyTo(mcly, 16); BitConverter.GetBytes(0x100u | 0x200u).CopyTo(mcly, 20); BitConverter.GetBytes(0).CopyTo(mcly, 24);
+                var mdid = new byte[8]; BitConverter.GetBytes(11).CopyTo(mdid, 0); BitConverter.GetBytes(12).CopyTo(mdid, 4);
+                var tex0 = Cat(Chunk("MDID", mdid), Chunk("MCNK", Cat(Chunk("MCLY", mcly), Chunk("MCAL", rle.ToArray()))));
+                var t = Tex0File.Parse(tex0, true, null);
+                Check("tex0: the texture list, a chunk's two layers and its RLE alpha map (64 x 64 of 200)", t.Problem == null && t.Diffuse.SequenceEqual(new[] { 11, 12 }) && t.Chunks[0].Layers.Count == 2 && t.Chunks[0].Layers[1].Alpha != null
+                    && t.Chunks[0].Layers[1].Alpha.All(b => b == 200) && t.AlphaRle == 1 && t.Chunks[1] == null);
+                // the root: chunk (ix 1, iy 0) has an MCCV whose first entry (B, G, R, A) = (10, 20, 30, 0)
+                var hdr = new byte[128]; BitConverter.GetBytes(1).CopyTo(hdr, 4); BitConverter.GetBytes(0).CopyTo(hdr, 8);
+                var mccv = new byte[145 * 4]; for (int i = 0; i < 145; i++) { mccv[i * 4] = 127; mccv[i * 4 + 1] = 127; mccv[i * 4 + 2] = 127; } mccv[0] = 10; mccv[1] = 20; mccv[2] = 30;
+                var root = Chunk("MCNK", Cat(hdr, Chunk("MCCV", mccv)));
+                var tile = WorldMapGround.MakeTile(31, 48, tex0, root, true, out int ntex, out var gp);
+                int o = 16 + ntex * 4; var slots = tile.Skip(o).Take(1024).ToArray(); o += 1024;
+                int al = BitConverter.ToInt32(tile, o); var alpha = WorldMapGround.Inflate(tile, o + 4, al); o += 4 + al;
+                int cl = BitConverter.ToInt32(tile, o); var col = WorldMapGround.Inflate(tile, o + 4, cl);
+                int c1 = (0 * 129 + 8) * 3;     // chunk ix 1: its first corner is pixel (8, 0)
+                Check("ground tile: \"M2G2\", the textures in slot order, chunk 0's slots (0, 1, none, none), every other chunk without ground (the minimap stays), the alpha map (planar: layer 1's plane first), the colours as R, G, B at the chunk's corner",
+                    gp == null && tile[3] == '2' && ntex == 2 && BitConverter.ToUInt32(tile, 16) == 11 && BitConverter.ToUInt32(tile, 20) == 12 && slots[0] == 0 && slots[1] == 1 && slots[2] == 255 && slots[3] == 255
+                    && slots.Where((b, i) => i >= 4 && i % 4 == 0).All(b => b == WorldMapGround.NoGround) && alpha.Length == 1024 * 1024 * 3 && alpha[0] == 200 && alpha[1024 * 1024] == 0 && alpha[63] == 200 && alpha[64] == 0 && alpha[63 * 1024] == 200 && alpha[64 * 1024] == 0
+                    && col.Length == 129 * 129 * 3 && col[c1] == 30 && col[c1 + 1] == 20 && col[c1 + 2] == 10 && col[0] == 127 && tile[14] == 1);
+                var none = WorldMapGround.MakeTile(1, 2, null, null, true, out int n0, out var p0);
+                Check("ground tile: a tile without a texture file is all minimap (" + p0 + ")", none != null && n0 == 0 && p0 != null && none.Skip(16).Take(1024).Where((b, i) => i % 4 == 0).All(b => b == WorldMapGround.NoGround));
+                var gt = WorldMapGround.MakeTexture(ObjBlp());
+                Check("ground texture: \"M2GT\", 256 x 256 RGBA (an 8 x 8 texture resized), opaque", gt != null && gt[3] == 'T' && BitConverter.ToUInt16(gt, 4) == 256 && WorldMapGround.Inflate(gt, 8, gt.Length - 8) is byte[] px && px.Length == 256 * 256 * 4 && px[3] == 255
+                    && WorldMapGround.MakeTexture(null) == null && WorldMapGround.MakeTexture(new byte[300]) == null);
+                WorldMapMessage Pm(string j) => WorldMapProtocol.Parse(j, out _);
+                var gn = Pm("{\"t\":\"gneed\",\"c\":31,\"r\":48}");
+                Check("protocol: gneed {c, r} takes a tile (0 - 63); anything else is refused", gn != null && gn.Type == WorldMapMessageType.GNeed && gn.Col == 31 && gn.Row == 48
+                    && Pm("{\"t\":\"gneed\",\"c\":64,\"r\":1}") == null && Pm("{\"t\":\"gneed\",\"c\":1.5,\"r\":1}") == null && Pm("{\"t\":\"gneed\",\"c\":-1,\"r\":1}") == null && Pm("{\"t\":\"gneed\"}") == null);
+            });
+
             // ---- the developer's pipe (Services/DevPipe.cs) exists only in a build made with -p:ElansDevPipe=true (Tools/devoutpost.ps1): never in this one
             Part("dev pipe", () =>
             {

@@ -157,6 +157,28 @@ namespace ElansAddonHub
                     notes.Add("note real objects off, " + v.name + ": " + Math.Round(fps0, 1) + " fps orbiting, " + oOff?.Int("drawn") + " drawn, " + oOff?.Int("drawCalls") + " calls");
                     res[v.name + "-off"] = oOff;
                 }
+                // ---- the real ground (3.2): made on demand for the tiles near the spot you look at; Westfall's open fields at Medium
+                {
+                    var swg = System.Diagnostics.Stopwatch.StartNew(); GroundService.ResetForTest();
+                    bool made = GroundService.MakeTile(0, 30, 50); long tileMs = swg.ElapsedMilliseconds;
+                    var gdir = Path.Combine(WorldMapObjects.Dir(WorldMapCache.MapDir(0)), "g");
+                    long tileBytes = File.Exists(WorldMapGround.TileFile(WorldMapObjects.Dir(WorldMapCache.MapDir(0)), 30, 50)) ? new FileInfo(WorldMapGround.TileFile(WorldMapObjects.Dir(WorldMapCache.MapDir(0)), 30, 50)).Length : 0;
+                    await WmEval("window.wm3.objectsLevel('medium', true)");
+                    await View(-10650, 1050, 160, 90, 28);
+                    var og = await Settle();
+                    for (int w = 0; w < 30; w++) { var gi = Json.Obj(Json.Parse(await WmEval("window.wm3.ground()")) as string ?? "{}"); if (gi != null && gi.Int("shown") >= 2) break; await Task.Delay(500); await WmEval("window.wm3.step(2,130)"); }
+                    var gd = Json.Obj(Json.Parse(await WmEval("window.wm3.ground()")) as string ?? "{}");
+                    var pngG = SelfTestClock.ShotsOn || !string.IsNullOrEmpty(shotEnv) ? await WorldMapView.CaptureForTest() : null; if (pngG != null) File.WriteAllBytes(Shot("westfall-ground"), pngG);
+                    long onDisk = Directory.Exists(gdir) ? Directory.EnumerateFiles(gdir).Sum(f => new FileInfo(f).Length) : 0;
+                    var gtdir = Path.Combine(WorldMapObjects.Dir(WorldMapCache.MapDir(0)), "gt");
+                    long texDisk = Directory.Exists(gtdir) ? Directory.EnumerateFiles(gtdir).Sum(f => new FileInfo(f).Length) : 0;
+                    notes.Add("note real ground: one tile and its textures made in " + tileMs + " ms (" + (tileBytes / 1024) + " KB for the tile); the page at Westfall: " + Json.Write(gd) + "; on disk now: tiles " + (onDisk / 1024) + " KB, textures " + (texDisk / 1024) + " KB");
+                    Check("real ground: a tile is made from the game files on demand (" + tileMs + " ms, " + (tileBytes / 1024) + " KB) and the page shows the real ground near the spot it looks at (" + gd?.Int("shown") + " tiles, " + gd?.Int("layers") + " textures, " + gd?.Int("errors") + " errors)",
+                        made && tileBytes > 1000 && gd != null && gd.Int("shown") >= 2 && gd.Int("layers") >= 4 && gd.Int("errors") == 0);
+                    await WmEval("window.wm3.objectsLevel('low', true)"); await Task.Delay(400); await WmEval("window.wm3.step(3,130)");
+                    var gLow = Json.Obj(Json.Parse(await WmEval("window.wm3.ground()")) as string ?? "{}");
+                    Check("real ground: Low shows no real ground (the minimap only; " + gLow?.Int("shown") + " tiles)", gLow != null && gLow.Int("shown") == 0);
+                }
                 int D(string k) => res.TryGetValue(k, out var o) && o != null ? o.Int("drawn") : -1;
                 Check("real objects page: Elwynn (" + D("goldshire-medium") + " near Goldshire, " + D("elwynn-forest-medium") + " in the forest) and Duskwood (" + D("duskwood-medium") + ") have trees and objects drawn at Medium, with textures and no read errors",
                     D("goldshire-medium") > 50 && D("elwynn-forest-medium") > 100 && D("duskwood-medium") > 100 && res.Values.Where(o => o != null).All(o => o.Int("errors") == 0) && res["duskwood-medium"].Int("texLoaded") > 20);

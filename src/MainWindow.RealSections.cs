@@ -50,7 +50,7 @@ namespace ElansAddonHub
                 DungeonPlans.RootOverride = savedPRoot; DungeonPlans.SourceForTest = savedPSrc; DungeonPlans.AutoSeconds = savedPAuto; DungeonPlans.Enabled = savedPEn; DungeonPlans.WowRoot = savedPWow; DungeonPlans.ResetForTest();
                 MapRender.DirOverride = savedMapDir; MapRender.TileSourceForTest = savedMapTiles; MapRender.ForgetFailuresForTest(); IconStore.WowRoot = savedIcon;
                 BuildingsService.SourceForTest = null; BuildingsService.GroundForTest = null; BuildingsService.ModelDelayMsForTest = 0; BuildingsService.ResetForTest();
-                ObjectsService.SourceForTest = null; ObjectsService.ModelDelayMsForTest = 0; ObjectsService.ResetForTest();
+                ObjectsService.SourceForTest = null; ObjectsService.ModelDelayMsForTest = 0; ObjectsService.ResetForTest(); GroundService.SourceForTest = null; GroundService.ResetForTest();
                 ClassicAtlas.Use(null);
                 try { ResetAtlasForTest(); } catch (Exception) { }
             }
