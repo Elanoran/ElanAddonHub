@@ -46,7 +46,7 @@ umask 077
 
 # letters of any language in names (the server accepts the same: letters, digits, space, _ and -)
 for loc in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
-  if locale -a 2>/dev/null | grep -qix "$loc"; then export LC_ALL="$loc"; break; fi
+  if locale -a 2>/dev/null | grep -ix "$loc" >/dev/null; then export LC_ALL="$loc"; break; fi
 done
 
 if [ -n "${LODGE_CODES_FILE:-}" ]; then FILE="$LODGE_CODES_FILE"

@@ -57,7 +57,7 @@ health_url() {
 wait_health() {
   local url i; url="$(health_url)"
   for i in $(seq 1 "${LODGE_HEALTH_TRIES:-30}"); do
-    if "$CURL" -fs "$url" 2>/dev/null | grep -q '"ok"'; then return 0; fi
+    if "$CURL" -fs "$url" 2>/dev/null | grep '"ok"' >/dev/null; then return 0; fi
     sleep "${LODGE_HEALTH_SLEEP:-1}"
   done
   return 1
@@ -72,7 +72,7 @@ net_major_of() { "${GIT[@]}" show "$1:server/Lodge.Server/Lodge.Server.csproj" 2
 check_sdk() {
   local major; major="$(net_major_of "$1")"
   [ -n "$major" ] || return 0
-  if "$DOTNET" --list-sdks 2>/dev/null | grep -q "^${major}\."; then return 0; fi
+  if "$DOTNET" --list-sdks 2>/dev/null | grep "^${major}\." >/dev/null; then return 0; fi
   if "$APT_CACHE" policy "dotnet-sdk-${major}.0" 2>/dev/null | grep -E '^ *Candidate:' | grep -vq '(none)'; then
     say "The .NET ${major} SDK is not installed yet - install.sh will install dotnet-sdk-${major}.0"; return 0
   fi

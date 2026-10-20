@@ -108,7 +108,7 @@ do_restore() {
   base="$(basename "$DATA_DIR")"; parent="$(dirname "$DATA_DIR")"
   # only a plain archive of the data folder: no absolute paths, no "..", everything under <base>/
   tar -tzf "$arc" >/dev/null || die "$arc is not a readable archive"
-  if tar -tzf "$arc" | grep -qvE "^$base(/.*)?\$" || tar -tzf "$arc" | grep -qE '(^|/)\.\.(/|$)'; then
+  if tar -tzf "$arc" | grep -vE "^$base(/.*)?\$" >/dev/null || tar -tzf "$arc" | grep -E '(^|/)\.\.(/|$)' >/dev/null; then
     die "$arc does not look like a Lodge backup (unexpected paths) - refusing"
   fi
 
@@ -145,7 +145,7 @@ do_restore() {
   "$SYSTEMCTL" start "$SERVICE" || die "could not start $SERVICE - check: journalctl -u $SERVICE -n 50"
   local url i; url="$(health_url)"
   for i in $(seq 1 "${LODGE_HEALTH_TRIES:-20}"); do
-    if "$CURL" -fs "$url" 2>/dev/null | grep -q '"ok"'; then log "health check OK ($url)"; return 0; fi
+    if "$CURL" -fs "$url" 2>/dev/null | grep '"ok"' >/dev/null; then log "health check OK ($url)"; return 0; fi
     sleep "${LODGE_HEALTH_SLEEP:-1}"
   done
   die "restored, but $url did not answer - check: journalctl -u $SERVICE -n 50 (old data: $aside)"

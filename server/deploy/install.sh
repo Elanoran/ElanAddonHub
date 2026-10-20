@@ -17,7 +17,7 @@ if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
 # The result is self-contained: the service itself needs no .NET runtime on the machine.
 NET_MAJOR="$(grep -oE '<TargetFramework>net[0-9]+' "$REPO_DIR/server/Lodge.Server/Lodge.Server.csproj" | grep -oE '[0-9]+$' || true)"
 NET_MAJOR="${NET_MAJOR:-10}"
-have_sdk() { command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep -q "^${NET_MAJOR}\."; }
+have_sdk() { command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep "^${NET_MAJOR}\." >/dev/null; }
 if ! have_sdk; then
   echo "== Installing the .NET ${NET_MAJOR} SDK (dotnet-sdk-${NET_MAJOR}.0)"
   apt-get update -y || true
