@@ -18,6 +18,7 @@ namespace ElansAddonHub.Lodge
         LodgeSession session;
         string inviteRoleFor;
         string lastLink, lastSecretLink;
+        string deviceLinkFor;          // the member a "Send a new device link" was started for (the result says they will be told)
 
         public InviteForm()
         {
@@ -97,7 +98,10 @@ namespace ElansAddonHub.Lodge
             }
             InviteHelp.Text = links
                 ? (guest ? "A guest link lets people in as guests (chat and voice, no files). It stops working after the chosen number of people, or when it expires."
-                         : "The link works once. Send it privately: it lets one person in, and then it is used up. For a person who is already in, it adds another device.")
+                         : "The link works once. Send it privately: it lets one person in, and then it is used up. "
+                           + (session.MyRole == "owner"
+                               ? "For a person who is already in, it adds another device to their account" + (session.SupportsDeviceNotice ? " - and they are told, with a way to remove it." : ".")
+                               : "Only the Guild Master can add a device for someone who is already in."))
                 : "Your Lodge server is older than 2.10, so this makes a permanent code. Update the server (sudo lodge-update) to send one-time links instead.";
             InviteHelp.Foreground = (Brush)Application.Current.Resources[links ? "Brush.Text.Secondary" : "Brush.Warn"];
         }
@@ -150,6 +154,9 @@ namespace ElansAddonHub.Lodge
             InviteName.Text = name ?? "";
             var opt = RankOptions().FirstOrDefault(r => r.Id == role);
             InviteResult.Visibility = Visibility.Collapsed;
+            // Lodge 2.31.2: a device for someone who is already in is the Guild Master's alone (the server refuses officers too)
+            if (session?.MyRole != "owner") { SetStatus("Only the Guild Master can send a device link to someone who is already in"); return; }
+            deviceLinkFor = name;
             // never fall back to another rank: a device link must carry the person's own rank, or nothing at all
             if (opt == null) { SetStatus("You can only send a device link to people ranked below you"); return; }
             InviteRole.SelectedItem = opt;
@@ -184,6 +191,9 @@ namespace ElansAddonHub.Lodge
         {
             var title = inv.IsGuest ? "Guest link" + (inv.Max > 1 ? $" for {inv.Max} people" : "") + " - copied" : $"Invite for {inv.Name} ({MemberVM.RoleName(inv.Role)}) - copied";
             var note = $"Works {(inv.Max > 1 ? $"for {inv.Max} people, " : "once, ")}expires {AgoText.In(inv.Expires, inv.Now)}. Send it privately (a DM, not a channel). It is shown only now.";
+            if (!inv.IsGuest && deviceLinkFor != null && string.Equals(deviceLinkFor, inv.Name, StringComparison.OrdinalIgnoreCase) && session.SupportsDeviceNotice)
+                note += $" {inv.Name} will be told that you added a device to their account, and can remove it.";
+            deviceLinkFor = null;
             SetResult(title, link, InviteLinks.MakeWeb(session.LodgeAddress, SecretOf(link)), note);
             InviteName.Text = "";
             SetStatus(null);
@@ -231,6 +241,7 @@ namespace ElansAddonHub.Lodge
         public string WebLinkForTest => lastSecretLink;
         public string TitleForTest => InviteTitle.Text;
         public string NoteForTest => InviteNote.Text;
+        public string HelpForTest => InviteHelp.Text;
         public string ClickHintForTest => InviteClickHint.Text;
         public bool ResultVisibleForTest => InviteResult.Visibility == Visibility.Visible;
         public bool AdvancedVisibleForTest => AdvancedButton.Visibility == Visibility.Visible;

@@ -200,11 +200,12 @@ namespace ElansAddonHub
             session.LeaveRefused += ShowTransfer;
             session.Left += () => { lodge.SignOut("You left the lodge. Your messages stay, with your name on them."); RefreshSection(); };
             FillLodgeInfo();
-            session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); UpdateLodgePosRow(); };
+            session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); FillDeviceNotices(); UpdateLodgePosRow(); };
             UpdateLodgePosRow();
             session.AdminMembers += FillAdmin;
             session.AdminPurged += m => GmStatus.Text = m.Atlas > 0 ? $"Took {m.Atlas} Atlas item(s) shared by {m.Name} back out. They stay a member." : $"{m.Name} had nothing in the Atlas.";
             session.DevicesChanged += FillDevices;
+            session.DeviceNoticesChanged += FillDeviceNotices;
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
             InitProfile();
             InitArmory();
@@ -952,6 +953,31 @@ namespace ElansAddonHub
             UpdateDevicesCard();
         }
 
+        // Lodge 2.31.2: "A new device 'X' was added to your account by Y on <date>. Not you? Remove it here."
+        void FillDeviceNotices()
+        {
+            if (DeviceNoticeRows == null) return;
+            var rows = session.SupportsDeviceNotice ? session.DeviceNotices.ToList() : new List<DeviceNoticeVM>();
+            DeviceNoticeRows.ItemsSource = rows;
+            DeviceNoticeRows.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void RemoveNoticed_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is string id)) return;
+            if (RemoveNoticedConfirm != null ? RemoveNoticedConfirm() : Dialog.Confirm(Window.GetWindow(this), "Remove this device?",
+                "It is signed out of your account at once. If someone else added it without asking you, tell the Guild Master.", "Remove", danger: true))
+                session.RemoveNoticedDevice(id);
+        }
+
+        void DismissNotice_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is string id) session.DismissDeviceNotice(id);
+        }
+
+        // the self-test answers the confirmation instead of a dialog; null = ask the person
+        public Func<bool> RemoveNoticedConfirm;
+
         // what the "Your devices" card says, depending on how this PC signs in
         void UpdateDevicesCard()
         {
@@ -1054,6 +1080,9 @@ namespace ElansAddonHub
         // test hooks
         public void InviteForTest(string name, string role) => session.Invite(name, role);
         public List<InviteRowVM> InviteRowsForTest => GmInvites.RowsForTest;
+        public List<DeviceNoticeVM> DeviceNoticeRowsForTest => DeviceNoticeRows.Visibility == Visibility.Visible ? (DeviceNoticeRows.ItemsSource as List<DeviceNoticeVM>) ?? new List<DeviceNoticeVM>() : new List<DeviceNoticeVM>();
+        public void RemoveNoticedClickForTest(string id) => RemoveNoticed_Click(new Button { Tag = id }, null);
+        public void DismissNoticeClickForTest(string id) => DismissNotice_Click(new Button { Tag = id }, null);
         public List<DeviceRowVM> MyDeviceRowsForTest => (MyDeviceRows.ItemsSource as List<DeviceRowVM>) ?? new List<DeviceRowVM>();
         public List<DeviceRowVM> AllDeviceRowsForTest => (AllDeviceRows.ItemsSource as List<DeviceRowVM>) ?? new List<DeviceRowVM>();
         public List<MemberRow> MemberRowsForTest => (MemberRows.ItemsSource as List<MemberRow>) ?? new List<MemberRow>();

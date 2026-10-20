@@ -29,6 +29,7 @@ namespace Elans.Shared
             "lfg-full",    // the sign-up card is full
             "room-full",   // the voice room is full (with room)
             "last-owner",  // the last Guild Master can't leave
+            "owner-only",  // only the Guild Master may do that (2.31.2: a device link for someone who is already in)
             "address",     // the Cairn: the public address is refused or can't change any more
             "atlas",       // the Cairn: the Atlas is switched off on this server
         };

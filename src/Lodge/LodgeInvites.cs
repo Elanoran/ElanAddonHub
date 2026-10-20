@@ -256,9 +256,10 @@ namespace ElansAddonHub.Lodge
         public static List<string> Offered(string myRole, bool serverHasLinks) =>
             myRole == "owner" || !serverHasLinks ? All.ToList() : All.Where(r => MemberVM.RoleLevel(r) < MemberVM.RoleLevel(myRole)).ToList();
 
-        // may I send this member a new device link? (officers: only people below them)
+        // may I send this member a new device link? Only the Guild Master (Lodge 2.31.2 refuses officers: a device link for someone who is
+        // already in would let an officer become them). theirRole is kept for the callers; it no longer changes the answer.
         public static bool CanSendDeviceLink(string myRole, bool canInvite, bool serverHasLinks, string theirRole, bool guest) =>
-            canInvite && serverHasLinks && !guest && (myRole == "owner" || MemberVM.RoleLevel(theirRole) < MemberVM.RoleLevel(myRole));
+            canInvite && serverHasLinks && !guest && myRole == "owner";
     }
 
     // The sign-in this PC keeps for one lodge. A device token (DPAPI-protected) replaces the old permanent code.
@@ -268,6 +269,43 @@ namespace ElansAddonHub.Lodge
         {
             if (string.IsNullOrEmpty(s.LodgeDeviceId)) { s.LodgeDeviceId = Guid.NewGuid().ToString("N"); }
             return s.LodgeDeviceId;
+        }
+
+        // 3.1.2: the id this PC gives one Lodge when it joins (POST /exchange). Each Lodge gets its own, so two Lodges can't tell they have the
+        // same PC: HMAC-SHA256(key = the stored random id, message = the Lodge's normalized address), the first 128 bits in hex - 32 characters
+        // like the stored id (the Lodge takes any id up to 64 characters; it only uses it so a re-join from this PC replaces its old device).
+        // The Lodge this PC was already signed in to before 3.1.2 keeps the plain id it has always been sent.
+        public static string DeviceIdFor(Settings s, string lodgeUrl)
+        {
+            MigrateDeviceId(s);
+            var key = DeviceId(s);
+            if (!string.IsNullOrEmpty(s.LodgeDeviceIdLegacyUrl) && InviteLinks.SameOrigin(s.LodgeDeviceIdLegacyUrl, lodgeUrl)) return key;
+            return PerLodgeId(key, lodgeUrl);
+        }
+
+        public static string PerLodgeId(string key, string lodgeUrl)
+        {
+            using var h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(key ?? ""));
+            var mac = h.ComputeHash(Encoding.UTF8.GetBytes(AddressForId(lodgeUrl)));
+            return Convert.ToHexString(mac, 0, 16).ToLowerInvariant();
+        }
+
+        // scheme://host[:port]/path - the host lower-case (punycode), the default port and a trailing slash left out, so one Lodge is one address
+        public static string AddressForId(string lodgeUrl)
+        {
+            var norm = LodgeSession.NormalizeUrl(lodgeUrl ?? "") ?? "";
+            if (!Uri.TryCreate(norm, UriKind.Absolute, out var u)) return norm.ToLowerInvariant();
+            var path = u.AbsolutePath.TrimEnd('/');
+            return u.Scheme.ToLowerInvariant() + "://" + u.IdnHost.ToLowerInvariant() + (u.IsDefaultPort ? "" : ":" + u.Port) + path;
+        }
+
+        // once: a PC that already had a saved sign-in (and so had sent its plain id) keeps that id for that one Lodge
+        public static void MigrateDeviceId(Settings s)
+        {
+            if (s == null || s.LodgeDeviceIdPerLodge) return;
+            s.LodgeDeviceIdPerLodge = true;
+            if (!string.IsNullOrEmpty(s.LodgeDeviceId) && !string.IsNullOrWhiteSpace(s.LodgeUrl) && (HasToken(s) || HasCode(s)))
+                s.LodgeDeviceIdLegacyUrl = s.LodgeUrl;
         }
 
         public static string DeviceName(Settings s) =>
@@ -368,17 +406,32 @@ namespace ElansAddonHub.Lodge
     public sealed class DeviceVM
     {
         public string Id, Owner, DeviceName, Ip, Role;
+        public string AddedBy;                                      // Lodge 2.31.2: someone else added it to the account (null = their own)
         public long Created, LastSeen, Now;
         public bool Current, Online;
         public string Title => string.IsNullOrEmpty(DeviceName) ? "Unknown device" : DeviceName;
-        public string Detail => (Online ? "Online now" : "Last seen " + AgoText.Ago(LastSeen, Now)) + (string.IsNullOrEmpty(Ip) ? "" : " · " + Ip);
+        public string Detail => (Online ? "Online now" : "Last seen " + AgoText.Ago(LastSeen, Now)) + (string.IsNullOrEmpty(Ip) ? "" : " · " + Ip)
+            + (string.IsNullOrEmpty(AddedBy) ? "" : " · added by " + SafeFile.Text(AddedBy));
         public string Who => string.IsNullOrEmpty(Owner) ? "Guest" : Owner;
 
         // devices' / admin.devices' rows (typed: shared/Elans.Shared/Lodge/DeviceMessages.cs DeviceView)
         public static DeviceVM From(DeviceView v, long now) => new DeviceVM
         {
-            Id = v.Id, Owner = v.Name, DeviceName = v.Device, Ip = v.Ip, Role = v.Role,
+            Id = v.Id, Owner = v.Name, DeviceName = v.Device, Ip = v.Ip, Role = v.Role, AddedBy = string.IsNullOrEmpty(v.AddedBy) ? null : v.AddedBy,
             Created = v.Created, LastSeen = v.LastSeen, Current = v.Current, Online = v.Online, Now = now,
         };
+    }
+
+    // Lodge 2.31.2 (device.added): someone else added a device to my account. Shown as a toast and as a line in Settings > Lodge > Your devices.
+    public sealed class DeviceNoticeVM
+    {
+        public string Id, DeviceName, By;
+        public long At;
+        public string Device => string.IsNullOrWhiteSpace(DeviceName) ? "Unknown device" : SafeFile.Text(DeviceName);
+        public string Who => string.IsNullOrWhiteSpace(By) ? "someone" : By == "console" ? "the server's console" : SafeFile.Text(By);
+        public string When => At > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(At).ToLocalTime().ToString("d MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "an unknown date";
+        public string Text => $"A new device '{Device}' was added to your account by {Who} on {When}. Not you? Remove it here.";
+
+        public static DeviceNoticeVM From(DeviceAddedMsg m) => new DeviceNoticeVM { Id = m.Id, DeviceName = m.Name, By = m.By, At = m.At };
     }
 }

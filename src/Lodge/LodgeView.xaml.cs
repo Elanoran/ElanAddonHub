@@ -560,7 +560,7 @@ namespace ElansAddonHub.Lodge
             try
             {
                 var s = Session.Settings;
-                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s), NameBox.Text);
+                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceIdFor(s, url), NameBox.Text);
                 if (!res.Ok)
                 {
                     if (res.Reason == "name-required") NameCaption.Text = NameCaptionOwner;
@@ -880,7 +880,7 @@ namespace ElansAddonHub.Lodge
             PopReset.Visibility = Session.CanManage && !popCard.Member.IsMe && (popCard.Member.HasAvatar || popCard.Member.HasDisplayName) ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        // "Send a new device link": owners and officers, for people below them (officers) who are members (not guests, not me)
+        // "Send a new device link": the Guild Master only (Lodge 2.31.2), for members (not guests, not me)
         void UpdateDeviceLinkRow(string theirRole)
         {
             var m = popMember;

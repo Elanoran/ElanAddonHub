@@ -10,7 +10,7 @@ namespace ElansAddonHub.Lodge
 {
     // What a toast is about. Reminders (events with a time) come later: add a kind here, give it a setting in
     // ToastCenter.Enabled and call Push - nothing else needs to change.
-    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event, Realms }
+    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event, Realms, Security }
 
     public class ToastItem
     {
@@ -49,7 +49,7 @@ namespace ElansAddonHub.Lodge
         public Brush Color => Who != null ? Who.Color : Avatar.Res("Brush.Accent");
         public Brush IconBrush => Who?.IconBrush;
         public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
-        public string Initial => Who != null ? Who.Initial : Kind == ToastKind.Summary || Kind == ToastKind.Health ? "!" : Avatar.Initial(Sender ?? "H");
+        public string Initial => Who != null ? Who.Initial : Kind == ToastKind.Summary || Kind == ToastKind.Health || Kind == ToastKind.Security ? "!" : Avatar.Initial(Sender ?? "H");
         public Brush NameBrush => Who != null ? Who.ClassBrushOrText : Avatar.Res("Brush.Text.Primary");
         // the personal avatar and class badge come from the member (the hub's own toasts have none)
         public System.Windows.Media.ImageSource AvatarImage => Who?.AvatarImage;
@@ -123,7 +123,7 @@ namespace ElansAddonHub.Lodge
         {
             var now = Clock();
             // coalesce a burst: same kind + channel still on screen
-            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms);
+            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms && it.Kind != ToastKind.Security);
             if (same != null)
             {
                 same.Count++;
@@ -135,7 +135,7 @@ namespace ElansAddonHub.Lodge
             var vm = new ToastVM
             {
                 Kind = it.Kind, KickerText = it.Kicker, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
-                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event || it.Kind == ToastKind.Realms ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
+                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event || it.Kind == ToastKind.Realms || it.Kind == ToastKind.Security ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
                 Text = it.Text, Opacity = 0,
             };
             Visible.Add(vm);

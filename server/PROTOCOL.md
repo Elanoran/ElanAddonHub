@@ -1,6 +1,6 @@
 # Lodge protocol
 
-This describes the Lodge server as of 2.31.1; the sections below say which server version added what.
+This describes the Lodge server as of 2.31.2; the sections below say which server version added what.
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -314,8 +314,8 @@ A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server
 
 ### WebSocket (client to server)
 
-- `admin.invite.create` `{kind: "person"|"guest", name, role, hours (1-720; 0 = server default 168), uses (guest, 1-50)}` - owner and officer (officers: ranks below their own; for an existing name the invite adds a device with that person's current rank)
-- `admin.invites` · `admin.invite.revoke` `{id}` · `admin.devices` `{name?}` - owner and officer
+- `admin.invite.create` `{kind: "person"|"guest", name, role, hours (1-720; 0 = server default 168), uses (guest, 1-50)}` - owner and officer (officers: ranks below their own, and only for a name that doesn't exist yet; for an existing name the invite adds a device with that person's current rank - the Guild Master only since 2.31.2, an officer gets `error` `{code: "owner-only"}`; see the 2.31.2 additions)
+- `admin.invites` · `admin.invite.revoke` `{id}` · `admin.devices` `{name?}` - owner and officer (2.31.2: an officer's `admin.devices` lists only the devices of ranks below their own - members, veterans, guests; the Guild Master sees all; your own are always in `devices`)
 - `device.list` - your own devices (a guest sees only theirs) · `device.revoke` `{id}` - your own, or a lower rank's (owner: anyone's)
 - `admin.retire` `{name, force?}` - owner: the person's permanent code stops working (`admin.members` entries carry `hasCode` and `devices`)
 
@@ -323,7 +323,7 @@ A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server
 
 - `welcome` adds `canInvite`, `canRetire`, `device: {id, name}` (tokens only)
 - `admin.invite.created` `{id, kind, name, role, by, created, expires (unix ms), max, uses, used, expired, revoked, pending, secret}` - the only place the secret appears
-- `admin.invites` `{now, invites:[{...as above, no secret}]}` · `devices` / `admin.devices` `{name, now, devices:[{id, name, role, device, created, lastSeen, ip (coarse), current, online}]}`
+- `admin.invites` `{now, invites:[{...as above, no secret}]}` · `devices` / `admin.devices` `{name, now, devices:[{id, name, role, device, created, lastSeen, ip (coarse), current, online, addedBy? (2.31.2)}]}`
 - A revoked device's socket is closed (1008, "This device was signed out"); clients don't reconnect after that.
 - Typed (stage 2): `device.list`, `device.revoke`, `admin.devices` (the ask and the answer), `devices`, and the 2.12 `member.leave` / `member.left`
   are classes in `shared/Elans.Shared/Lodge/DeviceMessages.cs` (`DeviceListMsg`, `DeviceRevokeMsg`, `AdminDevicesGetMsg`, `DevicesMsg`,
@@ -331,6 +331,23 @@ A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server
   `AdminMessages.cs` (see the first list). A device is named by its id; no token (or its hash) is in any of them. `join` / `leave` / `user`
   (presence, carrying the member's `user` entry) are not part of this group.
 
+
+## 2.31.2 additions (device links for existing members; feature `devicenotice`; optional for clients)
+
+Detect: the welcome's `features` has `"devicenotice"`. An Outpost that doesn't see it hides the notice UI; an older Outpost ignores the new frame and field.
+
+- **Owner only.** `admin.invite.create` `{kind: "person", name}` for a name that already exists (it adds a device to that member's account) is the
+  Guild Master's alone. An officer gets `error` `{code: "owner-only", text}` and nothing is made. Officers still invite NEW people below their rank,
+  and guest links, as before. Every other rule is unchanged.
+- **Added by.** A device that an invite made by someone else adds to an existing member's account records who made the invite (their login
+  name; `console` for a `lodge-admin` owner-recovery link) and when (the device's `created`). The device rows of `devices` / `admin.devices`
+  carry it as `addedBy` (left out for a member's own device: their own invite, a link they made for themselves, an upgraded code, a new person).
+- **The member is told.** When such a device is first used (`POST /exchange`), the member's other connected devices get
+  `device.added` `{id, name, by, at}` - `id` the new device's id (to sign it out with `device.revoke`), `name` its device name, `by` who added it,
+  `at` unix ms. When none of their other devices is connected, the Lodge keeps the notice (`<data>/device-notices`, at most 20 per member) and sends
+  the same frame right after the `welcome` of their next connect from any other device (never to the new device itself). Each notice is sent once,
+  then forgotten; leaving or being removed drops it. No token, invite or hash is in it.
+- Typed: `DeviceAddedMsg` and `DeviceView.AddedBy` in `shared/Elans.Shared/Lodge/DeviceMessages.cs`.
 
 ## 2.11 additions (raid / event calendar; all optional for clients)
 
@@ -874,7 +891,7 @@ Not Lodge messages (never on this socket): the Atlas world-map page's own messag
 | Chat | `edit` · `delete` · `history:before` · `search` | `edited` · `deleted` · `history:page` · `search:result` | `msg` · `react` · `pin` · `unpin` · `typing` |
 | Looking for group | `lfg:join` · `lfg:maybe` · `lfg:leave` · `lfg:close` · `lfg:cancel` | `lfg` | - |
 | Profiles | `profile:get` · `profile:set` · `profile:reset` | `profile` · `profile:data` | - |
-| Guild Master and officer tools, devices, leaving | `admin.invite` · `admin.role` · `admin.remove` · `admin.purge` · `admin.channel.add` · `admin.channel.remove` · `admin.invite.create` · `admin.invite.revoke` · `admin.retire` · `admin.lodge.set` · `mod.kick` · `mod.mute` · `device.list` · `device.revoke` · `member.leave` | `admin.invited` · `admin.purged` · `admin.invite.created` · `lodge.info` · `devices` · `member.left` | `admin.members` · `admin.invites` · `admin.devices` |
+| Guild Master and officer tools, devices, leaving | `admin.invite` · `admin.role` · `admin.remove` · `admin.purge` · `admin.channel.add` · `admin.channel.remove` · `admin.invite.create` · `admin.invite.revoke` · `admin.retire` · `admin.lodge.set` · `mod.kick` · `mod.mute` · `device.list` · `device.revoke` · `member.leave` | `admin.invited` · `admin.purged` · `admin.invite.created` · `lodge.info` · `devices` · `member.left` · `device.added` | `admin.members` · `admin.invites` · `admin.devices` |
 | Calendar | `cal:create` · `cal:edit` · `cal:cancel` · `cal:signup` · `cal:leave` | `cal:events` | `cal:range` |
 | Shared flight times and learned flight paths | `flights.share` · `flights.get` · `flights.routes.share` · `flights.routes.get` | `flights.shared` · `flights.data` · `flights.routes.shared` · `flights.routes.data` | - |
 | The Atlas pool | `atlas.share` · `atlas.get` | `atlas.shared` · `atlas.data` | - |

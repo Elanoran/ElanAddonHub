@@ -59,25 +59,43 @@ namespace Elans.Shared
     // (Perm.Invite) every member's devices (the answer to admin.devices, and to device.revoke of someone else's)
     public sealed class AdminDevicesMsg : LodgeDeviceListMsg<AdminDevicesMsg> { public const string Type = LodgeMsg.AdminDevices; protected override string MsgType => Type; }
 
-    // a device { id, name ("" for a guest), role, device (its name), created, lastSeen (unix ms), ip (coarse), current (the one asking), online }
+    // a device { id, name ("" for a guest), role, device (its name), created, lastSeen (unix ms), ip (coarse), current (the one asking), online,
+    // addedBy? (2.31.2: who added it, when that was someone other than the member - left out otherwise; an older Outpost ignores it) }
     public sealed class DeviceView
     {
         public string Id, Name, Role, Device, Ip;
         public long Created, LastSeen;
         public bool Current, Online;
+        public string AddedBy;         // null / "" = the member's own device (not sent)
 
         public void Write(ILodgeWriter w)
         {
             w.Set("id", Id); w.Set("name", Name); w.Set("role", Role); w.Set("device", Device);
             w.Set("created", Created); w.Set("lastSeen", LastSeen); w.Set("ip", Ip);
             w.Set("current", Current); w.Set("online", Online);
+            if (!string.IsNullOrEmpty(AddedBy)) w.Set("addedBy", AddedBy);
         }
 
         public static DeviceView Read(ILodgeFields f) => new DeviceView
         {
             Id = f.Str("id"), Name = f.Str("name"), Role = f.Str("role"), Device = f.Str("device"),
             Created = f.Long("created"), LastSeen = f.Long("lastSeen"), Ip = f.Str("ip"), Current = f.Bool("current"), Online = f.Bool("online"),
+            AddedBy = f.Str("addedBy"),
         };
+    }
+
+    // (2.31.2, feature "devicenotice") someone else added a device to your account and it was used for the first time:
+    // { id (the device's id, for device.revoke), name (the device's name), by (who added it), at (unix ms) }.
+    // Sent to your other connected devices at once, or - when none is connected - once, right after the welcome of your next connect
+    // (never to the new device itself). Never carries a token or an invite.
+    public sealed class DeviceAddedMsg
+    {
+        public const string Type = LodgeMsg.DeviceAdded;
+        public string Id, Name, By;
+        public long At;
+
+        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("id", Id); w.Set("name", Name); w.Set("by", By); w.Set("at", At); }
+        public static DeviceAddedMsg Read(ILodgeFields f) => new DeviceAddedMsg { Id = f.Str("id"), Name = f.Str("name"), By = f.Str("by"), At = f.Long("at") };
     }
 
     // you have left the Lodge (or this guest device was signed out); the socket closes next

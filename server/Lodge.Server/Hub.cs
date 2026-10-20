@@ -112,7 +112,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.31.1";
+    public const string Version = "2.31.2";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
 
     public readonly LodgeConfig Cfg;
@@ -255,6 +255,7 @@ public partial class LodgeHub
         try
         {
             await Send(me, Welcome(me));
+            if (me.Personal) await DeliverDeviceNotices(me.Name);   // 2.31.2: a device someone else added while they were away
             await Realms.SendTo(me);
             await BroadcastJoin(me);
             await RefreshLivePositions();   // the newcomer gets the positions it may see
@@ -275,7 +276,7 @@ public partial class LodgeHub
     // what this server can do ("files" only while the owner leaves it on); same list in welcome and GET /features
     public string[] FeatureList()
     {
-        var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights", "flightroutes" };   // flightroutes: learned flight paths, FlightRoutes.cs
+        var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights", "flightroutes", "devicenotice" };   // flightroutes: learned flight paths, FlightRoutes.cs; devicenotice (2.31.2): device.added + addedBy, device links for existing members are the Guild Master's
         if (Cfg.FilesEnabled) f.Add("files");
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); if (Cfg.ArmoryRepsEnabled) f.Add("reputations"); }   // reputations (2.27): shared characters may carry reputations (only members who switched it on send them); "standing with a faction"
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
@@ -516,6 +517,26 @@ public partial class LodgeHub
         if (me.DeviceId == null) return null;
         var d = Auth.FindDevice(me.DeviceId);
         return d == null ? null : new WelcomeDevice { Id = d.Id, Name = d.DeviceName };
+    }
+
+    // 2.31.2: tell a member about devices someone else added to their account (device.added): to every connection of theirs except the new
+    // device itself. A notice nobody could be given yet stays in the file for their next connect; each one is handed out once.
+    public async Task DeliverDeviceNotices(string name)
+    {
+        if (Auth == null || string.IsNullOrEmpty(name)) return;
+        var online = members.Values.Where(m => m.Personal && Names.Same(m.Name, name)).ToList();
+        if (online.Count == 0) return;
+        List<DeviceNotice> taken;
+        try { taken = Auth.TakeDeviceNotices(name, n => online.Any(m => m.DeviceId != n.DeviceId)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Log.LogWarning("Can't read the device notices: {Error}", e.GetType().Name); return; }
+        foreach (var n in taken)
+        {
+            var frame = LodgeJson.Build(new DeviceAddedMsg
+            {
+                Id = n.DeviceId, Name = n.DeviceName, By = n.By, At = new DateTimeOffset(DateTime.SpecifyKind(n.At, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
+            }.Write);
+            foreach (var m in online.Where(m => m.DeviceId != n.DeviceId)) await Send(m, frame);
+        }
     }
 
     // a device was revoked: its sockets close right now (the client shows the reason and does not reconnect)

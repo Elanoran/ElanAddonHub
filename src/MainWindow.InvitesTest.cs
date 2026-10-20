@@ -80,6 +80,7 @@ namespace ElansAddonHub
                 await InvitesKeepCreds(check);
                 await InvitesUpgrade(check);
                 await InvitesPanels(sentFrames, check);
+                await InvitesDeviceNotice(sentFrames, check);
                 await InvitesOldServer(sentFrames, check);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
@@ -210,6 +211,23 @@ namespace ElansAddonHub
             check("store: Clear forgets both", !LodgeCredentials.Load(st, out _, out _));
             var id1 = LodgeCredentials.DeviceId(st); var id2 = LodgeCredentials.DeviceId(st);
             check("store: the device id is random, made once and stable", id1 == id2 && id1.Length == 32 && id1 != LodgeCredentials.DeviceId(new Settings()));
+            // 3.1.2 (L3): each Lodge gets its own id; the Lodge this PC was already in keeps the old one
+            var fresh = new Settings { LodgeDeviceId = id1 };
+            var a1 = LodgeCredentials.DeviceIdFor(fresh, "https://example.org/lodge"); var b1 = LodgeCredentials.DeviceIdFor(fresh, "https://other.example/lodge");
+            check("device id: two different Lodges get different ids, neither is the stored id", a1 != b1 && a1 != id1 && b1 != id1 && a1.Length == 32 && b1.Length == 32
+                && a1.All(ch => "0123456789abcdef".IndexOf(ch) >= 0), a1 + " / " + b1);
+            check("device id: the same Lodge always gets the same id, however its address is written",
+                a1 == LodgeCredentials.DeviceIdFor(fresh, "https://example.org/lodge") && a1 == LodgeCredentials.DeviceIdFor(fresh, "example.org/lodge/")
+                && a1 == LodgeCredentials.DeviceIdFor(fresh, "https://EXAMPLE.org:443/lodge") && a1 != LodgeCredentials.DeviceIdFor(fresh, "https://example.org/lodge2"));
+            check("device id: another PC (another stored id) gives the same Lodge a different id", a1 != LodgeCredentials.DeviceIdFor(new Settings { LodgeDeviceId = "0123456789abcdef0123456789abcdef" }, "https://example.org/lodge"));
+            var existing = new Settings { LodgeDeviceId = id1, LodgeUrl = "https://example.org/lodge", LodgeTokenProtected = SettingsStore.Protect(TokA) };
+            var keep = LodgeCredentials.DeviceIdFor(existing, "https://example.org/lodge");
+            check("device id: a Lodge this PC was already signed in to keeps the id it was sent before", keep == id1 && existing.LodgeDeviceIdLegacyUrl == "https://example.org/lodge" && existing.LodgeDeviceIdPerLodge);
+            existing.LodgeUrl = "https://other.example/lodge";
+            check("device id: ...a new Lodge joined afterwards gets its own, and the old Lodge still the old one",
+                LodgeCredentials.DeviceIdFor(existing, "https://other.example/lodge") == b1 && LodgeCredentials.DeviceIdFor(existing, "https://example.org/lodge") == id1);
+            var noCred = new Settings { LodgeDeviceId = id1, LodgeUrl = "https://example.org/lodge" };
+            check("device id: an address without a saved sign-in is not 'already known'", LodgeCredentials.DeviceIdFor(noCred, "https://example.org/lodge") == a1 && noCred.LodgeDeviceIdLegacyUrl == null);
             check("store: the device name defaults to the PC name and can be changed", LodgeCredentials.DeviceName(new Settings()) == Environment.MachineName && LodgeCredentials.DeviceName(new Settings { LodgeDeviceName = "  Deck  " }) == "Deck");
         }
 
@@ -315,7 +333,7 @@ namespace ElansAddonHub
             await Task.Delay(100);
             check("join: a good invite stores the token (DPAPI) and no code", LodgeCredentials.Load(s, out var cred, out var isTok) && cred == TokA && isTok && !LodgeCredentials.HasCode(s));
             check("join: ...connects with the token", Session.Connected && Session.UsingToken && s.LodgeUrl == "http://127.0.0.1:9/lodge" && s.LodgeName == "Nova");
-            check("join: ...with this PC's name and id sent", okBody != null && okBody.Contains("Quest-PC") && okBody.Contains(LodgeCredentials.DeviceId(s)));
+            check("join: ...with this PC's name and its id for this Lodge sent (3.1.2: per Lodge)", okBody != null && okBody.Contains("Quest-PC") && okBody.Contains(LodgeCredentials.DeviceIdFor(s, "http://127.0.0.1:9/lodge")));
             Session.Disconnect();
 
             // an old permanent code in an older link still joins the old way
@@ -637,6 +655,84 @@ namespace ElansAddonHub
             Session.FeedForTest(InvWelcome("member", "2.10.0", true, false, false, "Mia-PC"));
             await Task.Delay(200);
             check("member: no Guild Master page", !SettingsPage.NavGmVisibleForTest);
+        }
+
+        // ---------------------------------------------------------------- Lodge 2.31.2: a device someone else added to my account (device.added, addedBy)
+        static string InvDeviceAdded(string id, string name, string by, long at) =>
+            "{\"t\":\"device.added\",\"id\":" + Q(id) + ",\"name\":" + Q(name) + ",\"by\":" + Q(by) + ",\"at\":" + at + "}";
+
+        async Task InvitesDeviceNotice(List<Dictionary<string, object>> sent, InvCheck check)
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var confirmWas = SettingsPage.RemoveNoticedConfirm;
+            try
+            {
+                SettingsPage.RemoveNoticedConfirm = () => true;
+                Session.Disconnect();
+                LodgePage.ShowChatForTest();
+                foreach (var n in Session.DeviceNotices.ToList()) Session.DismissDeviceNotice(n.Id);
+                Session.Toasts.ClearForTest();
+                // an older Lodge (no "devicenotice"): a stray frame shows nothing
+                Session.FeedForTest(InvWelcome("member", "2.31.1", true, false, false, "Mia-PC"));
+                int shown = Session.Toasts.Shown;
+                Session.FeedForTest(InvDeviceAdded("d7", "Strange-Laptop", "Elan", now));
+                ShowTab("settings");
+                SettingsPage.Show("lodge");
+                await Task.Delay(200);
+                check("notice: an older Lodge (no devicenotice) -> no notice, no toast", !Session.SupportsDeviceNotice && Session.DeviceNotices.Count == 0 && Session.Toasts.Shown == shown && SettingsPage.DeviceNoticeRowsForTest.Count == 0);
+
+                Session.Disconnect();
+                LodgePage.ShowChatForTest();
+                Session.FeedForTest(InvWelcome("member", "2.31.2", true, false, false, "Mia-PC").Replace("\"devices\"", "\"devices\",\"devicenotice\""));
+                check("notice: a 2.31.2 Lodge announces devicenotice", Session.SupportsDeviceNotice);
+                sent.Clear();
+                shown = Session.Toasts.Shown;
+                Session.FeedForTest(InvDeviceAdded("d7", "Strange-Laptop", "Elan", now));
+                var toast = Session.Toasts.Visible.LastOrDefault();
+                check("notice: device.added -> one Security toast that names the device and who added it", Session.Toasts.Shown == shown + 1 && toast != null && toast.Kind == ToastKind.Security
+                    && toast.Title == "New device on your account" && toast.Text.Contains("Strange-Laptop") && toast.Text.Contains("Elan") && toast.Text.Contains("Remove"), toast?.Title + " / " + toast?.Text);
+                check("notice: ...and the Outpost asks for its device list again", sent.Any(f => f.Str("t") == "device.list"));
+                Session.FeedForTest(InvDeviceAdded("d7", "Strange-Laptop", "Elan", now));
+                Session.FeedForTest(InvDeviceAdded("d1", "Mia-PC", "Elan", now));       // about the PC I am on: never
+                check("notice: the same notice twice and one about this PC add nothing", Session.DeviceNotices.Count == 1 && Session.Toasts.Shown == shown + 1);
+                ShowTab("settings");
+                SettingsPage.Show("lodge");
+                await Task.Delay(200);
+                var rows = SettingsPage.DeviceNoticeRowsForTest;
+                var when = DateTimeOffset.FromUnixTimeMilliseconds(now).ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                check("notice: Settings > Lodge, Your devices shows \"A new device 'Strange-Laptop' was added to your account by Elan on <date>. Not you? Remove it here.\"",
+                    rows.Count == 1 && rows[0].Text.StartsWith("A new device 'Strange-Laptop' was added to your account by Elan on " + when) && rows[0].Text.EndsWith("Not you? Remove it here."), rows.FirstOrDefault()?.Text);
+                check("notice: nothing secret in it", rows.All(r => !r.Text.Contains("t1.") && !r.Text.Contains("i1.")) && !(toast?.Text ?? "").Contains("t1."));
+                // the device list shows who added a device
+                Session.FeedForTest("{\"t\":\"devices\",\"name\":\"Mia\",\"now\":" + now + ",\"devices\":["
+                    + "{\"id\":\"d1\",\"name\":\"Mia\",\"role\":\"member\",\"device\":\"Mia-PC\",\"created\":" + (now - 86400000L) + ",\"lastSeen\":" + now + ",\"ip\":\"203.0.113.x\",\"current\":true,\"online\":true},"
+                    + "{\"id\":\"d7\",\"name\":\"Mia\",\"role\":\"member\",\"device\":\"Strange-Laptop\",\"created\":" + now + ",\"lastSeen\":" + now + ",\"ip\":\"198.51.100.x\",\"current\":false,\"online\":false,\"addedBy\":\"Elan\"}]}");
+                await Task.Delay(100);
+                var mine = SettingsPage.MyDeviceRowsForTest;
+                check("devices: a device someone else added says so ('added by Elan'), my own doesn't", mine.Count == 2 && mine[1].Detail.EndsWith("· added by Elan") && !mine[0].Detail.Contains("added by"), string.Join(" | ", mine.Select(m => m.Detail)));
+                check("notice: ...and stays while the device is still there", SettingsPage.DeviceNoticeRowsForTest.Count == 1);
+                sent.Clear();
+                SettingsPage.RemoveNoticedClickForTest("d7");
+                check("notice: Remove signs that device out (device.revoke d7) and the line goes", sent.Count(f => f.Str("t") == "device.revoke") == 1 && sent.First(f => f.Str("t") == "device.revoke").Str("id") == "d7"
+                    && Session.DeviceNotices.Count == 0 && SettingsPage.DeviceNoticeRowsForTest.Count == 0);
+                // Dismiss keeps the device; a notice whose device has gone from my list goes by itself
+                Session.FeedForTest(InvDeviceAdded("d8", "Tablet", "console", now));
+                await Task.Delay(100);
+                check("notice: a recovery link from the server's console says so", SettingsPage.DeviceNoticeRowsForTest.SingleOrDefault()?.Text.Contains("by the server's console") == true);
+                sent.Clear();
+                SettingsPage.DismissNoticeClickForTest("d8");
+                check("notice: Dismiss forgets the line and signs nothing out", Session.DeviceNotices.Count == 0 && !sent.Any(f => f.Str("t") == "device.revoke"));
+                Session.FeedForTest(InvDeviceAdded("d9", "Old-PC", "Elan", now));
+                Session.FeedForTest(InvDevicesFrame("devices", now, false));            // d9 is not in it: removed elsewhere
+                await Task.Delay(100);
+                check("notice: a notice whose device is gone from Your devices disappears", Session.DeviceNotices.Count == 0 && SettingsPage.DeviceNoticeRowsForTest.Count == 0);
+            }
+            finally
+            {
+                SettingsPage.RemoveNoticedConfirm = confirmWas;
+                foreach (var n in Session.DeviceNotices.ToList()) Session.DismissDeviceNotice(n.Id);
+                Session.Toasts.ClearForTest();
+            }
         }
 
         // ---------------------------------------------------------------- an older server (< 2.10): everything stays as it was

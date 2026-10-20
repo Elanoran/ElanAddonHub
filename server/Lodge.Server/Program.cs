@@ -158,6 +158,8 @@ app.MapPost("/exchange", async (HttpContext ctx) =>
     else return Results.Json(new { error = "Send the invite in the X-Lodge-Invite header" }, statusCode: 400);
     ctx.Response.Headers["Cache-Control"] = "no-store";
     if (r.Status != 200) return Results.Json(new { error = r.Error, reason = r.Reason }, statusCode: r.Status);
+    // 2.31.2: someone else's link added this device to an existing member - their other connected devices are told now (else at their next connect)
+    if (r.Who.Personal && !string.IsNullOrEmpty(r.Device.AddedBy)) await lodge.DeliverDeviceNotices(r.Who.Name);
     return Results.Json(new
     {
         token = r.Token, deviceId = r.Device.Id, device = r.Device.DeviceName, name = r.Who.Name, role = r.Who.Role,

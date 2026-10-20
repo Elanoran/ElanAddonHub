@@ -477,7 +477,7 @@ public class InviteTests
         var (bob, sbob) = r.Connect(T.BobCode, false);
         await r.Ask(bob, sbob, new { t = "admin.devices" });
         var all = sbob.Of("admin.devices").Last()["devices"]!.AsArray();
-        Assert.Equal(2, all.Count);
+        Assert.Equal(dMia.Id, (string?)all.Single()!["id"]);                     // 2.31.2 (L8): only the member's, not the Guild Master's
         await r.Ask(bob, sbob, new { t = "device.revoke", id = ownerDev.Device!.Id });
         Assert.NotNull(r.Auth.CheckToken(ownerDev.Token!));                      // owner's: refused
         await r.Ask(bob, sbob, new { t = "device.revoke", id = dMia.Id });
@@ -583,7 +583,7 @@ public class InviteTests
         await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "person", name = "Rex", role = "officer" });
         Assert.Contains("below your own", (string)sbob.Of("error").Last()["text"]!);
         await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "person", name = "Elan", role = "member" });   // would give a device on the owner
-        Assert.Contains("below your rank", (string)sbob.Of("error").Last()["text"]!);
+        Assert.Equal("owner-only", (string?)sbob.Of("error").Last()["code"]);                                         // 2.31.2: an existing name is the Guild Master's
         await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "guest", uses = 5 });
         Assert.Equal(5, (int)sbob.Of("admin.invite.created").Last()["max"]!);
         // after use the list says so
@@ -619,7 +619,7 @@ public class InviteTests
         var (token, dev) = r.Join("Nova", "Nova's PC");
         var (nova, _) = r.Connect(token, true);
         var w = r.Hub.Welcome(nova);
-        Assert.Equal("2.31.1", (string)w["server"]!);
+        Assert.Equal("2.31.2", (string)w["server"]!);
         var features = w["features"]!.AsArray().Select(x => (string)x!).ToList();
         Assert.Contains("tokens", features);
         Assert.Contains("invites", features);
@@ -829,5 +829,189 @@ public class InviteTests
         foreach (var s in new[] { snova, sbob, sguest })
             foreach (var token in new[] { tNova, tNova2, gx.Token! })
                 Assert.DoesNotContain(s.Sent, x => x.ToJsonString().Contains(token) || x.ToJsonString().Contains(Auth.HashHex(token)));
+    }
+
+    // ---------------------------------------------------------------- 2.31.2: device links for existing members (owner only + the member is told)
+
+    static int NoticesOf(Rig r, string name) => r.Auth.PendingDeviceNotices(name).Count;
+
+    [Fact]
+    public async Task Only_the_owner_makes_a_device_link_for_an_existing_member_officers_still_invite_new_people()
+    {
+        using var r = new Rig();
+        var (bob, sbob) = r.Connect(T.BobCode, false);
+        int before = r.Auth.ListInvites().Count;
+        foreach (var name in new[] { "Mia", "mia", "Bob" })                                       // a member below Bob, another spelling, and himself
+        {
+            await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "person", name, role = "member" });
+            var err = sbob.Of("error").Last();
+            Assert.Equal("owner-only", (string?)err["code"]);
+            Assert.Contains("Guild Master", (string)err["text"]!);
+        }
+        Assert.Empty(sbob.Of("admin.invite.created"));
+        Assert.Equal(before, r.Auth.ListInvites().Count);                                          // nothing was made
+        await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "person", name = "Nova", role = "member" });   // a new person: as before
+        Assert.Equal("Nova", (string?)sbob.Of("admin.invite.created").Single()["name"]);
+        await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "person", name = "Rex", role = "officer" });   // rank rule unchanged
+        Assert.Contains("below your own", (string)sbob.Of("error").Last()["text"]!);
+
+        var (elan, selan) = r.Connect(T.ElanCode, false);
+        await r.Ask(elan, selan, new { t = "admin.invite.create", kind = "person", name = "Mia", role = "owner" });
+        var made = selan.Of("admin.invite.created").Single();
+        Assert.Equal(("Mia", "member"), ((string?)made["name"], (string?)made["role"]));          // the member's own rank, not the request's
+        await r.Ask(elan, selan, new { t = "admin.invite.create", kind = "person", name = "Bob", role = "member" });
+        Assert.Equal("Bob", (string?)selan.Of("admin.invite.created").Last()["name"]);
+    }
+
+    [Fact]
+    public async Task A_device_added_by_someone_else_records_who_and_is_shown_in_the_lists()
+    {
+        using var r = new Rig();
+        var (tMia, dMia) = r.Join("Mia", "Mia-PC", "m1");                                          // Mia exists (codes file): Elan's link adds a device
+        Assert.Equal("Elan", dMia.AddedBy);
+        var (tElan2, dElan2) = r.Join("Elan", "Elan-Laptop", "e2");                                // a link the Guild Master made for himself
+        Assert.Equal("", dElan2.AddedBy);
+        var (tNova, dNova) = r.Join("Nova", "Nova-PC", "n1");                                      // a new person: their own first device
+        Assert.Equal("", dNova.AddedBy);
+        var up = r.Auth.ExchangeCode(Ip, T.BobCode, "Bob-PC", "b1");                               // an upgraded code: their own
+        Assert.Equal("", up.Device!.AddedBy);
+        Assert.Equal((1, 0, 0, 0), (NoticesOf(r, "Mia"), NoticesOf(r, "Elan"), NoticesOf(r, "Nova"), NoticesOf(r, "Bob")));
+
+        // stored with the device and read back by a fresh server
+        var again = new Auth(r.Cfg, r.Log, r.Clock);
+        Assert.Equal("Elan", again.FindDevice(dMia.Id)!.AddedBy);
+        Assert.Equal("", again.FindDevice(dNova.Id)!.AddedBy);
+        Assert.Single(again.PendingDeviceNotices("Mia"));
+
+        var (elan, selan) = r.Connect(T.ElanCode, false);
+        await r.Ask(elan, selan, new { t = "admin.devices" });
+        var rows = selan.Of("admin.devices").Last()["devices"]!.AsArray().Select(x => x!.AsObject()).ToList();
+        var miaRow = rows.Single(x => (string?)x["id"] == dMia.Id);
+        Assert.Equal(new[] { "id", "name", "role", "device", "created", "lastSeen", "ip", "current", "online", "addedBy" }, KeysInOrder(miaRow));
+        Assert.Equal("Elan", (string?)miaRow["addedBy"]);
+        Assert.Equal((long)miaRow["created"]!, new DateTimeOffset(dMia.Created).ToUnixTimeMilliseconds());   // "when" = when it was added
+        Assert.All(rows.Where(x => (string?)x["id"] != dMia.Id), x => Assert.False(x.ContainsKey("addedBy")));
+
+        var (mia, smia) = r.Connect(tMia, true);
+        await r.Ask(mia, smia, new { t = "device.list" });
+        Assert.Equal("Elan", (string?)smia.Of("devices").Last()["devices"]!.AsArray().Single()!["addedBy"]);
+        foreach (var s in new[] { selan, smia })
+            foreach (var secret in new[] { tMia, tElan2, tNova, up.Token! })
+                Assert.DoesNotContain(s.Sent, f => f.ToJsonString().Contains(secret) || f.ToJsonString().Contains(Auth.HashHex(secret)));
+    }
+
+    [Fact]
+    public async Task The_member_is_told_at_once_on_their_other_connected_device_and_only_once()
+    {
+        using var r = new Rig();
+        var (tNova, dNova) = r.Join("Nova", "Nova-PC", "n1");
+        var (nova, snova) = r.Connect(tNova, true);
+        var (inv, secret) = r.Auth.CreateInvite("person", "Nova", "member", "Elan");
+        var ex = r.Auth.ExchangeInvite(Ip, secret, "Strange-Laptop", "x9");
+        Assert.Equal(200, ex.Status);
+        await r.Hub.DeliverDeviceNotices("Nova");                                                   // what POST /exchange does after a 200
+        var told = snova.Of("device.added").Single();
+        Assert.Equal(new[] { "t", "id", "name", "by", "at" }, KeysInOrder(told));
+        Assert.Equal((ex.Device!.Id, "Strange-Laptop", "Elan"), ((string?)told["id"], (string?)told["name"], (string?)told["by"]));
+        Assert.Equal(new DateTimeOffset(ex.Device.Created).ToUnixTimeMilliseconds(), (long)told["at"]!);
+        Assert.Equal(0, NoticesOf(r, "Nova"));                                                      // handed out: gone
+        await r.Hub.DeliverDeviceNotices("Nova");
+        Assert.Single(snova.Of("device.added"));
+
+        // the new device itself is never told, and the member's next connect doesn't repeat it
+        var (_, snew) = r.Connect(ex.Token!, true);
+        var (_, snova2) = r.Connect(tNova, true);
+        await Task.Delay(100);
+        Assert.Empty(snew.Of("device.added"));
+        Assert.Empty(snova2.Of("device.added"));
+        foreach (var s in new[] { snova, snew, snova2 })
+            Assert.DoesNotContain(s.Sent, f => f.ToJsonString().Contains(secret) || f.ToJsonString().Contains(ex.Token!) || f.ToJsonString().Contains(Auth.HashHex(ex.Token!)));
+    }
+
+    [Fact]
+    public async Task An_offline_member_is_told_at_their_next_connect_from_another_device_exactly_once()
+    {
+        using var r = new Rig();
+        var (tNova, _) = r.Join("Nova", "Nova-PC", "n1");
+        var (_, secret) = r.Auth.CreateInvite("person", "Nova", "member", "Elan");
+        var ex = r.Auth.ExchangeInvite(Ip, secret, "Strange-Laptop", "x9");
+        await r.Hub.DeliverDeviceNotices("Nova");                                                   // nobody online: it waits
+        Assert.Equal(1, NoticesOf(r, "Nova"));
+
+        var (_, snew) = r.Connect(ex.Token!, true);                                                 // the new device signs in: not told, still waiting
+        await Task.Delay(100);
+        Assert.Empty(snew.Of("device.added"));
+        Assert.Equal(1, NoticesOf(r, "Nova"));
+
+        var (_, snova) = r.Connect(tNova, true);                                                    // Nova's own PC: told right after the welcome
+        SpinWait.SpinUntil(() => snova.Of("device.added").Count > 0, 2000);
+        var t = snova.Sent.Select(f => (string?)f["t"]).ToList();
+        Assert.Equal(t.IndexOf("welcome") + 1, t.IndexOf("device.added"));
+        Assert.Equal(("Strange-Laptop", "Elan", ex.Device!.Id), ((string?)snova.Of("device.added").Single()["name"], (string?)snova.Of("device.added").Single()["by"], (string?)snova.Of("device.added").Single()["id"]));
+        Assert.Equal(0, NoticesOf(r, "Nova"));
+
+        var (_, snova2) = r.Connect(tNova, true);
+        await Task.Delay(100);
+        Assert.Empty(snova2.Of("device.added"));                                                    // exactly once
+        // the notice file never holds a secret
+        Assert.False(File.Exists(r.Auth.DeviceNoticesFile) && (File.ReadAllText(r.Auth.DeviceNoticesFile).Contains(ex.Token!) || File.ReadAllText(r.Auth.DeviceNoticesFile).Contains(secret)));
+    }
+
+    [Fact]
+    public async Task A_member_on_a_permanent_code_is_told_too_and_leaving_drops_the_notice()
+    {
+        using var r = new Rig();
+        var (_, secret) = r.Auth.CreateInvite("person", "Mia", "member", "Elan");
+        r.Auth.ExchangeInvite(Ip, secret, "Laptop", "l1");
+        var (_, smia) = r.Connect("synthetic0mia00code0000000000003", false);
+        SpinWait.SpinUntil(() => smia.Of("device.added").Count > 0, 2000);
+        Assert.Equal("Laptop", (string?)smia.Of("device.added").Single()["name"]);
+
+        var (_, s2) = r.Auth.CreateInvite("person", "Bob", "member", "Elan");
+        r.Auth.ExchangeInvite(Ip, s2, "Laptop", "l2");
+        Assert.Equal(1, NoticesOf(r, "Bob"));
+        r.Auth.Remove("Bob");
+        Assert.Equal(0, NoticesOf(r, "Bob"));
+        var (_, s3) = r.Auth.CreateInvite("person", "Mia", "member", "Elan");
+        r.Auth.ExchangeInvite(Ip, s3, "Tablet", "l3");
+        await Task.Delay(10);
+        Assert.Equal(1, NoticesOf(r, "Mia"));
+        r.Auth.Leave("Mia");
+        Assert.Equal(0, NoticesOf(r, "Mia"));
+    }
+
+    // ---------------------------------------------------------------- 2.31.2 (L8): an officer sees only lower ranks' devices
+
+    [Fact]
+    public async Task An_officer_sees_only_lower_ranks_devices_the_owner_sees_all()
+    {
+        using var r = new Rig();
+        T.WriteCodes(r.Cfg, $"Elan:{T.ElanCode}:owner", $"Bob:{T.BobCode}:officer", "Mia:synthetic0mia00code0000000000003:member", "Oli:synthetic0oli00code0000000000004:officer");
+        var dElan = r.Auth.ExchangeCode(Ip, T.ElanCode, "Elan-PC", "e1").Device!;
+        var dBob = r.Auth.ExchangeCode(Ip, T.BobCode, "Bob-PC", "b1").Device!;
+        var dOli = r.Auth.ExchangeCode(Ip, "synthetic0oli00code0000000000004", "Oli-PC", "o1").Device!;
+        var dMia = r.Auth.ExchangeCode(Ip, "synthetic0mia00code0000000000003", "Mia-PC", "m1").Device!;
+        var (_, guestSecret) = r.Auth.CreateInvite("guest", "", "guest", "Bob");
+        var dGuest = r.Auth.ExchangeInvite(Ip, guestSecret, "Guest-PC", "g1").Device!;
+        List<string> Ids(ClosableSock s) => s.Of("admin.devices").Last()["devices"]!.AsArray().Select(x => (string)x!["id"]!).ToList();
+
+        var (bob, sbob) = r.Connect(T.BobCode, false);
+        await r.Ask(bob, sbob, new { t = "admin.devices" });
+        Assert.Equal(new[] { dGuest.Id, dMia.Id }.OrderBy(x => x), Ids(sbob).OrderBy(x => x));          // not Elan's, not Oli's, not his own
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Elan" });
+        Assert.Empty(Ids(sbob));
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Oli" });
+        Assert.Empty(Ids(sbob));
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Mia" });
+        Assert.Equal(new[] { dMia.Id }, Ids(sbob));
+        Assert.DoesNotContain(sbob.Of("admin.devices"), f => f.ToJsonString().Contains("Elan-PC") || f.ToJsonString().Contains("Oli-PC"));
+        await r.Ask(bob, sbob, new { t = "device.list" });                                               // his own: always
+        Assert.Equal(new[] { dBob.Id }, sbob.Of("devices").Last()["devices"]!.AsArray().Select(x => (string)x!["id"]!));
+        await r.Ask(bob, sbob, new { t = "device.revoke", id = dGuest.Id });                              // the answer after a revoke is filtered too
+        Assert.Equal(new[] { dMia.Id }, Ids(sbob));
+
+        var (elan, selan) = r.Connect(T.ElanCode, false);
+        await r.Ask(elan, selan, new { t = "admin.devices" });
+        Assert.Equal(new[] { dElan.Id, dBob.Id, dOli.Id, dMia.Id }.OrderBy(x => x), Ids(selan).OrderBy(x => x));
     }
 }

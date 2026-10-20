@@ -9,7 +9,9 @@ namespace Lodge;
 //   <data>/invites   one tab-separated row per invite:
 //                    id  sha256(secret)  kind(person|guest)  name  role  createdBy  created  expires  maxUses  uses  revoked
 //   <data>/devices   one tab-separated row per device:
-//                    id  sha256(token)  name(- = guest)  role  deviceName  clientDeviceId  created  lastSeen  lastIp(coarse)
+//                    id  sha256(token)  name(- = guest)  role  deviceName  clientDeviceId  created  lastSeen  lastIp(coarse)  addedBy (2.31.2)
+//   <data>/device-notices   (2.31.2) one tab-separated row per notice the member hasn't been given yet:
+//                    name  deviceId  deviceName  addedBy  at
 //
 // Times are unix seconds. Only HASHES of the invite secret and the device token are stored; the secrets themselves
 // are shown once (on creation) and never logged. Both files share codes.lock with the codes file and lodge-admin,
@@ -27,6 +29,7 @@ public sealed record InviteInfo(string Id, string Kind, string Name, string Role
 public sealed class DeviceInfo
 {
     public string Id, TokenHash, Name, Role, DeviceName, ClientId, LastIp;
+    public string AddedBy = "";        // 2.31.2: who added it to an existing member's account, when that wasn't the member ("" = their own)
     public DateTime Created, LastSeen;
     internal DateTime Persisted;
     public bool Guest => string.IsNullOrEmpty(Name);
@@ -34,6 +37,9 @@ public sealed class DeviceInfo
 
 // Status: 200 ok, 401 unknown secret (counts as a wrong guess), 410 used/expired/revoked, 409 can't add the device,
 // 429 blocked by the lockout, 403 not allowed, 500 storage problem
+// 2.31.2: "a new device was added to your account by someone else", waiting for the member (Name) to be told
+public sealed record DeviceNotice(string Name, string DeviceId, string DeviceName, string By, DateTime At);
+
 public sealed record ExchangeOutcome(int Status, string Error, string Reason, string Token = null, DeviceInfo Device = null, Identity Who = null);
 
 public partial class Auth
@@ -58,6 +64,7 @@ public partial class Auth
     string DataFolder => Path.GetDirectoryName(Path.GetFullPath(cfg.CodesFile))!;
     public string InvitesFile => Path.Combine(DataFolder, "invites");
     public string DevicesFile => Path.Combine(DataFolder, "devices");
+    public string DeviceNoticesFile => Path.Combine(DataFolder, "device-notices");
 
     static DateTime FromUnix(long s) => DateTimeOffset.FromUnixTimeSeconds(s).UtcDateTime;
     static long ToUnix(DateTime t) => new DateTimeOffset(DateTime.SpecifyKind(t, DateTimeKind.Utc)).ToUnixTimeSeconds();
@@ -276,12 +283,19 @@ public partial class Auth
         // the invite is marked used BEFORE the device exists: a crash in between costs a new invite, never a free extra device
         row.Uses++;
         WriteInvites(rows);
-        var made = CreateDeviceLocked(name, role, deviceName, clientDeviceId, ip, out var err);
+        // 2.31.2: a device for someone who was already in, made by somebody else, records who added it - and the member will be told
+        string addedBy = name != null && !createPerson && !Names.Same(row.By ?? "", name) ? Clean(row.By, 24, "?") : "";
+        var made = CreateDeviceLocked(name, role, deviceName, clientDeviceId, ip, out var err, addedBy);
         if (made == null)
         {
             row.Uses--;
             try { WriteInvites(rows); } catch (IOException) { }
             return err;
+        }
+        if (addedBy.Length > 0)
+        {
+            AddDeviceNoticeLocked(new DeviceNotice(name, made.Value.Device.Id, made.Value.Device.DeviceName, addedBy, made.Value.Device.Created));
+            log.LogInformation("Device {Device} was added to {Name}'s account by {By}; they will be told", made.Value.Device.Id, Names.ForLog(name), Names.ForLog(addedBy));
         }
         var who = name == null ? new Identity(null, false, "guest", made.Value.Device.Id) : new Identity(name, true, role, made.Value.Device.Id);
         log.LogInformation("Invite {Invite} used: new device {Device} for {Name}", row.Id, made.Value.Device.Id, name == null ? "a guest" : Names.ForLog(name));
@@ -399,7 +413,7 @@ public partial class Auth
         return refusal == null;
     }
 
-    (string Token, DeviceInfo Device)? CreateDeviceLocked(string name, string role, string deviceName, string clientDeviceId, string ip, out ExchangeOutcome err)
+    (string Token, DeviceInfo Device)? CreateDeviceLocked(string name, string role, string deviceName, string clientDeviceId, string ip, out ExchangeOutcome err, string addedBy = "")
     {
         err = null;
         if (!DeviceRoom(name, clientDeviceId, out err)) return null;
@@ -411,7 +425,7 @@ public partial class Auth
         var dev = new DeviceInfo
         {
             Id = NewId(), TokenHash = HashHex(token), Name = name, Role = role, DeviceName = Clean(deviceName, 32, "Unknown device"),
-            ClientId = cid, Created = now, LastSeen = now, LastIp = CoarseIp(ip), Persisted = now,
+            ClientId = cid, Created = now, LastSeen = now, LastIp = CoarseIp(ip), Persisted = now, AddedBy = addedBy ?? "",
         };
         while (devs.Any(d => d.Id == dev.Id)) dev.Id = NewId();
         devs.Add(dev);
@@ -422,7 +436,7 @@ public partial class Auth
     // ================================================================ devices
 
     static string FormatDevice(DeviceInfo d) => string.Join('\t', d.Id, d.TokenHash, d.Name ?? "-", d.Role, d.DeviceName, d.ClientId,
-        ToUnix(d.Created), ToUnix(d.LastSeen), d.LastIp ?? "");
+        ToUnix(d.Created), ToUnix(d.LastSeen), d.LastIp ?? "", (d.AddedBy ?? "").Replace('\t', ' '));
 
     List<DeviceInfo> ReadDeviceRows()
     {
@@ -439,7 +453,7 @@ public partial class Auth
                 {
                     Id = f[0], TokenHash = f[1], Name = f[2] == "-" ? null : f[2], Role = Roles.Normalize(f[3]), DeviceName = f[4], ClientId = f[5],
                     Created = FromUnix(long.Parse(f[6], CultureInfo.InvariantCulture)), LastSeen = FromUnix(long.Parse(f[7], CultureInfo.InvariantCulture)),
-                    LastIp = f.Length > 8 ? f[8] : "",
+                    LastIp = f.Length > 8 ? f[8] : "", AddedBy = f.Length > 9 ? f[9] : "",
                 };
                 d.Persisted = d.LastSeen;
                 list.Add(d);
@@ -451,7 +465,7 @@ public partial class Auth
 
     void WriteDevices(List<DeviceInfo> devs)
     {
-        AtomicWrite(DevicesFile, "# Lodge devices: id, sha256(token), name (- = guest), role, device name, client device id, created, last seen, last address (coarse)\n"
+        AtomicWrite(DevicesFile, "# Lodge devices: id, sha256(token), name (- = guest), role, device name, client device id, created, last seen, last address (coarse), added by\n"
                                  + string.Join("", devs.Select(d => FormatDevice(d) + "\n")));
         ReloadDevicesIfChanged(force: true);
     }
@@ -552,6 +566,60 @@ public partial class Auth
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log.LogWarning("Can't record a device's last seen: {Error}", e.GetType().Name); }
     }
+
+    // ================================================================ device notices (2.31.2)
+    // "A new device was added to your account by Y": kept until the member is told once (on one of their other devices), dropped when they
+    // leave or are removed. Device names and login names only - never a token, an invite or a hash.
+
+    public const int MaxNoticesPerPerson = 20, MaxNoticesTotal = 1000;
+
+    List<DeviceNotice> ReadDeviceNotices()
+    {
+        var list = new List<DeviceNotice>();
+        if (!File.Exists(DeviceNoticesFile)) return list;
+        foreach (var line in File.ReadAllLines(DeviceNoticesFile))
+        {
+            if (line.Length == 0 || line[0] == '#') continue;
+            var f = line.Split('\t');
+            if (f.Length < 5) continue;
+            try { list.Add(new DeviceNotice(f[0], f[1], f[2], f[3], FromUnix(long.Parse(f[4], CultureInfo.InvariantCulture)))); }
+            catch (Exception e) when (e is FormatException or OverflowException or ArgumentOutOfRangeException) { }
+        }
+        return list;
+    }
+
+    void WriteDeviceNotices(List<DeviceNotice> list) =>
+        AtomicWrite(DeviceNoticesFile, "# Lodge device notices not yet shown: name, device id, device name, added by, at\n"
+            + string.Join("", list.Select(n => string.Join('\t', n.Name, n.DeviceId, n.DeviceName.Replace('\t', ' '), n.By.Replace('\t', ' '), ToUnix(n.At)) + "\n")));
+
+    void AddDeviceNoticeLocked(DeviceNotice n)
+    {
+        var list = ReadDeviceNotices();
+        list.Add(n);
+        // bounded: the oldest of that person's, then the oldest overall, go first
+        while (list.Count(x => Names.Same(x.Name, n.Name)) > MaxNoticesPerPerson) list.Remove(list.First(x => Names.Same(x.Name, n.Name)));
+        while (list.Count > MaxNoticesTotal) list.RemoveAt(0);
+        WriteDeviceNotices(list);
+    }
+
+    int DropDeviceNoticesLocked(string name)
+    {
+        var list = ReadDeviceNotices();
+        int n = list.RemoveAll(x => Names.Same(x.Name, name));
+        if (n > 0) WriteDeviceNotices(list);
+        return n;
+    }
+
+    public List<DeviceNotice> PendingDeviceNotices(string name) { lock (writeGate) return ReadDeviceNotices().Where(x => Names.Same(x.Name, name)).ToList(); }
+
+    // the member's notices that can be given now (deliverable), removed from the file in the same step: each is handed out exactly once
+    public List<DeviceNotice> TakeDeviceNotices(string name, Func<DeviceNotice, bool> deliverable) => Locked(() =>
+    {
+        var list = ReadDeviceNotices();
+        var take = list.Where(x => Names.Same(x.Name, name) && deliverable(x)).ToList();
+        if (take.Count > 0) { list.RemoveAll(take.Contains); WriteDeviceNotices(list); }
+        return take;
+    });
 
     // ================================================================ retiring a permanent code
 
