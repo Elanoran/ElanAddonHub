@@ -213,6 +213,9 @@ has `displayName` too (public, also while `visibleTo: officers`). The server has
   (small capital L) and `Elаn` (Cyrillic а) all collide with `Elan`. Accents stay: `Élan` is a name of its own. Your own login name is
   allowed. Display names stored before the look-alike check that now share a key with someone's name are kept as they are (saving them
   unchanged works); a change has to pick a free name. The server logs how many there are at start (a count, no names).
+- the same key guards NEW login names: an invite for a new person, the owner claim and a code added by the owner are refused (the
+  usual texts / `name-taken`) when the name has the key of an existing login or of another person's display name. Existing logins are
+  never renamed or blocked and are found exactly as before; the server logs at start how many of them share a key (a count, no names).
 - guests are refused (`Guests can't set a display name`); they keep their `(guest)` naming.
 - changing it is limited to 1 per 60 s per identity (kept across reconnects); saving the same name again, and refused attempts, cost
   nothing. Any refusal rejects the whole `profile:set`.

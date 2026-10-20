@@ -70,7 +70,7 @@ public static class ProfileRules
     // the comparison key for display-name uniqueness (L5): the Unicode look-alike skeleton (UTS #39, Elans.Shared.Confusables) of the
     // normalized name, case folded, small capitals as letters, 0->o, 1/i/|/!->l, 3->e, 5->s, separators dropped - so "E1an", "El an",
     // "Eʟan" and "Elаn" (Cyrillic а) are all the name "Elan". Accents stay ("Élan" is its own name). Never shown, only compared.
-    public static string NameKey(string name) => Confusables.NameKey(Names.Normalize(name));
+    public static string NameKey(string name) => Names.Key(name);
 
     // how many stored display names (identity key -> display name) share their key with another person's display name or login name.
     // Such names were allowed before the look-alike check (L5); they are kept as they are, and only a change has to pick a free name.
@@ -87,6 +87,23 @@ public static class ProfileRules
         foreach (var login in logins) Add(NameKey(login), Key(login));
         foreach (var (who, shown) in list) Add(NameKey(shown), who);
         return list.Count(d => owners.TryGetValue(NameKey(d.Display), out var set) && set.Any(o => o != d.Key));
+    }
+
+    // the same for login names: how many existing logins share their key with another login or with another person's display name.
+    // Existing logins are never renamed or blocked (they sign in by code / device token, looked up exactly); only NEW names are checked.
+    public static int LookalikeLogins(IEnumerable<(string Key, string Display)> displays, IEnumerable<string> logins)
+    {
+        var owners = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        void Add(string nameKey, string who)
+        {
+            if (nameKey.Length == 0) return;
+            if (!owners.TryGetValue(nameKey, out var set)) owners[nameKey] = set = new HashSet<string>(StringComparer.Ordinal);
+            set.Add(who);
+        }
+        var list = logins.ToList();
+        foreach (var login in list) Add(NameKey(login), Key(login));
+        foreach (var (who, shown) in displays) Add(NameKey(shown), who);
+        return list.Count(l => owners.TryGetValue(NameKey(l), out var set) && set.Any(o => o != Key(l)));
     }
 
     public static CharInfo CleanChar(string name, string cls, string classFile, string race, string raceFile, int level, long seen)

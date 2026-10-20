@@ -109,6 +109,19 @@ public partial class Auth
     public bool Blocked(string ip) => Strikes.IsBlocked(ip);
 
     public LodgeSecurity Security;   // 2.31: set by the hub (LodgeSecurity.cs)
+    // every stored (identity key, display name), set by the hub; null without one (tools, some tests)
+    public Func<List<(string Key, string Display)>> DisplayNames;
+
+    // L5: a NEW login name may not look like (Names.Key: Unicode's look-alike list, case and the older folds) any existing login name
+    // or another person's display name. Only for new names: existing logins are never checked again (identity lookups use Names.Same).
+    bool LooksTaken(string name, IEnumerable<string> logins)
+    {
+        var k = Names.Key(name);
+        if (logins.Any(l => Names.Key(l) == k)) return true;
+        var who = Names.Normalize(name).ToLowerInvariant();   // the identity key (ProfileRules.Key) the new person would have
+        var shown = DisplayNames?.Invoke();
+        return shown != null && shown.Any(d => d.Key != who && Names.Key(d.Display) == k);
+    }
 
     public void Fail(string ip)
     {
@@ -153,7 +166,8 @@ public partial class Auth
         var code = NewCode();
         Mutate(lines =>
         {
-            if (lines.Select(Parse).Any(p => p != null && (Names.Same(p.Value.Name, name) || Names.Alike(p.Value.Name, name))))
+            var logins = lines.Select(Parse).Where(p => p != null).Select(p => p.Value.Name).ToList();
+            if (logins.Any(l => Names.Same(l, name)) || LooksTaken(name, logins))
                 throw new InvalidOperationException($"{name} already has a code (or a name that looks just like it)");
             lines.Add($"{name}:{code}:{Roles.Normalize(role)}");
         });
