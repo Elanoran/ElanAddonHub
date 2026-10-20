@@ -1197,6 +1197,17 @@ namespace ElansAddonHub
             }
         }
 
+#if ELANS_DEVPIPE
+        // the developer's pipe (Services/DevPipe.cs): the page files were replaced on disk; load the document again and send it the map from scratch
+        public void DevReload()
+        {
+            if (web?.CoreWebView2 == null || mapId < 0) return;
+            loadedPage = null; pageHello = false;
+            target = new WorldMapTarget { MapId = mapId, HasView = hasView, X = vx, Y = vy, Z = vz };
+            Resolve();
+        }
+#endif
+
         // ---------------------------------------------------------------- test helpers
         public async Task<string> EvalForTest(string js)
         {

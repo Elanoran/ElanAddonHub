@@ -175,7 +175,13 @@ namespace ElansAddonHub
             thread.Start();
 
             // elanshub:// links: keep the registration current (it follows the exe after a self-update or a move) and listen for links from a second start
+#if ELANS_DEVPIPE
+            // a developer's build (Services/DevPipe.cs): its own pipe; the elanshub:// links stay with the real Outpost
+            if (testDir == null) ElansAddonHub.Services.DevPipe.Start(main);
+            if (false)
+#else
             if (testDir == null && !e.Args.Contains("--test-selfupdate"))
+#endif
             {
                 try { if (!SettingsStore.Load().NoLinkHandler) LinkOpen.EnsureRegistered(SelfUpdater.ExePath); }
                 catch (Exception ex) { Util.Log("link handler: " + ex.Message); }

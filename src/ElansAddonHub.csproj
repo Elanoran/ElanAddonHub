@@ -37,6 +37,12 @@
     <DefineConstants>$(DefineConstants);ELANS_UPDATETEST</DefineConstants>
   </PropertyGroup>
 
+  <!-- 3.2: Tools/devoutpost.ps1 only (dotnet build -p:ElansDevPipe=true): the developer's pipe for Tools/OutpostDevMcp (Services/DevPipe.cs). Such a build
+       never updates itself and does not register elanshub:// links; release.py and the self-test never set it, and the self-test checks the type is absent. -->
+  <PropertyGroup Condition="'$(ElansDevPipe)' == 'true'">
+    <DefineConstants>$(DefineConstants);ELANS_DEVPIPE</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Resource Include="Assets\hub.ico" />
     <Resource Include="Assets\hub.png" />

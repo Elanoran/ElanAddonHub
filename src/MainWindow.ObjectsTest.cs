@@ -198,6 +198,13 @@ namespace ElansAddonHub
                     && js.Str("card").StartsWith("Trees & objects of Eastern Kingdoms: 3,000 models for 209,000 placements, about 3 minutes and 180 MB", StringComparison.Ordinal));
                 Check("setting: a saved level is one of the four, anything else is Off", WorldMapObjects.Normalize("high") == "high" && WorldMapObjects.Normalize(null) == "off" && WorldMapObjects.Normalize("ULTRA") == "off");
             });
+
+            // ---- the developer's pipe (Services/DevPipe.cs) exists only in a build made with -p:ElansDevPipe=true (Tools/devoutpost.ps1): never in this one
+            Part("dev pipe", () =>
+            {
+                var asm = typeof(MainWindow).Assembly;
+                Check("dev pipe: this build (the one the self-test and release.py make) has no developer's pipe and no DevReload in the world map", asm.GetType("ElansAddonHub.Services.DevPipe") == null && typeof(WorldMapView).GetMethod("DevReload") == null);
+            });
         }
     }
 }

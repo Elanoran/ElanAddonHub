@@ -17,7 +17,11 @@ namespace ElansAddonHub.Services
         }
 
         public static bool IsNewer(HubInfo hub) =>
+#if ELANS_DEVPIPE
+            false;      // a developer's build (Services/DevPipe.cs) is never replaced by an update
+#else
             hub != null && !string.IsNullOrEmpty(hub.Url) && Util.CompareVersions(hub.Version, App.Version) > 0;
+#endif
 
         // Why this update must not be installed, or null. The address must be https on a GitHub host and the manifest must carry a valid SHA-256 of the exe:
         // without a hash the file cannot be checked, and this exe replaces the running program - so there is no "install anyway" for it.
