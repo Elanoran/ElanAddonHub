@@ -260,7 +260,10 @@ namespace ElansAddonHub.Services.WorldMap
                 else
                 {
                     byte[] bytes = null; string why = null, detail = "";
-                    try { bytes = t.RootFdid == 0 ? null : load(t); } catch (OperationCanceledException) { throw; } catch (Exception e) { detail = WorldMapPending.Short(e); Util.Log("world map terrain: tile " + t.Col + "," + t.Row + ": " + detail); res.Failed++; why = "unreadable"; }
+                    try { bytes = t.RootFdid == 0 ? null : load(t); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (FileNotThereException e) { bytes = null; res.Missing++; why = e.Reason; }
+                    catch (Exception e) { detail = WorldMapPending.Short(e); Util.Log("world map terrain: tile " + t.Col + "," + t.Row + ": " + detail); res.Failed++; why = WorldMapPending.ReasonOf(e); }
                     AdtFile adt = null;
                     if (bytes == null) { if (why == null) { res.Missing++; why = "missing"; } }
                     else
@@ -293,7 +296,7 @@ namespace ElansAddonHub.Services.WorldMap
                         try { if (File.Exists(wfile)) File.Delete(wfile); } catch (Exception) { }
                         WorldMapPending.WriteMarker(marker, p);
                         res.Pending.Add(p);
-                        if (why == "missing") Util.Log("world map terrain: tile " + t.Col + "," + t.Row + " is not in the local game storage yet; " + (low != null ? "drawn at low detail from the WDL" : "a placeholder is drawn") + " and it is read again later");
+                        if (why == "missing" || why == "unlisted") Util.Log("world map terrain: tile " + t.Col + "," + t.Row + (why == "unlisted" ? " is not in the game's file list" : " is not in the local game storage yet") + "; " + (low != null ? "drawn at low detail from the WDL" : "a placeholder is drawn") + " and it is read again later");
                     }
                 }
                 if (tt != null) { if (tt.MinZ < minZ) minZ = tt.MinZ; if (tt.MaxZ > maxZ) maxZ = tt.MaxZ; }

@@ -24,7 +24,8 @@ namespace ElansAddonHub
             public int Placements, Bridges;
             public double TowerX, TowerZ, BridgeX, BridgeZ, HouseX, HouseZ;
             public int Opens;
-            public FuncBuildingSource Source() { Opens++; return new FuncBuildingSource(f => Files.TryGetValue(f, out var b) ? b : null); }
+            public Func<int, bool> Later;       // 3.1.1: the files a "later copy of a tie" gave
+            public FuncBuildingSource Source() { Opens++; return new FuncBuildingSource(f => Files.TryGetValue(f, out var b) ? b : null) { Later = Later }; }
         }
 
         static int BldObjFdid(int col, int row) => 2000000 + row * 64 + col;
@@ -197,7 +198,7 @@ namespace ElansAddonHub
                 world.Files[BldWorld.House] = BldRoot(new[] { -9f, -9f, 0f, 9f, 40f, 11f }, new uint[] { 8, 8, 0x2000, 0x2040 }, new[] { 6001, 6002, 6003, 6007 }, new uint[] { 7001, 0 });
                 world.Files[6007] = BldGroup(0x2041, cv, ci, new byte[12]);
                 var old = WorldMapBuildings.ReadManifest(D());
-                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":2,", ""));     // a 2.88 manifest has no "rules"
+                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":" + WorldMapBuildings.Rules + ",", ""));     // a 2.88 manifest has no "rules"
                 var oldRead = WorldMapBuildings.ReadManifest(D());
                 BuildingsService.ResetForTest();
                 bool readyBefore = BuildingsService.IsReady(0, "all");
@@ -219,7 +220,33 @@ namespace ElansAddonHub
                 world.Files[BldWorld.House] = savedHouse; world.Files.Remove(6007);
                 // and back to the plain house for what follows (its file removed, an old rule: the upgrade makes the missing one)
                 File.Delete(houseFile);
-                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":2,", "\"rules\":1,"));
+                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":" + WorldMapBuildings.Rules + ",", "\"rules\":1,"));
+                BuildingsService.ResetForTest(); await BuildingsService.Prepare(0, "all"); await WaitFor(() => !BuildingsService.IsRunning(0), 20000);
+                BuildingsService.TakeFresh(0);
+            }
+
+            // ---------------------------------------------------------------- 3.1.1: a folder made before the root-tie fix (rule 2): the models that read a file from a later copy are made again
+            {
+                var houseFile = WorldMapBuildings.ModelFile(D(), BldWorld.House); var towerFile = WorldMapBuildings.ModelFile(D(), BldWorld.Tower);
+                var houseTime = File.GetLastWriteTimeUtc(houseFile); var towerTime = File.GetLastWriteTimeUtc(towerFile);
+                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":" + WorldMapBuildings.Rules + ",", "\"rules\":2,"));
+                world.Later = id => id == 6004;          // the tower's group: found only by the later copy
+                var savedGroup = world.Files[6004]; world.Files.Remove(6004);     // ... and, this time, not there at all: the build says why
+                await Task.Delay(30);
+                BuildingsService.ResetForTest(); bool ready2 = BuildingsService.IsReady(0, "all");
+                await BuildingsService.Prepare(0, "all"); await WaitFor(() => !BuildingsService.IsRunning(0), 20000);
+                var man3 = WorldMapBuildings.ReadManifest(D()); var fresh3 = BuildingsService.TakeFresh(0);
+                Check("tie rule (3.1.1): a finished folder of rule 2 is not ready (" + ready2 + "); Prepare remakes only the model with a file from a later copy (the tower, " + (File.GetLastWriteTimeUtc(towerFile) != towerTime) + "), not the house (" + (File.GetLastWriteTimeUtc(houseFile) == houseTime) + "); the manifest says rule " + man3?.Rules + " and why a file was not readable: " + WorldMapBuildings.UnreadText(man3?.Unread),
+                    !ready2 && File.GetLastWriteTimeUtc(towerFile) != towerTime && File.GetLastWriteTimeUtc(houseFile) == houseTime && man3 != null && man3.Rules == WorldMapBuildings.Rules && man3.AllDone
+                    && man3.Unread.TryGetValue("building:missing", out var um) && um >= 1 && WorldMapBuildings.UnreadText(man3.Unread).Contains("building files: ") && WorldMapBuildings.UnreadText(man3.Unread).Contains("listed but not on disk"), WorldMapBuildings.UnreadText(man3?.Unread));
+                // a texture colour that could not be read is not kept for the next run (it may be readable then); real colours are
+                var tcDir = Path.Combine(work, "texcolors"); Directory.CreateDirectory(tcDir);
+                WorldMapBuildings.WriteTexColors(tcDir, new Dictionary<uint, int> { [7001] = -1, [7000] = 0x123456 });
+                var tcBack = WorldMapBuildings.ReadTexColors(tcDir);
+                Check("tie rule (3.1.1): a texture that could not be read (-1) is asked for again in the next build - only real colours come back from the cache file", tcBack.Count == 1 && tcBack.TryGetValue(7000, out var tc0) && tc0 == 0x123456, string.Join(",", tcBack.Select(kv => kv.Key + "=" + kv.Value)));
+                // back to the whole world: the tower made again from its group
+                world.Files[6004] = savedGroup; world.Later = null; File.Delete(towerFile);
+                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":" + WorldMapBuildings.Rules + ",", "\"rules\":1,"));
                 BuildingsService.ResetForTest(); await BuildingsService.Prepare(0, "all"); await WaitFor(() => !BuildingsService.IsRunning(0), 20000);
                 BuildingsService.TakeFresh(0);
             }

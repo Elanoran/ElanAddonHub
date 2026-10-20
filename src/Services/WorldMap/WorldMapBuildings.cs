@@ -141,6 +141,7 @@ namespace ElansAddonHub.Services.WorldMap
         public List<int> GroupFdids = new List<int>();
         public List<uint> TextureFdids = new List<uint>();
         public bool RootMissing;
+        public bool LaterCopy;              // its root, a group or a texture is read from a later copy of a tie in the root (3.1.1): before, it was missing (Rules 3)
     }
 
     public sealed class BuildingScan
@@ -200,6 +201,8 @@ namespace ElansAddonHub.Services.WorldMap
         void Prefetch(IEnumerable<int> fdids);       // look up many ids at once (the root file is walked once)
         byte[] Read(int fdid);                        // null = not in the install; never throws for a single missing / damaged file
         byte[] ReadTexture(int fdid);                 // a texture reduced to what the average colour needs (a small mip level); null = not in the install
+        bool LaterCopy(int fdid) => false;            // the file is read from a later copy of a tie in the game's root (CascStorage.TookLaterCopy)
+        Dictionary<string, int> Unread() => null;     // the files this source could not give, "<kind>:<reason>" (kind building | texture, reason as PendingTile.Reason) -> count
     }
 
     public sealed class CascBuildingSource : IBuildingSource
@@ -215,27 +218,37 @@ namespace ElansAddonHub.Services.WorldMap
             foreach (var w in want) asked.Add(w);
             try { foreach (var kv in casc.ResolveFileIds(want)) keys[kv.Key] = kv.Value; } catch (Exception e) { Util.Log("world map buildings: lookup: " + e.Message); }
         }
+        readonly Dictionary<string, int> unread = new Dictionary<string, int>();
+        internal static void Note(Dictionary<string, int> d, string kind, string reason) { lock (d) { var k = kind + ":" + reason; d.TryGetValue(k, out var n); d[k] = n + 1; } }
+        public Dictionary<string, int> Unread() { lock (unread) return new Dictionary<string, int>(unread); }
+        public bool LaterCopy(int fdid) => casc.TookLaterCopy(fdid);
+        bool Key(int fdid, out byte[] ck)
+        {
+            if (keys.TryGetValue(fdid, out ck)) return true;
+            if (!asked.Contains(fdid)) { Prefetch(new[] { fdid }); if (keys.TryGetValue(fdid, out ck)) return true; }
+            return false;
+        }
         public byte[] Read(int fdid)
         {
-            if (!keys.TryGetValue(fdid, out var ck)) { if (asked.Contains(fdid)) return null; Prefetch(new[] { fdid }); if (!keys.TryGetValue(fdid, out ck)) return null; }
-            try { return casc.ReadByContentKey(ck); } catch (Exception) { return null; }
+            if (!Key(fdid, out var ck)) { Note(unread, "building", "unlisted"); return null; }
+            try { var b = casc.ReadByContentKey(ck); if (b == null) Note(unread, "building", "missing"); return b; } catch (Exception e) { Note(unread, "building", WorldMapPending.ReasonOf(e)); return null; }
         }
         public byte[] ReadTexture(int fdid)
         {
-            if (!keys.TryGetValue(fdid, out var ck)) { if (asked.Contains(fdid)) return null; Prefetch(new[] { fdid }); if (!keys.TryGetValue(fdid, out ck)) return null; }
+            if (!Key(fdid, out var ck)) { Note(unread, "texture", "unlisted"); return null; }
             try
             {
                 var h = casc.ReadRangeByContentKey(ck, 0, 148);
-                if (h == null || h.Length < 148 || h[0] != 'B' || h[1] != 'L' || h[2] != 'P' || h[3] != '2') return null;
-                if (BitConverter.ToUInt32(h, 4) != 1) return null;
+                if (h == null) { Note(unread, "texture", "missing"); return null; }
+                if (h.Length < 148 || h[0] != 'B' || h[1] != 'L' || h[2] != 'P' || h[3] != '2' || BitConverter.ToUInt32(h, 4) != 1) { Note(unread, "texture", "unreadable"); return null; }
                 int w = BitConverter.ToInt32(h, 12), ht = BitConverter.ToInt32(h, 16), k = 0;
                 while (k < 15 && (w >> (k + 1)) >= 8 && (ht >> (k + 1)) >= 8 && BitConverter.ToUInt32(h, 20 + (k + 1) * 4) != 0 && BitConverter.ToUInt32(h, 84 + (k + 1) * 4) != 0) k++;
                 int off = (int)BitConverter.ToUInt32(h, 20 + k * 4), size = (int)BitConverter.ToUInt32(h, 84 + k * 4);
-                if (off <= 0 || size <= 0 || size > (16 << 20)) return null;
+                if (off <= 0 || size <= 0 || size > (16 << 20)) { Note(unread, "texture", "unreadable"); return null; }
                 int hdr = h[8] == 1 ? 148 + 1024 : 148;
                 var head = hdr == 148 ? h : casc.ReadRangeByContentKey(ck, 0, hdr);
                 var data = casc.ReadRangeByContentKey(ck, off, size);
-                if (head == null || head.Length < hdr || data == null || data.Length < size) return null;
+                if (head == null || head.Length < hdr || data == null || data.Length < size) { Note(unread, "texture", "unreadable"); return null; }
                 var o = new byte[hdr + size];
                 Buffer.BlockCopy(head, 0, o, 0, hdr); Buffer.BlockCopy(data, 0, o, hdr, size);
                 for (int i = 0; i < 16; i++) { Buffer.BlockCopy(BitConverter.GetBytes(0), 0, o, 20 + i * 4, 4); Buffer.BlockCopy(BitConverter.GetBytes(0), 0, o, 84 + i * 4, 4); }
@@ -243,7 +256,7 @@ namespace ElansAddonHub.Services.WorldMap
                 Buffer.BlockCopy(BitConverter.GetBytes(Math.Max(1, w >> k)), 0, o, 12, 4); Buffer.BlockCopy(BitConverter.GetBytes(Math.Max(1, ht >> k)), 0, o, 16, 4);
                 return o;
             }
-            catch (Exception) { return null; }
+            catch (Exception e) { Note(unread, "texture", WorldMapPending.ReasonOf(e)); return null; }
         }
         public void Dispose() { casc.Dispose(); }
     }
@@ -252,10 +265,21 @@ namespace ElansAddonHub.Services.WorldMap
     {
         readonly Func<int, byte[]> read;
         public int Reads;
+        public Func<int, bool> Later;                 // self-test: the ids a "later copy" gave
+        readonly Dictionary<string, int> unread = new Dictionary<string, int>();
         public FuncBuildingSource(Func<int, byte[]> r) { read = r; }
         public void Prefetch(IEnumerable<int> fdids) { }
-        public byte[] Read(int fdid) { Interlocked.Increment(ref Reads); try { return read(fdid); } catch (Exception) { return null; } }
-        public byte[] ReadTexture(int fdid) => Read(fdid);
+        // the self-test's reader says why with FileNotThereException ("unlisted" / "missing"); null is "missing", any other exception a read error
+        byte[] Get(int fdid, string kind)
+        {
+            Interlocked.Increment(ref Reads);
+            try { var b = read(fdid); if (b == null) CascBuildingSource.Note(unread, kind, "missing"); return b; }
+            catch (Exception e) { CascBuildingSource.Note(unread, kind, WorldMapPending.ReasonOf(e)); return null; }
+        }
+        public byte[] Read(int fdid) => Get(fdid, "building");
+        public byte[] ReadTexture(int fdid) => Get(fdid, "texture");
+        public bool LaterCopy(int fdid) => Later != null && Later(fdid);
+        public Dictionary<string, int> Unread() { lock (unread) return new Dictionary<string, int>(unread); }
         public void Dispose() { }
     }
 
@@ -264,7 +288,8 @@ namespace ElansAddonHub.Services.WorldMap
         public const int Version = 1;
         // which groups a model is made of: 1 = exterior groups only (before 2.89), 2 = exterior and exterior-lit ones (WmoRoot.OutsideGroups). A finished folder made by an
         // older rule is not ready: the models it would make differently (ExteriorLitGroups > 0, a handful per continent) are removed and made again, without asking.
-        public const int Rules = 2;
+        // 3 (3.1.1) = the files the game lists twice are read from the copy that is on the disk: the models with such a file (most textures of the Forever client) are made again.
+        public const int Rules = 3;
         public const string Folder = "buildings";
         public const int PlacementBytes = 60;
         public static string Dir(string mapDir) => Path.Combine(mapDir, Folder);
@@ -325,6 +350,20 @@ namespace ElansAddonHub.Services.WorldMap
             return res;
         }
 
+        // "textures: 12 listed but not on disk; buildings: 1 not in the game's file list" (Manifest.Unread in words)
+        public static string UnreadText(Dictionary<string, int> unread)
+        {
+            if (unread == null || unread.Count == 0) return "";
+            var parts = new List<string>();
+            foreach (var kind in new[] { "building", "texture" })
+            {
+                var l = unread.Where(kv => kv.Key.StartsWith(kind + ":", StringComparison.Ordinal) && kv.Value > 0).OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+                    .Select(kv => kv.Value.ToString(CultureInfo.InvariantCulture) + " " + WorldMapPending.ReasonText(kv.Key.Substring(kind.Length + 1), "")).ToList();
+                if (l.Count > 0) parts.Add((kind == "building" ? "building files" : "textures") + ": " + string.Join(", ", l));
+            }
+            return string.Join("; ", parts);
+        }
+
         // ---------------------------------------------------------------- manifest
         public sealed class Manifest
         {
@@ -333,6 +372,7 @@ namespace ElansAddonHub.Services.WorldMap
             public string BuildKey = "", Built = "";
             public long Bytes, Ms;
             public double SecPerGroup, BytesPerGroup, SecBase;
+            public Dictionary<string, int> Unread = new Dictionary<string, int>();     // 3.1.1: the files the last build could not read, "<kind>:<reason>" -> count (for "Copy details")
             public bool Valid => Version == WorldMapBuildings.Version && Placements >= 0 && Models >= 0;
         }
 
@@ -349,6 +389,7 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     Version = d.Int("v"), Rules = d.ContainsKey("rules") ? d.Int("rules") : 1, MapId = d.Int("mapId"), BuildKey = d.Str("build") ?? "", Placements = d.Int("placements"), Models = d.Int("models"), Bridges = d.Int("bridges"), BridgeModels = d.Int("bridgeModels"),
                     ModelsBuilt = d.Int("modelsBuilt"), Tiles = d.Int("tiles"), Bytes = d.Long("bytes"), Ms = d.Long("ms"), Built = d.Str("built") ?? "", SecPerGroup = num("secPerGroup"), BytesPerGroup = num("bytesPerGroup"), SecBase = num("secBase"), BridgesDone = d.Bool("bridgesDone"), AllDone = d.Bool("allDone"),
+                    Unread = d.TryGetValue("unread", out var u) && u is Dictionary<string, object> ud ? ud.Where(kv => kv.Value is double).ToDictionary(kv => kv.Key, kv => (int)(double)kv.Value) : new Dictionary<string, int>(),
                 };
             }
             catch (Exception) { return null; }
@@ -361,6 +402,7 @@ namespace ElansAddonHub.Services.WorldMap
                 ["v"] = Version, ["rules"] = m.Rules, ["mapId"] = m.MapId, ["build"] = m.BuildKey, ["placements"] = m.Placements, ["models"] = m.Models, ["bridges"] = m.Bridges, ["bridgeModels"] = m.BridgeModels, ["modelsBuilt"] = m.ModelsBuilt,
                 ["tiles"] = m.Tiles, ["bytes"] = m.Bytes, ["ms"] = m.Ms, ["secPerGroup"] = Math.Round(m.SecPerGroup, 5), ["bytesPerGroup"] = Math.Round(m.BytesPerGroup, 1), ["secBase"] = Math.Round(m.SecBase, 5),
                 ["bridgesDone"] = m.BridgesDone, ["allDone"] = m.AllDone, ["built"] = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+                ["unread"] = (m.Unread ?? new Dictionary<string, int>()).ToDictionary(kv => kv.Key, kv => (object)kv.Value),
             };
             WriteAtomic(ManifestPath(dir), Encoding.UTF8.GetBytes(Json.Write(d)));
         }
@@ -405,6 +447,9 @@ namespace ElansAddonHub.Services.WorldMap
                 }
                 scan.Models[id] = info;
             }
+            // which models read a file from a later copy of a tie in the root (a group, a texture): they looked different before 3.1.1 (Rules 3)
+            src.Prefetch(scan.Models.Values.SelectMany(m => m.GroupFdids.Concat(m.TextureFdids.Select(t => (int)t))));
+            foreach (var m in scan.Models.Values) m.LaterCopy = !m.RootMissing && (src.LaterCopy(m.Fdid) || m.GroupFdids.Any(src.LaterCopy) || m.TextureFdids.Any(t => src.LaterCopy((int)t)));
             foreach (var p in scan.Placements)
             {
                 bool br = roots.TryGetValue((int)p.NameId, out var r) && ground != null && BridgeRules.IsBridge(r, p, ground);
@@ -481,7 +526,9 @@ namespace ElansAddonHub.Services.WorldMap
                 if (b.Length < 8 || b[0] != 'T' || b[1] != 'X' || b[2] != 'C' || b[3] != '1') return res;
                 int n = BitConverter.ToInt32(b, 4);
                 if (n < 0 || 8L + (long)n * 8 != b.Length) return res;
-                for (int i = 0; i < n; i++) res[BitConverter.ToUInt32(b, 8 + i * 8)] = BitConverter.ToInt32(b, 12 + i * 8);
+                // 3.1.1: a texture that could not be read (-1) is not taken from the file: it is asked for again in the next build (it may be on disk by now,
+                // or found by a later copy in the game's file list) - no "missing" is kept across runs
+                for (int i = 0; i < n; i++) { int c = BitConverter.ToInt32(b, 12 + i * 8); if (c != -1) res[BitConverter.ToUInt32(b, 8 + i * 8)] = c; }
             }
             catch (Exception) { }
             return res;
@@ -560,7 +607,7 @@ namespace ElansAddonHub.Services.WorldMap
             if (scan == null || oldRules >= Rules) return 0;
             foreach (var m in scan.Models.Values)
             {
-                if (m.RootMissing || m.ExteriorLitGroups == 0) continue;
+                if (m.RootMissing || !((oldRules < 2 && m.ExteriorLitGroups > 0) || (oldRules < 3 && m.LaterCopy))) continue;
                 var f = ModelFile(dir, m.Fdid);
                 try { if (File.Exists(f)) { File.Delete(f); n++; } } catch (Exception) { }
             }

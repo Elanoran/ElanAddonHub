@@ -272,7 +272,25 @@ namespace ElansAddonHub
                 var broken = WorldMapPyramid.Build(5, "Testland", "keyA", four, t => t == four[1] ? throw new IOException("not a BLTE block") : Load(t), pdir2b, null, CancellationToken.None);
                 var bman = WorldMapPyramid.ReadManifest(pdir2b);
                 Check("pyramid: a minimap that cannot be read (not a BLTE block) gets a stand-in and is listed as a read error with the reason; the rest of the continent is built",
-                    broken.Complete && broken.Missing == 1 && broken.Unreadable == 1 && broken.Decoded == 3 && bman != null && bman.Pending.Count == 1 && bman.Pending[0].Reason == "unreadable" && bman.Pending[0].Detail.Contains("BLTE") && bman.Pending[0].ReasonText.StartsWith("read error"), broken.Missing + " " + broken.Unreadable + " " + broken.Decoded);
+                    broken.Complete && broken.Missing == 1 && broken.Unreadable == 1 && broken.Decoded == 3 && bman != null && bman.Pending.Count == 1 && bman.Pending[0].Reason == "unreadable" && bman.Pending[0].Detail.Contains("BLTE") && bman.Pending[0].ReasonText.StartsWith("on disk but could not be read (not a BLTE block"), broken.Missing + " " + broken.Unreadable + " " + broken.Decoded);
+                // 3.1.1: why, finer - from a fake storage: a tile the game's file list does not have, one it lists with no copy on the disk, one key-locked, one damaged
+                {
+                    var pdirWhy = Path.Combine(work, "pyrWhy");
+                    var why = WorldMapPyramid.Build(5, "Testland", "keyA", four.Concat(new[] { new WdtTile { Col = 12, Row = 21, MinimapFdid = 99 } }).ToArray(), t =>
+                        t == four[0] ? throw new FileNotThereException("unlisted", "the minimap tile") : t == four[1] ? throw new FileNotThereException("missing", "the minimap tile")
+                        : t == four[2] ? throw new NotSupportedException("BLTE block type 'E' (encrypted or unknown) is not supported") : t.MinimapFdid == 99 ? throw new IOException("not a BLTE block") : Load(t),
+                        pdirWhy, null, CancellationToken.None);
+                    var wman = WorldMapPyramid.ReadManifest(pdirWhy);
+                    string R(int c, int r) => wman?.Pending.FirstOrDefault(p => p.Col == c && p.Row == r)?.Reason;
+                    var wrep = WorldMapReport.Build(new WorldMapReport.Info { Continent = "Testland", MapId = 5, PictureTiles = 5, Pending = wman?.Pending ?? new List<PendingTile>(),
+                        Buildings = WorldMapBuildings.UnreadText(new Dictionary<string, int> { ["texture:missing"] = 12, ["texture:unlisted"] = 1, ["building:unreadable"] = 2 }) });
+                    Check("reasons (3.1.1): each stand-in tile says why, from a fake storage - not in the game's file list (" + R(four[0].Col, four[0].Row) + "), listed but not on disk (" + R(four[1].Col, four[1].Row) + "), key-locked (" + R(four[2].Col, four[2].Row) + "), damaged (" + R(12, 21) + "); the read survives the manifest",
+                        why.Complete && why.Pending.Count == 4 && R(four[0].Col, four[0].Row) == "unlisted" && R(four[1].Col, four[1].Row) == "missing" && R(four[2].Col, four[2].Row) == "locked" && R(12, 21) == "unreadable" && why.Unreadable == 2, wman == null ? "no manifest" : string.Join(",", wman.Pending.Select(p => p.Col + "," + p.Row + " " + p.Reason)));
+                    Check("reasons (3.1.1): Copy details counts them per kind of file in plain words (minimap tiles; the buildings' textures and files), and each tile's line has its reason",
+                        wrep.Contains("Why (minimap tiles): ") && wrep.Contains("1 not in the game's file list") && wrep.Contains("1 listed but not on disk") && wrep.Contains("1 on disk but key-locked (encrypted)") && wrep.Contains("1 on disk but could not be read")
+                        && wrep.Contains("tile 12,21: on disk but could not be read (not a BLTE block)") && wrep.Contains("3D buildings, not readable in their last build: building files: 2 on disk but could not be read; textures: 12 listed but not on disk, 1 not in the game's file list")
+                        && WorldMapPending.Summary(new[] { "missing", "missing", "unlisted" }) == "2 listed but not on disk, 1 not in the game's file list", wrep);
+                }
                 Check("pyramid: the page's reason for an unreadable game file says what to do (let Battle.net finish, or Scan and Repair)",
                     WorldMapService.Why(new IOException("not a BLTE block")).Contains("Scan and Repair") && WorldMapService.Why(new IOException("disk full")) == "disk full");
                 var none = Assert(() => WorldMapPyramid.Build(5, "Testland", "keyA", new[] { new WdtTile { Col = 1, Row = 1, MinimapFdid = 99 } }, Load, Path.Combine(work, "pyr3"), null, CancellationToken.None));
@@ -474,7 +492,8 @@ namespace ElansAddonHub
                     WorldMapReport.LogPathForTest = null;
                     Check("report: Copy details names the Outpost, game build and flavour, WebView2, the WebGL renderer, the continent, the tile counts, each tile not readable yet with its reason and what is shown, the page's state and errors",
                         rep.Contains("Outpost: 2.70.0") && rep.Contains("Game: 1.60.1.70425-ea9c525e (_classic_beta_)") && rep.Contains("WebView2 runtime: 140.0.3485.54") && rep.Contains("Graphics (WebGL): ANGLE (NVIDIA") && rep.Contains("Continent: Kalimdor (map 1), 3D view")
-                        && rep.Contains("picture tile 40,28: missing in local storage - shown as continent map art") && rep.Contains("terrain tile 40,28: read error (not a BLTE block) - shown as low-detail heights (WDL)") && rep.Contains("Pictures: 988 map tiles, 1 shown with a stand-in") && rep.Contains("Page error: TypeError"), rep);
+                        && rep.Contains("picture tile 40,28: listed but not on disk - shown as continent map art") && rep.Contains("terrain tile 40,28: on disk but could not be read (not a BLTE block) - shown as low-detail heights (WDL)")
+                        && rep.Contains("Why (minimap tiles): 1 listed but not on disk") && rep.Contains("Why (height tiles): 1 on disk but could not be read") && rep.Contains("Pictures: 988 map tiles, 1 shown with a stand-in") && rep.Contains("Page error: TypeError"), rep);
                     Check("report: the recent log lines are only the world map's (not the Lodge, the inventory or the self-test's own), and no path shows the user folder (it is %USERPROFILE% / %LOCALAPPDATA%), another user's folder neither",
                         rep.Contains("minimap 40,28 is not in the local game storage") && rep.Contains("world map web:") && !rep.Contains("Lodge: Elan") && !rep.Contains("inventory:") && !rep.Contains("worldmap test")
                         && !rep.ToLowerInvariant().Contains(prof.ToLowerInvariant()) && !rep.Contains("SomeoneElse") && rep.Contains("%LOCALAPPDATA%\\ElansAddonHub") && rep.Contains("%USERPROFILE%"), rep);

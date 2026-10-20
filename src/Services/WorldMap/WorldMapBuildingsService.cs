@@ -252,7 +252,7 @@ namespace ElansAddonHub.Services.WorldMap
             try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
             var sw = System.Diagnostics.Stopwatch.StartNew();
             string dir = j.Dir;
-            Dictionary<uint, int> texColors = null;
+            Dictionary<uint, int> texColors = null; Dictionary<string, int> unread = null;
             long writtenBytes = 0; int groupsDone = 0; double secWorked = 0, estWorked = 0;
             try
             {
@@ -315,6 +315,7 @@ namespace ElansAddonHub.Services.WorldMap
                         Fire(j.MapId);
                     }
                     WriteTexColorsSafe(dir, texColors);
+                    unread = src.Unread();
                 }
                 // finished: the measured costs, then the manifest (last)
                 var man = new WorldMapBuildings.Manifest
@@ -328,6 +329,8 @@ namespace ElansAddonHub.Services.WorldMap
                 if (groupsDone > 0 && secWorked > 0) { man.SecPerGroup = secWorked / groupsDone; man.BytesPerGroup = (double)writtenBytes / groupsDone; }
                 else if (prev != null) { man.SecPerGroup = prev.SecPerGroup; man.BytesPerGroup = prev.BytesPerGroup; man.SecBase = prev.SecBase; }
                 man.Bytes = WorldMapBuildings.SizeBytes(dir);
+                man.Unread = unread ?? new Dictionary<string, int>();
+                if (man.Unread.Count > 0) Util.Log("world map buildings: " + j.Name + ": not readable in this build: " + WorldMapBuildings.UnreadText(man.Unread));
                 WorldMapBuildings.WriteManifest(dir, man);
                 j.State.Phase = "done"; j.State.SecondsLeft = 0; j.State.BytesOnDisk = man.Bytes;
                 j.State.Total = WorldMapBuildings.Estimate(scan, j.Mode, dir).Buildings; j.State.Done = j.State.Total;

@@ -143,7 +143,8 @@ namespace ElansAddonHub.Services.WorldMap
                     MapRender.TileImage img; string why = "missing", detail = "";
                     try { img = load(t); }
                     catch (OperationCanceledException) { throw; }
-                    catch (Exception e) { detail = WorldMapPending.Short(e); Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " could not be read: " + detail); img = null; res.Unreadable++; why = "unreadable"; }
+                    catch (FileNotThereException e) { img = null; why = e.Reason; }
+                    catch (Exception e) { detail = WorldMapPending.Short(e); Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " could not be read: " + detail); img = null; res.Unreadable++; why = WorldMapPending.ReasonOf(e); }
                     bool good = !(img == null || img.Bgra == null || img.Width <= 0 || img.Height <= 0 || img.Bgra.Length < img.Width * img.Height * 4);
                     byte[] px; string shown = "";
                     if (!good && wasStandIn && haveFiles)
@@ -168,7 +169,7 @@ namespace ElansAddonHub.Services.WorldMap
                         try { art = standIn?.Invoke(t); } catch (OperationCanceledException) { throw; } catch (Exception) { art = null; }
                         shown = art != null && art.Bgra != null && art.Width > 0 && art.Bgra.Length >= art.Width * art.Height * 4 ? "art" : "plain";
                         px = Placeholder(shown == "art" ? (art.Width == WorldMapMath.MinimapPx && art.Height == WorldMapMath.MinimapPx ? art.Bgra : Resample(art, WorldMapMath.MinimapPx)) : null);
-                        if (why == "missing") Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " is not in the local game storage yet; shown as " + (shown == "art" ? "continent map art" : "a placeholder") + " and read again later");
+                        if (why == "missing" || why == "unlisted") Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + (why == "unlisted" ? " is not in the game's file list" : " is not in the local game storage yet") + "; shown as " + (shown == "art" ? "continent map art" : "a placeholder") + " and read again later");
                     }
                     var tile = new byte[WorldMapMath.TilePx * WorldMapMath.TilePx * 4];
                     for (int y = y0; y <= y1; y++)
