@@ -12,6 +12,7 @@ One definition of what the Outpost (`src/`), the Lodge server (`server/`) and th
 | `PublicUrl.cs` | the rules a Lodge's public address must follow: https, the canonical form both sides sign, nothing local or private |
 | `IpKey.cs` | the key per-address limits count by: an IPv4 address as itself, an IPv6 address by its /64 |
 | `DangerousFiles.cs` | the one list of file types that can run something on Windows: the Outpost warns about them, the Lodge refuses them |
+| `Confusables.cs`, `Confusables.Data.cs` | Unicode's look-alike check (UTS #39): `Skeleton`, and `NameKey`, the key the Lodge makes display names unique by. `Confusables.Data.cs` is generated from Unicode's `confusables.txt` by `Tools/unicode/make_confusables.py` (see `Tools/unicode/README.md`); never edit it by hand |
 | `Lodge/LodgeMsg.cs` | every Lodge message type, in one list |
 | `Lodge/<Group>Messages.cs` | one typed class per message and direction, read and written through `ILodgeFields` / `ILodgeWriter` (`Lodge/LodgeFields.cs`) |
 | `Lodge/LodgeJson.cs` | the one JSON engine of the Lodge link (System.Text.Json): the frame parser and its rules (size, depth, counts, duplicate keys, UTF-8), the serializer, and `LodgeJsonFields`, the adapter both sides read and write the typed classes through |
@@ -40,7 +41,7 @@ change the file here, run the sync, and commit both sides.
 
     dotnet test shared/Elans.Shared.Tests
 
-They cover the signature vectors (including one made by the release tool), the address rules, `IpKey`, the dangerous file types, golden
+They cover the signature vectors (including one made by the release tool), the address rules, `IpKey`, the dangerous file types, the look-alike table against `confusables.txt` and the name key (`ConfusablesTests.cs`), golden
 and round-trip tests of every Lodge message against the wire as it was, the rules that keep the protocol in one place (`LodgeMsgTests.cs`),
 and the JSON engine: how tricky input reads, pinned against frozen copies of both old readers (`JsonLeniencyTests.cs`,
 `JsonLeniency.golden.txt`, `Frozen/`), its parser rules and converters (`LodgeJsonTests.cs`), the count limits against the biggest real

@@ -67,25 +67,26 @@ public static class ProfileRules
         return n;
     }
 
-    // the comparison key for uniqueness: lower case, look-alike characters folded together (0->o, 1/i/|/!->l, 3->e, 5->s),
-    // separators dropped - so "E1an", "El an" and "Elan" are the same name. Never shown, only compared.
-    public static string Fold(string name)
+    // the comparison key for display-name uniqueness (L5): the Unicode look-alike skeleton (UTS #39, Elans.Shared.Confusables) of the
+    // normalized name, case folded, small capitals as letters, 0->o, 1/i/|/!->l, 3->e, 5->s, separators dropped - so "E1an", "El an",
+    // "Eʟan" and "Elаn" (Cyrillic а) are all the name "Elan". Accents stay ("Élan" is its own name). Never shown, only compared.
+    public static string NameKey(string name) => Confusables.NameKey(Names.Normalize(name));
+
+    // how many stored display names (identity key -> display name) share their key with another person's display name or login name.
+    // Such names were allowed before the look-alike check (L5); they are kept as they are, and only a change has to pick a free name.
+    public static int LookalikeDisplayNames(IEnumerable<(string Key, string Display)> displays, IEnumerable<string> logins)
     {
-        var sb = new System.Text.StringBuilder();
-        foreach (var raw in Names.Normalize(name)) // Cyrillic/Greek look-alikes fold to Latin first
+        var owners = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);   // name key -> identity keys using it
+        void Add(string nameKey, string who)
         {
-            var ch = char.ToLowerInvariant(Names.Latin(raw));
-            switch (ch)
-            {
-                case '0': sb.Append('o'); break;
-                case '1': case 'i': case '|': case '!': sb.Append('l'); break;
-                case '3': sb.Append('e'); break;
-                case '5': sb.Append('s'); break;
-                case ' ': case '-': case '_': case '.': case '\'': break;
-                default: sb.Append(ch); break;
-            }
+            if (nameKey.Length == 0) return;
+            if (!owners.TryGetValue(nameKey, out var set)) owners[nameKey] = set = new HashSet<string>(StringComparer.Ordinal);
+            set.Add(who);
         }
-        return sb.ToString();
+        var list = displays.ToList();
+        foreach (var login in logins) Add(NameKey(login), Key(login));
+        foreach (var (who, shown) in list) Add(NameKey(shown), who);
+        return list.Count(d => owners.TryGetValue(NameKey(d.Display), out var set) && set.Any(o => o != d.Key));
     }
 
     public static CharInfo CleanChar(string name, string cls, string classFile, string race, string raceFile, int level, long seen)
@@ -390,18 +391,19 @@ public class ProfileModule : IModule
         if (publicChanged) await hub.BroadcastProfile(me);
     }
 
-    // null when `name` is free for `me`, else the reason. Called under Profiles.Gate. A display name may not equal (after
-    // normalizing and the look-alike fold) anyone else's login name or display name; one's own login name is fine.
+    // null when `name` is free for `me`, else the reason. Called under Profiles.Gate. A display name may not look like (same
+    // ProfileRules.NameKey) anyone else's login name or display name; one's own login name is fine. A stored name that already looks
+    // like someone else's (allowed before the look-alike check) is kept while it is unchanged; a change is checked like any other.
     string DisplayTaken(Member me, string name)
     {
-        var f = ProfileRules.Fold(name);
+        var f = ProfileRules.NameKey(name);
         if (f.Length == 0) return "Display name: needs at least one letter or digit";
         bool Mine(string login) => me.Personal && LodgeHub.Same(login, me.Name);
         foreach (var login in hub.Auth.PersonalNames.Concat(hub.Members.Select(x => x.Name)))
-            if (!Mine(login) && ProfileRules.Fold(login) == f) return "That display name is taken";
+            if (!Mine(login) && ProfileRules.NameKey(login) == f) return "That display name is taken";
         var myKey = ProfileRules.Key(me.Name);
         foreach (var (key, shown) in hub.Profiles.DisplayNames())
-            if (key != myKey && ProfileRules.Fold(shown) == f) return "That display name is taken";
+            if (key != myKey && ProfileRules.NameKey(shown) == f) return "That display name is taken";
         return null;
     }
 

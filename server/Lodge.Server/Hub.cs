@@ -176,6 +176,21 @@ public partial class LodgeHub
         Realms = new RealmsModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
         modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, CairnIn, Armory, SharedFiles, Datasets, Badges, Realms, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        LogLookalikeDisplayNames();
+    }
+
+    // L5: display names are unique by their look-alike key now; names stored before that may share one. They are kept - only the count
+    // is logged (no names), so the owner knows whether any exist.
+    void LogLookalikeDisplayNames()
+    {
+        if (Auth == null) return;
+        try
+        {
+            int n;
+            lock (Profiles.Gate) n = ProfileRules.LookalikeDisplayNames(Profiles.DisplayNames(), Auth.PersonalNames);
+            Log?.LogInformation("Display names: {Count} stored display name(s) look like another member's name (kept; a change must pick a free one)", n);
+        }
+        catch (Exception e) { Log?.LogWarning("Display names: the look-alike count failed: {Error}", e.GetType().Name); }
     }
 
     // personal codes: one budget per person; guests (shared code): one per address (IpKey: an IPv6 /64), so several friends on one guest
