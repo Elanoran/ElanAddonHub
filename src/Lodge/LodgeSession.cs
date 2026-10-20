@@ -138,7 +138,7 @@ namespace ElansAddonHub.Lodge
             Presence.Start();
             tick.Tick += (s, e) => OnTick();
             Sounds.Off = settings.SoundsOff;
-            YouTube.Enabled = () => !settings.VideoPreviewsOff;
+            YouTube.AutoLoad = () => settings.VideoPreviewsAuto;
             InitToasts();
             marksTimer.Tick += (s, e) => { marksTimer.Stop(); WriteMarksAsync(); };
             try { var disp = System.Windows.Application.Current?.Dispatcher; if (disp != null) disp.ShutdownStarted += (s, e) => FlushMarks(); } catch { }
@@ -179,10 +179,10 @@ namespace ElansAddonHub.Lodge
 
         static string OneLine(string t) { t = (t ?? "").Replace("\r", " ").Replace("\n", " "); return t.Length > 90 ? t.Substring(0, 90) + "..." : t; }
 
-        // "Show video previews" changed: rebuild (or drop) every message's YouTube card
         // the item data (names, icons from the Bags addon) arrived or changed: every message rebuilds its chips
         public void RefreshItemChips() { foreach (var l in messages.Values.ToList()) foreach (var m in l.ToList()) m.RefreshItems(); }
 
+        // "Load YouTube previews automatically" changed: switched on, every waiting card loads; switched off, cards already loaded stay
         public void RefreshVideos() { foreach (var l in messages.Values.ToList()) foreach (var m in l.ToList()) m.RefreshVideo(); }
 
         public ObservableCollection<MessageVM> MessagesOf(string channel)

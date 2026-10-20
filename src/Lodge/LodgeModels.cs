@@ -559,19 +559,29 @@ namespace ElansAddonHub.Lodge
             if (refs.Any(r => r.Id == 0 || ItemKnowledge.Get(r.Id) == null)) ItemKnowledge.EnsureLoaded();   // names / icons may be in the Bags data
         }
 
-        // ---- YouTube preview card (Settings > Privacy > Show video previews)
+        // ---- YouTube preview card (Settings > Privacy > Load YouTube previews automatically)
         VideoVM video;
         public VideoVM Video => video;
         public Visibility VideoVisibility => video?.CardVisibility ?? Visibility.Collapsed;
-        public YouTubeLink VideoLink => YouTube.Find(text);   // the link itself, also when previews are off
-        // (re)builds the card from the text and the current setting; same video = keep it
+        public Visibility VideoPromptVisibility => video?.PromptVisibility ?? Visibility.Collapsed;   // the click-to-load card (domain + "Load preview")
+        public YouTubeLink VideoLink => YouTube.Find(text);   // the link itself, also before a preview is loaded
+        // (re)builds the card from the text; it loads by itself only with automatic previews on, or when this video was already
+        // loaded in this session (then it comes from the cache, no request). Same video = keep it, and load it now if automatic got switched on.
         public void RefreshVideo()
         {
-            var link = YouTube.PreviewsOn ? YouTube.Find(text) : null;
-            if (link == null ? video == null : video != null && video.Link.Id == link.Id && video.Link.StartSeconds == link.StartSeconds) return;
+            var link = YouTube.Find(text);
+            if (link == null ? video == null : video != null && video.Link.Id == link.Id && video.Link.StartSeconds == link.StartSeconds)
+            {
+                if (video != null && !video.Started && YouTube.AutoLoadOn) video.Load();
+                return;
+            }
             video = link == null ? null : new VideoVM(link);
-            if (video != null) { video.PropertyChanged += (s, e) => Raise(nameof(VideoVisibility)); video.Load(); }
-            Raise(nameof(Video)); Raise(nameof(VideoVisibility));
+            if (video != null)
+            {
+                video.PropertyChanged += (s, e) => { Raise(nameof(VideoVisibility)); Raise(nameof(VideoPromptVisibility)); };
+                if (YouTube.AutoLoadOn || YouTube.Requested(link.Id)) video.Load();
+            }
+            Raise(nameof(Video)); Raise(nameof(VideoVisibility)); Raise(nameof(VideoPromptVisibility));
         }
         public bool Edited { get => edited; set { if (Set(ref edited, value)) Raise(nameof(EditedVisibility)); } }
         public bool Mentioned { get => mentioned; set { if (Set(ref mentioned, value)) { Raise(nameof(RowBackground)); Raise(nameof(MentionBar)); } } }

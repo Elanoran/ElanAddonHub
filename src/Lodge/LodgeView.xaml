@@ -751,6 +751,21 @@
                                 </DockPanel>
                               </Border>
                             </StackPanel>
+                            <!-- YouTube click to load (automatic previews off): the link's domain and a button; nothing is fetched before that click -->
+                            <Border Visibility="{Binding VideoPromptVisibility}" HorizontalAlignment="Left" Width="360" Margin="0,8,0,4" CornerRadius="{StaticResource Radius.Card}"
+                                    Background="{StaticResource Brush.Surface2}" Padding="12,8">
+                              <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="{Binding Video.LoadText}" IsEnabled="{Binding Video.LoadEnabled}"
+                                        Tag="{Binding Video}" Click="VideoLoad_Click" VerticalAlignment="Center" Margin="8,0,0,0"
+                                        ToolTip="Fetches the thumbnail and title from YouTube (YouTube sees your address)" AutomationProperties.Name="Load the YouTube preview" />
+                                <TextBlock DockPanel.Dock="Left" Text="&#xE714;" FontFamily="{StaticResource Font.Icons}" FontSize="18"
+                                           Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <StackPanel VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Video.Domain}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" />
+                                  <TextBlock Text="Video preview not loaded" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                              </DockPanel>
+                            </Border>
                             <!-- YouTube preview: thumbnail + play button, title and channel; a click plays it in the viewer -->
                             <Border Visibility="{Binding VideoVisibility}" HorizontalAlignment="Left" Width="360" Margin="0,8,0,4" CornerRadius="{StaticResource Radius.Card}"
                                     Background="{StaticResource Brush.Surface2}" Cursor="Hand" Tag="{Binding Video}" ToolTip="{Binding Video.ToolTipText}"

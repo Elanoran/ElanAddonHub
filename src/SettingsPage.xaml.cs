@@ -691,7 +691,7 @@ namespace ElansAddonHub
             if (settings == null) return;
             PvShareGame.IsChecked = !settings.ShareGameOff; PvShareZone.IsChecked = !settings.ShareZoneOff; PvShareXp.IsChecked = !settings.ShareXpOff;
             PvAutoStatus.IsChecked = !settings.AutoStatusOff; PvAutoAway.IsChecked = !settings.AutoAwayOff; PvPixel.IsChecked = !settings.PixelOff;
-            PvRememberInvis.IsChecked = !settings.InvisibleForget; PvCfAuto.IsChecked = settings.CfAutoCheck; PvVideo.IsChecked = !settings.VideoPreviewsOff;
+            PvRememberInvis.IsChecked = !settings.InvisibleForget; PvCfAuto.IsChecked = settings.CfAutoCheck; PvVideo.IsChecked = settings.VideoPreviewsAuto;
             PvBrPrivate.IsChecked = !settings.BrowserRemember; PvBrAds.IsChecked = !settings.BrowserAdsOff; PvBrChat.IsChecked = settings.BrowserFromChat;
             if (PvBrSearch.Items.Count == 0) { PvBrSearch.ItemsSource = BrowserUrl.Engines.Select(e => e.Name).ToList(); }
             PvBrSearch.SelectedIndex = Array.IndexOf(BrowserUrl.Engines, BrowserUrl.EngineById(settings.BrowserSearch));
@@ -719,7 +719,7 @@ namespace ElansAddonHub
             }
             if (cb == PvVideo)
             {
-                settings.VideoPreviewsOff = cb.IsChecked != true;
+                settings.VideoPreviewsAuto = cb.IsChecked == true;
                 SettingsStore.Save(settings);
                 session.RefreshVideos();
                 return;

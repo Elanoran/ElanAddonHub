@@ -92,14 +92,14 @@ namespace ElansAddonHub
             var perf = new List<string>();
             bool ok = true;
             Action<string, bool> check = (what, cond) => { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; };
-            var hadShown = Session.IsShownToUser; var hadThumb = YouTube.ThumbSource; var hadMeta = YouTube.MetaSource; var hadOff = settings.VideoPreviewsOff; var hadLast = settings.LastChannel;
+            var hadShown = Session.IsShownToUser; var hadThumb = YouTube.ThumbSource; var hadMeta = YouTube.MetaSource; var hadAuto = settings.VideoPreviewsAuto; var hadLast = settings.LastChannel;
             try
             {
                 Session.Disconnect();
                 TabLodge.IsChecked = true;
                 LodgePage.ShowChatForTest();
                 Session.IsShownToUser = () => true;
-                settings.VideoPreviewsOff = false;
+                settings.VideoPreviewsAuto = true;   // the video cards of this channel load by themselves (click to load is the video test)
                 YouTube.ClearCaches();
                 var late = new TaskCompletionSource<byte[]>();
                 var late2 = new TaskCompletionSource<byte[]>();
@@ -113,7 +113,7 @@ namespace ElansAddonHub
             finally
             {
                 Session.SentForTest = null;
-                Session.IsShownToUser = hadShown; YouTube.ThumbSource = hadThumb; YouTube.MetaSource = hadMeta; settings.VideoPreviewsOff = hadOff; settings.LastChannel = hadLast;
+                Session.IsShownToUser = hadShown; YouTube.ThumbSource = hadThumb; YouTube.MetaSource = hadMeta; settings.VideoPreviewsAuto = hadAuto; settings.LastChannel = hadLast;
                 YouTube.ClearCaches();
                 Session.Disconnect();
             }
