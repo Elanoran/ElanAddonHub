@@ -38,8 +38,41 @@ html, body { margin: 0; height: 100%; background: var(--sea); overflow: hidden; 
 .wm-panel h4 { margin: 0; padding: 8px 12px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
 .wm-panel .body { padding: 2px 6px 8px; max-height: calc(100vh - 140px); overflow: auto; }
 .wm-panel.collapsed .body { display: none; }
+/* 3.2 panel.js: tabs, the faction switch, collapsible groups */
+.wm-head { display: flex; align-items: center; gap: 4px; padding: 6px 6px 4px 8px; }
+.wm-tabs { display: flex; gap: 2px; flex: 1; }
+.wm-tabs button, .wm-fold { background: none; border: 0; color: var(--text-dim); font: inherit; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.wm-tabs button.on { color: var(--text); background: rgba(255, 255, 255, .08); }
+.wm-tabs button:hover, .wm-fold:hover { color: var(--text); }
+.wm-panel.collapsed .wm-fold { transform: rotate(180deg); }
+.wm-panel .body[hidden] { display: none; }
+.wm-fac { display: flex; gap: 2px; margin: 2px 4px 6px; padding: 2px; background: rgba(255, 255, 255, .05); border-radius: 7px; }
+.wm-fac button { flex: 1; background: none; border: 0; color: var(--text-dim); font: inherit; font-size: 12px; padding: 3px 0; border-radius: 5px; cursor: pointer; }
+.wm-fac button.on { background: rgba(255, 255, 255, .12); color: var(--text); }
+.wm-group { border-top: 1px solid var(--panel-line); }
+.wm-group:first-of-type { border-top: 0; }
+.wm-ghd { display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: 0; color: var(--text); font: inherit; font-weight: 600; padding: 6px 6px; cursor: pointer; text-align: left; border-radius: 6px; }
+.wm-ghd:hover { background: rgba(255, 255, 255, .05); }
+.wm-ghd .chev { color: var(--text-dim); font-size: 10px; transition: transform .12s; width: 10px; }
+.wm-group.open .wm-ghd .chev { transform: rotate(90deg); }
+.wm-ghd .gt { flex: 1; }
+.wm-ghd .gc { color: var(--text-dim); font-size: 11px; font-weight: 400; }
+.wm-glist { display: none; padding-bottom: 4px; }
+/* 3.2 the loading steps (panel.js loader) */
+.wm-load { position: fixed; left: 12px; bottom: 12px; z-index: 900; min-width: 210px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 8px 10px; color: var(--text); font-size: 12px; pointer-events: none; box-shadow: 0 4px 16px rgba(0, 0, 0, .35); }
+.wm-load[hidden] { display: none; }
+.wm-load .lt { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); font-weight: 600; margin-bottom: 4px; }
+.wm-load .ls { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.wm-load .li { width: 12px; height: 12px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: #4ade80; font-size: 11px; }
+.wm-load .ls.busy .li { border: 2px solid rgba(255, 255, 255, .2); border-top-color: var(--accent); border-radius: 50%; animation: wmspin .8s linear infinite; width: 8px; height: 8px; }
+.wm-load .ln { flex: 1; }
+.wm-load .ls.ok .ln { color: var(--text-dim); }
+.wm-load .lc { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+@keyframes wmspin { to { transform: rotate(360deg); } }
+.wm-group.open .wm-glist { display: block; }
 .wm-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
 .wm-row:hover { background: rgba(255, 255, 255, .06); }
+.wm-row[hidden] { display: none; }
 .wm-row input { margin: 0; accent-color: var(--accent); }
 .wm-row.sub { padding-left: 26px; }
 .wm-row .sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }
@@ -95,6 +128,8 @@ body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
 .v3set .v3h { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
 .v3r { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .v3r > span:first-child { width: 50px; color: var(--text-dim); }
+.v3r.bl { margin-top: 6px; }
+.v3r.bl > span:first-child { width: auto; color: var(--text); font-weight: 600; }
 .v3r b { width: 34px; text-align: right; font-weight: 600; color: var(--text); }
 .v3r input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
 .v3r button { background: rgba(255, 255, 255, .08); color: var(--text); border: 1px solid var(--panel-line); border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer; }

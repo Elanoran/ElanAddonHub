@@ -20,6 +20,7 @@
 
   var map = null, tileLayer = null, cfg = null, ready = false, tileErrors = 0, tilesLoaded = 0;
   var defs = {};          // layer id -> {id,title,color,children,...}
+  var tilesPending = 0, loadTimer = 0;
   var on = {};            // layer id -> true
   var data = {};          // layer id -> {kind, ...}
   var groups = {};        // layer id -> L.layerGroup (labels, markers, lines)
@@ -267,6 +268,7 @@
       r.row.classList.toggle('disabled', !!dis); r.row.classList.toggle('off', !on[id] && !dis);
       r.cb.disabled = !!dis;
     });
+    if (panelApi) panelApi.sync();
   }
   function setOn(id, v) {
     on[id] = !!v;
@@ -283,29 +285,16 @@
   }
   function setCount(id, text) { if (panelRows[id]) panelRows[id].ct.textContent = text == null ? '' : text; }
 
+  // 3.2: the panel is panel.js (WmPanel), shared with the 3D page: the layers in collapsible groups with one faction switch
+  var panelApi = null;
+  function setMany(changes) { Object.keys(changes).forEach(function (k) { setOn(k, changes[k]); }); }
   function buildPanel(list) {
     var C = L.Control.extend({
       options: { position: 'topright' },
       onAdd: function () {
-        var p = el('div', 'wm-panel'); L.DomEvent.disableClickPropagation(p); L.DomEvent.disableScrollPropagation(p);
-        var h = el('h4', '', '<span>Layers</span><span aria-hidden="true">▾</span>'); h.tabIndex = 0; h.setAttribute('role', 'button'); h.setAttribute('aria-expanded', 'true');
-        var body = el('div', 'body');
-        function toggle() { var c = p.classList.toggle('collapsed'); h.setAttribute('aria-expanded', String(!c)); }
-        h.addEventListener('click', toggle); h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-        function row(d, parent) {
-          var r = el('label', 'wm-row' + (parent ? ' sub' : ''));
-          var cb = el('input'); cb.type = 'checkbox';
-          var sw = el('span', 'sw'); sw.style.background = d.color || '#888';
-          var nm = el('span', 'nm', esc(d.title)); var ct = el('span', 'ct');
-          if (d.tip) r.title = d.tip;
-          r.appendChild(cb); r.appendChild(sw); r.appendChild(nm); r.appendChild(ct);
-          cb.addEventListener('change', function () { setOn(d.id, cb.checked); });
-          body.appendChild(r);
-          panelRows[d.id] = { row: r, cb: cb, ct: ct, parent: parent };
-          defs[d.id] = d; if (parent) d.child = true;
-        }
-        list.forEach(function (d) { row(d, null); (d.children || []).forEach(function (c) { row(c, d.id); }); });
-        p.appendChild(h); p.appendChild(body);
+        panelApi = window.WmPanel.build({ list: list, on: on, set: setMany, tab: null });
+        panelRows = panelApi.rows; Object.keys(panelApi.defs).forEach(function (k) { defs[k] = panelApi.defs[k]; });
+        var p = panelApi.root; L.DomEvent.disableClickPropagation(p); L.DomEvent.disableScrollPropagation(p);
         return p;
       }
     });
@@ -622,6 +611,20 @@
     tileLayer = L.tileLayer(m.map.base + '/z{z}/{x}_{y}.jpg' + (m.map.rev ? '?r=' + m.map.rev : ''), { tileSize: 256, minNativeZoom: 0, maxNativeZoom: NATIVE, minZoom: 0, maxZoom: MAXZ, noWrap: true, bounds: bounds.pad(.02), keepBuffer: 3, updateWhenZooming: false, errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' });
     tileLayer.on('tileerror', function () { tileErrors++; });
     tileLayer.on('tileload', function () { tilesLoaded++; });
+    // 3.2: the loading steps (panel.js loader): the map pictures in flight and the layers asked for but not in yet
+    tilesPending = 0;
+    tileLayer.on('tileloadstart', function () { tilesPending++; });
+    tileLayer.on('tileload tileerror', function () { tilesPending = Math.max(0, tilesPending - 1); });
+    if (!loadTimer && window.WmPanel) {
+      var card = window.WmPanel.loader();
+      loadTimer = setInterval(function () {
+        var asked = Object.keys(requested).filter(function (k) { return requested[k] && on[k]; }), got = asked.filter(function (k) { return data[k]; });
+        card.update([
+          { title: 'Map pictures', done: tilesLoaded, total: 0, busy: tilesPending > 0 },
+          { title: 'Layers', done: got.length, total: asked.length, busy: got.length < asked.length },
+        ]);
+      }, 250);
+    }
     tileLayer.once('load', function () { if (!ready) { ready = true; send({ t: 'ready', tiles: tilesLoaded, errors: tileErrors }); } });
     tileLayer.addTo(map);
     initCanvas();

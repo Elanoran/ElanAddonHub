@@ -743,32 +743,25 @@
   }
 
   // ---------------------------------------------------------------- the panel: layers + 3D settings + a few buttons
+  // 3.2: the panel is panel.js (WmPanel): the layers in collapsible groups with one faction switch, and a second tab "3D view" with the detail, the height,
+  // the buildings and the trees & ground (their cards and what is on disk) - so the layer list stays short
+  var panelApi = null;
+  function setMany(changes) { Object.keys(changes).forEach(function (k) { setOn(k, changes[k]); }); }
   function buildPanel(list) {
     var hud = $('hud'); hud.innerHTML = '';
-    var p = el('div', 'wm-panel');
-    var h = el('h4', '', '<span>Layers</span><span aria-hidden="true">&#9662;</span>'); h.tabIndex = 0; h.setAttribute('role', 'button'); h.setAttribute('aria-expanded', 'true');
-    var body = el('div', 'body');
-    function toggle() { var c = p.classList.toggle('collapsed'); h.setAttribute('aria-expanded', String(!c)); }
-    h.addEventListener('click', toggle); h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-    function row(d, parent) {
-      var r = el('label', 'wm-row' + (parent ? ' sub' : '')), cb = el('input'); cb.type = 'checkbox';
-      var sw = el('span', 'sw'); sw.style.background = d.color || '#888';
-      var nm = el('span', 'nm', esc(d.title)), ct = el('span', 'ct');
-      if (d.tip) r.title = d.tip;
-      r.appendChild(cb); r.appendChild(sw); r.appendChild(nm); r.appendChild(ct);
-      cb.addEventListener('change', function () { setOn(d.id, cb.checked); });
-      body.appendChild(r); panelRows[d.id] = { row: r, cb: cb, ct: ct, parent: parent }; defs[d.id] = d; if (parent) d.child = true;
-    }
-    list.forEach(function (d) { row(d, null); (d.children || []).forEach(function (c) { row(c, d.id); }); });
-    // 3D settings
-    var s = el('div', 'v3set');
-    s.innerHTML = '<div class="v3h">3D view</div><div class="v3r"><span>Detail</span><span class="seg" id="v3detail"><button type="button" data-d="low">Low</button><button type="button" data-d="medium">Medium</button><button type="button" data-d="high">High</button></span></div>' +
-      '<div class="v3r"><span>Height</span><input id="v3exag" type="range" min="0.5" max="1.5" step="0.1" aria-label="Height exaggeration (1 = true height)"><b id="v3exagv"></b></div>' +
-      '<div class="v3r"><button type="button" id="v3north">North up</button><button type="button" id="v3fit">Whole continent</button></div>';
-    body.appendChild(s);
-    bldPanel(s);
-    objPanel(s);
-    p.appendChild(h); p.appendChild(body); hud.appendChild(p);
+    var s = null;
+    panelApi = window.WmPanel.build({ list: list, on: on, set: setMany, tab: { title: '3D view', fill: function (c) {
+      s = el('div', 'v3set');
+      s.innerHTML = '<div class="v3r"><span>Detail</span><span class="seg" id="v3detail"><button type="button" data-d="low">Low</button><button type="button" data-d="medium">Medium</button><button type="button" data-d="high">High</button></span></div>' +
+        '<div class="v3r"><span>Height</span><input id="v3exag" type="range" min="0.5" max="1.5" step="0.1" aria-label="Height exaggeration (1 = true height)"><b id="v3exagv"></b></div>' +
+        '<div class="v3r"><button type="button" id="v3north">North up</button><button type="button" id="v3fit">Whole continent</button></div>';
+      c.appendChild(s);
+      bldPanel(s);
+      objPanel(s);
+    } } });
+    panelRows = panelApi.rows; Object.keys(panelApi.defs).forEach(function (k) { defs[k] = panelApi.defs[k]; });
+    var p = panelApi.root;
+    hud.appendChild(p);
     ['mousedown', 'wheel', 'click', 'dblclick', 'contextmenu'].forEach(function (ev) { p.addEventListener(ev, function (e) { e.stopPropagation(); }); });
     function syncPrefs() {
       [].forEach.call(s.querySelectorAll('#v3detail button'), function (b) { b.classList.toggle('on', b.getAttribute('data-d') === prefs.detail); });
@@ -804,6 +797,7 @@
       var dis = r.parent && !on[r.parent];
       r.row.classList.toggle('disabled', !!dis); r.row.classList.toggle('off', !on[id] && !dis); r.cb.disabled = !!dis;
     });
+    if (panelApi) panelApi.sync();
     dirty = true;
   }
   function setOn(id, v) {
@@ -947,8 +941,27 @@
   // ---------------------------------------------------------------- frame loop
   var fps = 0, fpsFrames = 0, fpsT0 = performance.now(), lastStats = 0, lastSel2 = 0, lastHeightGen = -1, lastRefresh = 0, benching = null;
   function frame(now) { requestAnimationFrame(frame); tick(now); }
+  // 3.2: what is still coming in, as steps (panel.js loader): only the parts that are switched on
+  var loadCard = null, loadAt = 0;
+  function loadSteps(now) {
+    if (now - loadAt < 250 || !window.WmPanel) return; loadAt = now;
+    if (!loadCard) loadCard = window.WmPanel.loader();
+    var steps = [], tl = tileList.length, hd = heightsLoaded + heightsFailed;
+    steps.push({ title: 'Terrain heights', done: hd, total: tl, busy: tl > 0 && hd < tl });
+    steps.push({ title: 'Map pictures', done: texLoaded, total: 0, busy: inFlight > 0 });
+    steps.push({ title: 'Water', done: waterLoaded, total: 0, busy: waterActive > 0 });
+    if (BLD.mode !== 'off') steps.push({ title: 'Buildings', done: BLD.loaded, total: 0, busy: BLD.fetching > 0 || BLD.plLoading });
+    if (OBJ.level !== 'off' && OBJ.base && OBJ.gpu) {
+      var tLoading = Object.keys(OBJ.T).some(function (k) { return OBJ.T[k].state === 'loading'; });
+      steps.push({ title: 'Trees & objects', done: OBJ.loaded, total: 0, busy: OBJ.fetching > 0 || tLoading });
+      if (OD() && OD().ground > 0) steps.push({ title: 'Real ground', done: GD.made, total: 0, busy: GD.loading > 0 || !!GD.arrDirty });
+      if (OD() && OD().ground > 0 && BLD.mode !== 'off') steps.push({ title: 'City details', done: Object.keys(WD.models).filter(function (k) { return WD.models[k].state === 'ready'; }).length, total: 0, busy: WD.asked > 0 || Object.keys(WD.models).some(function (k) { return WD.models[k].state === 'loading'; }) });
+    }
+    loadCard.update(steps);
+  }
   function tick(now) {
     if (!renderer || !inited) return;
+    loadSteps(now);
     stepFlight(now);
     stepFollow();
     if (meLines && meLineDist > 0 && Math.abs(Math.log(cam.dist / meLineDist)) > 0.3) meDrawLines();      // the ribbon keeps a few pixels wide as you zoom

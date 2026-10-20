@@ -43,8 +43,42 @@ namespace ElansAddonHub.Services.WorldMap
 
         public const string Alliance = "a", Horde = "h", Neutral = "n";
 
-        // the layer panel's rows
+        // 3.2: the panel's groups (collapsible on the page, panel.js), in this order
+        public static readonly string[][] Groups =
+        {
+            new[] { "places", "Places" }, new[] { "travel", "Travel" }, new[] { "people", "People" }, new[] { "gathering", "Gathering" }, new[] { "lodge", "Lodge & you" },
+        };
+        static readonly Dictionary<string, string> GroupOfLayer = new Dictionary<string, string>
+        {
+            ["zones"] = "places", ["borders"] = "places", ["instances"] = "places",
+            ["fm"] = "travel", ["routes"] = "travel", ["saved"] = "travel",
+            ["quests"] = "people", ["vendors"] = "people", ["trainers"] = "people", ["rares"] = "people", ["seen"] = "people",
+            ["nodes"] = "gathering",
+            ["finds"] = "lodge", ["trailevents"] = "lodge", [TrailPrints.LayerId] = "lodge",
+        };
+
+        // the layer panel's rows; 3.2: each with its group (group, groupTitle) and the faction rows marked (faction h / a / n: the page's faction switch draws them)
         public static List<Dictionary<string, object>> Catalog()
+        {
+            var list = CatalogRows();
+            var order = Groups.Select(g => g[0]).ToList();
+            foreach (var d in list)
+            {
+                var gid = GroupOfLayer.TryGetValue((string)d["id"], out var g) ? g : "lodge";
+                d["group"] = gid; d["groupTitle"] = Groups.First(x => x[0] == gid)[1];
+                if (d.TryGetValue("children", out var k) && k is List<Dictionary<string, object>> kids)
+                    foreach (var c in kids)
+                    {
+                        var id = (string)c["id"];
+                        if (id.EndsWith(".horde", StringComparison.Ordinal)) c["faction"] = Horde;
+                        else if (id.EndsWith(".alliance", StringComparison.Ordinal)) c["faction"] = Alliance;
+                        else if (id.EndsWith(".neutral", StringComparison.Ordinal)) c["faction"] = Neutral;
+                    }
+            }
+            return list.OrderBy(d => order.IndexOf((string)d["group"])).ToList();        // stable: the rows keep their order inside a group
+        }
+
+        static List<Dictionary<string, object>> CatalogRows()
         {
             Dictionary<string, object> L(string id, string title, string color, string tip, params Dictionary<string, object>[] kids)
             {

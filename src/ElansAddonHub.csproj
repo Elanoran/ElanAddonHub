@@ -57,6 +57,7 @@
   <ItemGroup>
     <EmbeddedResource Include="WorldMap\index.html" LogicalName="WorldMap.index.html" />
     <EmbeddedResource Include="WorldMap\icons.js" LogicalName="WorldMap.icons.js" />
+    <EmbeddedResource Include="WorldMap\panel.js" LogicalName="WorldMap.panel.js" />
     <EmbeddedResource Include="WorldMap\trailprints.js" LogicalName="WorldMap.trailprints.js" />
     <EmbeddedResource Include="WorldMap\worldmap.js" LogicalName="WorldMap.worldmap.js" />
     <EmbeddedResource Include="WorldMap\worldmap.css" LogicalName="WorldMap.worldmap.css" />
