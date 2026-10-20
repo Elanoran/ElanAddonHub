@@ -765,11 +765,13 @@ Lodge's id. `sig` is ES256 (base64, r||s) with the Cairn's dataset key over
 `"elans-cairn-notice/1\n<id>\n<created>\n<expires>\n<level>\n<to>\n<text>"` (unix seconds). The Lodge keeps the current list in
 `data/cairn-notices.json`, logs each new one, and passes them on unchanged - it can't write or alter one.
 
-Cairn 1.6.4 binds a notice to the Lodge it is for: every new notice carries `"v":2` and is signed over
+Cairn 1.6.4 binds a notice for one Lodge to that Lodge: it carries `"v":2` and is signed over
 `"elans-cairn-notice/2\n<id>\n<created>\n<expires>\n<level>\n<target>\n<text>"` (`CairnFormats.NoticeV2`), and its `to` is that `<target>`:
-`*` (every Lodge) or the target Lodge's public address as it joined the Cairn, in `PublicUrl.TryNormalize` form (at most 200 characters).
-A notice without `v` is v1 (signed by Cairn 1.6.2-1.6.3; kept until it expires): its `to` is the Lodge's id at the Cairn, which no Outpost
-can tie to the Lodge it is connected to. The Lodge passes `v` on as it came (any 1..99) and allows a `to` as long as an address.
+the Lodge's public address as it joined the Cairn, in `PublicUrl.TryNormalize` form (at most 200 characters). Notices for every Lodge stay in
+the original format (v1, `to` `*`, no `v`) so older Outposts keep showing them; a notice for one Lodge carries its address and needs Outpost
+3.1.2 or later (an older one can't check it and ignores it). A v1 notice for one Lodge (Cairn 1.6.2-1.6.3; kept until it expires) names the
+Lodge's id at the Cairn, which no Outpost can tie to the Lodge it is connected to. The Lodge passes `v` on as it came (any 1..99) and allows a
+`to` as long as an address.
 
 - `cairn.notices {list}` (server -> client): after `cairn.notices.get` and whenever the list changes. The Guild Master and officers get every
   notice, other members only `critical` ones, guests none. An empty list = withdrawn.
@@ -779,9 +781,9 @@ can tie to the Lodge it is connected to. The Lodge passes `v` on as it came (any
   Ids the Cairn did not send are ignored.
 
 The Outpost checks every notice against the Cairn key it pins (`CairnAtlas.PinnedKeyX/Y`) and drops unsigned, wrongly signed, expired or odd
-ones; it shows the most urgent one not closed on this PC. It only shows a notice meant for it: a v2 one whose `to` is `*` or, normalized,
-the address of the Lodge it is connected to (`PublicUrl.TryNormalize` of the connected address, compared ignoring case); a v1 one only when
-its `to` is `*`. Anything else (for another Lodge, an old one for one Lodge, an unknown `v`) is ignored and logged once per id - so a Lodge
+ones; it shows the most urgent one not closed on this PC. It only shows a notice meant for it: a v1 or v2 one whose `to` is `*`, or a v2
+one whose `to` is, normalized, the address of the Lodge it is connected to (`PublicUrl.TryNormalize` of the connected address, compared
+ignoring case). Anything else (for another Lodge, an old one for one Lodge, an unknown `v`) is ignored and logged once per id - so a Lodge
 can't pass on a notice the Cairn signed for another Lodge. A withdrawn notice's signature stays valid until it expires: withdrawing works
 by the Cairn no longer sending it (and the Lodge dropping it at its next check).
 

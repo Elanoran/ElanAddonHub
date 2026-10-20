@@ -9,11 +9,12 @@ namespace Elans.Shared
     //   request    "elans-cairn-req/1\n<METHOD>\n<path?query>\n<time>\n<nonce>\n<sha256 hex of the body>"   Lodge signs, Cairn checks
     //   challenge  "elans-cairn-challenge/1\n<nonce>\n<public url>"                                         Lodge signs, Cairn checks
     //   dataset    "elans-cairn/1\n<day>\n<seq>\n<content sha256 hex>"                                    Cairn signs, Lodges / Outposts check
-    //   notice v1  "elans-cairn-notice/1\n<id>\n<created>\n<expires>\n<level>\n<to or *>\n<text>"          Cairn signed (to 1.6.3), Outposts check
-    //   notice v2  "elans-cairn-notice/2\n<id>\n<created>\n<expires>\n<level>\n<target>\n<text>"            Cairn signs (1.6.4), Outposts check
-    //     v1's <to> is the Lodge's id at the Cairn, which an Outpost can't tie to the Lodge it is connected to, so a Lodge could replay a notice
-    //     meant for another one. v2's <target> is "*" (every Lodge) or the target Lodge's public address in PublicUrl.TryNormalize form (the
-    //     address it joined the Cairn with), which the Outpost compares with the Lodge it is connected to. The notice frame says which ("v":2).
+    //   notice v1  "elans-cairn-notice/1\n<id>\n<created>\n<expires>\n<level>\n<to or *>\n<text>"          Cairn signs (for every Lodge), Outposts check
+    //   notice v2  "elans-cairn-notice/2\n<id>\n<created>\n<expires>\n<level>\n<target>\n<text>"            Cairn signs (1.6.4, for one Lodge), Outposts check
+    //     v1's <to> for one Lodge was its id at the Cairn, which an Outpost can't tie to the Lodge it is connected to, so a Lodge could replay a
+    //     notice meant for another one: since Cairn 1.6.4 a notice for one Lodge is v2, its <target> the Lodge's public address in
+    //     PublicUrl.TryNormalize form (the address it joined the Cairn with), which the Outpost compares with the Lodge it is connected to; the
+    //     frame says so ("v":2). A notice for every Lodge stays v1 "*", so older Outposts keep showing it. NoticeV2 also accepts "*".
     // The prefixes differ and no field can hold a line break, so a signature made for one kind can never pass for another.
     public static class CairnFormats
     {

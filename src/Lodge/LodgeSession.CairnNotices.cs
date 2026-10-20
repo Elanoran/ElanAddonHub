@@ -12,10 +12,10 @@ namespace ElansAddonHub.Lodge
     // Cairn signed - the Guild Master and officers get every notice, other members only critical ones, guests none - as
     // `cairn.notices { list:[{id, created, expires, level, to, text, sig, kid}] }`; the Outpost asks once after the welcome (`cairn.notices.get`).
     // Each one is checked against the Cairn key the Outpost pins (CairnAtlas.PinnedKeyX/Y), so a Lodge can't make one up; anything unsigned, odd
-    // or expired is dropped. Cairn 1.6.4 signs v2 notices ("v":2, CairnFormats.NoticeV2) that name the Lodge they are for: "*" or its normalized
+    // or expired is dropped. Since Cairn 1.6.4 a notice for one Lodge is v2 ("v":2, CairnFormats.NoticeV2) and names that Lodge's normalized
     // public address, which must be the address of the Lodge this Outpost is connected to - so a Lodge can't replay a notice the Cairn signed for
-    // another one. A v1 notice (no "v") only counts when it is for every Lodge ("*"): its target is the Lodge's id at the Cairn, which can't be
-    // tied to this Lodge. A withdrawn notice's signature stays valid until it expires; withdrawing works by the Cairn no longer sending it. Closing the banner remembers the id on this PC and, for an officer, tells the Lodge (`cairn.notice.seen { ids }`), which
+    // another one (a v2 "*" counts too). A notice for every Lodge stays v1 (no "v", "*"), which older Outposts can check as well; a v1 notice for
+    // one Lodge names its id at the Cairn, which can't be tied to this Lodge, so it is ignored. A withdrawn notice's signature stays valid until it expires; withdrawing works by the Cairn no longer sending it. Closing the banner remembers the id on this PC and, for an officer, tells the Lodge (`cairn.notice.seen { ids }`), which
     // tells the Cairn once. Self-test section "cairnnotices".
     public partial class LodgeSession
     {
