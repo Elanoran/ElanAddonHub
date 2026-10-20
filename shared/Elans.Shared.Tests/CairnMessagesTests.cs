@@ -175,4 +175,28 @@ public class CairnMessagesTests
         SameJson(stored, Written(CairnNoticeEntry.Read(TestFields.From(stored)).Write).D);
         SameJson(new JsonObject { ["t"] = "cairn.notices", ["list"] = new JsonArray() }, Written(new CairnNoticesMsg().Write).D);
     }
+
+    [Fact]
+    public void Golden_v2_notice_carries_its_version_and_round_trips()
+    {
+        // Cairn 1.6.4: a v2 notice adds "v":2 and its `to` is the target Lodge's normalized public address (or "*")
+        var v2 = new JsonObject
+        {
+            ["id"] = 8L, ["created"] = 1_790_000_000L, ["expires"] = 1_790_600_000L, ["level"] = "critical", ["to"] = "https://lodge.example.test/guild",
+            ["text"] = "Update your Lodge", ["sig"] = "c2lnbmF0dXJl", ["kid"] = "k1", ["v"] = 2,
+        };
+        var e = new CairnNoticeEntry
+        {
+            Id = 8, Created = 1_790_000_000, Expires = 1_790_600_000, Level = "critical", To = "https://lodge.example.test/guild", Text = "Update your Lodge",
+            Sig = "c2lnbmF0dXJl", Kid = "k1", V = 2,
+        };
+        SameJson(v2, Written(e.Write).D);
+        var back = CairnNoticeEntry.Read(TestFields.From(v2));
+        Assert.Equal((8L, "https://lodge.example.test/guild", 2), (back.Id, back.To, back.V));
+        SameJson(v2, Written(back.Write).D);
+        // a v1 notice reads as V = 0 and writes no "v" (the old wire); a "v" that isn't a number is 0 too
+        Assert.Equal(0, CairnNoticeEntry.Read(TestFields.From(new JsonObject { ["id"] = 7L })).V);
+        Assert.False(Written(Notice().Write).Has("v"));
+        Assert.Equal(0, CairnNoticeEntry.Read(TestFields.From(new JsonObject { ["v"] = "2" })).V);
+    }
 }

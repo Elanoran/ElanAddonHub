@@ -41,11 +41,16 @@ public sealed class CairnNotices
         foreach (var n in a ?? new JsonArray())
         {
             if (n is not JsonObject o || res.Count >= MaxNotices) continue;
-            long id = L(o["id"]), created = L(o["created"]), expires = L(o["expires"]);
+            // Cairn 1.6.4: "v" is the signed format's version (missing = 1); a v2 notice's "to" is "*" or this Lodge's public address, so it may
+            // be as long as an address (Elans.Shared.PublicUrl.MaxLength). Both are passed on as they came: the Outpost checks them.
+            long id = L(o["id"]), created = L(o["created"]), expires = L(o["expires"]), v = L(o["v"]);
             string level = S(o["level"]), to = S(o["to"]) ?? "*", text = S(o["text"]), sig = S(o["sig"]), kid = S(o["kid"]);
             if (id <= 0 || created <= 0 || expires <= created || !Levels.Contains(level) || string.IsNullOrEmpty(text) || text.Length > MaxText
-                || string.IsNullOrEmpty(sig) || sig.Length > 200 || string.IsNullOrEmpty(kid) || kid.Length > 40 || to.Length > 40) continue;
-            res.Add(new JsonObject { ["id"] = id, ["created"] = created, ["expires"] = expires, ["level"] = level, ["to"] = to, ["text"] = text, ["sig"] = sig, ["kid"] = kid });
+                || string.IsNullOrEmpty(sig) || sig.Length > 200 || string.IsNullOrEmpty(kid) || kid.Length > 40 || to.Length > Elans.Shared.PublicUrl.MaxLength
+                || v < 0 || v > 99) continue;
+            var c = new JsonObject { ["id"] = id, ["created"] = created, ["expires"] = expires, ["level"] = level, ["to"] = to, ["text"] = text, ["sig"] = sig, ["kid"] = kid };
+            if (v > 0) c["v"] = (int)v;   // an int, as CairnNoticeEntry reads it (an in-memory long would not read as an int)
+            res.Add(c);
         }
         return res;
     }
