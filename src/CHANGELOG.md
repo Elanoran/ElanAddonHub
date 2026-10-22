@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.2.0
+- **3D world map: Trees & ground (experimental).** A new switch in the 3D view's panel (Off / Low / Medium / High, off by default) draws the game's real trees, rocks, fences and carts with their own textures near the spot you look at, and at Medium and High the real ground textures too, fading to the map picture further out. The models are read from your game files once, in the background (Build now / Pause / Cancel, like the 3D buildings); the ground is made the first time you look at a place. If your graphics card can't draw them the switch says why, and if the view gets slow it steps a level down by itself.
+- **Cities in detail.** With Trees & ground at Medium or High, buildings near the spot you look at are drawn in full detail with their real textures, and cities get their own furnishings - lamps, benches, banners, crates and the trees in their streets.
+- **Fixed: every 3D building was one colour.** The Outpost read each building's materials from the wrong place, so whole cities came out in a single colour; now roofs, walls and streets have their own colours. Buildings you already made are made again once, by themselves.
+- **A new panel for the world map.** Two tabs - Layers and 3D view - so the 3D settings and the build cards no longer sit in the layer list; the layers are in groups you can fold (Places, Travel, People, Gathering, Lodge & you); and one All / Alliance / Horde switch replaces the separate faction rows of flight masters and routes. While a map loads, a small card shows what is still coming in.
+- **Talent builds for every class.** The talent calculator now has three recommended builds for every class (Hunter's still come from Hunter Helper): a leveling build plus dungeon, healing, tanking or PvP builds, each as the order to spend your points from level 10. They follow the published WoW Forever guides and are checked against this game's own talent trees.
+
 ## 3.1.2
 - **Knows Lodge server 2.31.2.** Only the Guild Master can add a device to an existing member's account, and the member is always told - with a way to remove it.
 - **Lodge server 2.31.2:** Officers only see the devices of lower ranks; the Guild Master still sees all.
