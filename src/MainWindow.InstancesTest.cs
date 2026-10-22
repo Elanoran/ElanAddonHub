@@ -243,8 +243,8 @@ namespace ElansAddonHub
                 string Why(string json) { WorldMapProtocol.Parse(json, out var why); return why; }
                 var layersMsg = WorldMapProtocol.Parse("{\"t\":\"layers\",\"on\":[\"zones\",\"instances\",\"instances.raids\",\"instances.dungeons\"]}", out _);
                 var needMsg = WorldMapProtocol.Parse("{\"t\":\"need\",\"layer\":\"instances\"}", out _);
-                Check("catalog: \"Dungeons & raids\" is a layer with the child rows Dungeons and Raids (distinct colours), after the flight routes; it is on by default (with both kinds); every id is one the protocol accepts",
-                    insRow != null && (string)insRow["title"] == "Dungeons & raids" && kidRows.Select(k => (string)k["id"]).SequenceEqual(new[] { "instances.dungeons", "instances.raids" }) && catIds.IndexOf("instances") == catIds.IndexOf("routes") + 1
+                Check("catalog: \"Dungeons & raids\" is a layer with the child rows Dungeons and Raids (distinct colours), in the panel's Places group (3.2); it is on by default (with both kinds); every id is one the protocol accepts",
+                    insRow != null && (string)insRow["title"] == "Dungeons & raids" && kidRows.Select(k => (string)k["id"]).SequenceEqual(new[] { "instances.dungeons", "instances.raids" }) && (string)insRow["group"] == "places"
                     && WorldMapLayers.DefaultOn.Contains("instances") && WorldMapLayers.DefaultOn.Contains("instances.dungeons") && WorldMapLayers.DefaultOn.Contains("instances.raids") && WorldMapLayers.DefaultOn.All(WorldMapIds.IsLayerId)
                     && kidRows.Select(k => (string)k["color"]).Distinct().Count() == 2);
                 Check("protocol: \"layers\" with the new ids and \"need\" for \"instances\" are accepted; a kind row is never asked for on its own, and kinds that do not exist (battlegrounds), a glued or empty suffix are refused",
