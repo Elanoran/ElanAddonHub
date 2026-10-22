@@ -227,8 +227,53 @@ namespace ElansAddonHub.Services
                         var sel = string.IsNullOrEmpty(filter) ? all : all.Where(l => l.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
                         return Ok(string.Join("\n", sel.Skip(Math.Max(0, sel.Length - lines))));
                     }
-                default: throw new ArgumentException("unknown command '" + cmd + "' (status, open, view, eval, level, objects, settle, bench, screenshot, reload, log)");
+                case "talents":
+                    {
+                        // a class's talent tree as the calculator shows it (names, trees, rows, ranks, what a node needs, what it does at full rank)
+                        if (Services.Db2.TalentData.Status == Services.Db2.TalentData.State.NotStarted) Services.Db2.TalentData.Start();
+                        await WaitFor(() => Services.Db2.TalentData.Ready, 120000);
+                        if (Services.Db2.SpellData.Status == Services.Db2.SpellData.State.NotStarted) Services.Db2.SpellData.Start();
+                        await WaitFor(() => Services.Db2.SpellData.Ready, 120000);          // the names and descriptions come from the spells
+                        var t = Services.Db2.TalentData.ForClassFile((a.Str("class") ?? "").ToUpperInvariant()) ?? throw new ArgumentException("no talent tree for class '" + a.Str("class") + "' (" + Services.Db2.TalentData.Status + ")");
+                        var levels = Services.Talents.TalentRules.PointLevels(t, 0);
+                        var nodes = t.Nodes.OrderBy(n => n.Spec).ThenBy(n => n.Row).ThenBy(n => n.Col).Select(n => (object)new Dictionary<string, object>
+                        {
+                            ["name"] = Services.Db2.TalentData.NodeName(n) ?? ("talent " + n.Id), ["tree"] = n.Spec, ["row"] = n.Row, ["col"] = n.Col, ["max"] = n.MaxRanks,
+                            ["needsSpent"] = Services.Talents.TalentRules.GateNeeded(t, n),
+                            ["needs"] = t.Edges.Where(e => e.To == n.Id && e.Type == Services.Talents.TalentEdge.Required).Select(e => (object)(Services.Db2.TalentData.NodeName(t.Node(e.From)) ?? "?")).ToList(),
+                            ["needsOneOf"] = t.Edges.Where(e => e.To == n.Id && e.Type == Services.Talents.TalentEdge.Sufficient).Select(e => (object)(Services.Db2.TalentData.NodeName(t.Node(e.From)) ?? "?")).ToList(),
+                            ["excludes"] = t.Edges.Where(e => e.To == n.Id && e.Type == Services.Talents.TalentEdge.Exclusive).Select(e => (object)(Services.Db2.TalentData.NodeName(t.Node(e.From)) ?? "?")).ToList(),
+                            ["needsNode"] = n.Conds.Where(c => c.Type == 0 && c.NodeId != 0 && c.NodeId != n.Id).Select(c => (object)(Services.Db2.TalentData.NodeName(t.Node(t.Resolve(c.NodeId))) ?? "?")).ToList(),
+                            ["needsTotal"] = n.Conds.Where(c => c.Type == 0 && c.GroupId == 0 && c.NodeId == 0 && c.Spent > 0).Select(c => c.Spent).DefaultIfEmpty(0).Max(),
+                            ["desc"] = Desc(Services.Db2.TalentData.SpellAtRank(n.Entry, n.MaxRanks)),
+                        }).ToList();
+                        return Ok(new Dictionary<string, object> { ["class"] = t.ClassFile, ["trees"] = t.SpecNames.Cast<object>().ToList(), ["points"] = levels.Count, ["firstLevel"] = levels.Count > 0 ? levels[0] : 0, ["nodes"] = nodes });
+                    }
+                case "talentcheck":
+                    {
+                        // a build order laid on the class's tree with the calculator's own rules: every point with its level, and what did not fit
+                        var t = Services.Db2.TalentData.ForClassFile((a.Str("class") ?? "").ToUpperInvariant()) ?? throw new ArgumentException("no talent tree for that class (run talents first)");
+                        var b = new Services.Talents.RecBuild { Name = "check" };
+                        if (a.TryGetValue("order", out var oo) && oo is List<object> ol)
+                            foreach (var o in ol.OfType<List<object>>()) if (o.Count == 2 && o[0] is string nm && o[1] is double rk) b.Order.Add(new KeyValuePair<string, int>(nm, (int)rk));
+                        var app = Services.Talents.BuildsRecommended.Apply(t, b, TalentsPage.NameOf, 0);
+                        var perTree = new int[t.SpecCount];
+                        foreach (var s in app.Steps.Where(s => s.Applied)) { var n = t.Node(s.NodeId); if (n != null && n.Spec < perTree.Length) perTree[n.Spec]++; }
+                        return Ok(new Dictionary<string, object>
+                        {
+                            ["points"] = app.Points, ["blocked"] = app.Blocked, ["unmatched"] = app.Unmatched.Cast<object>().ToList(), ["perTree"] = perTree.Cast<object>().ToList(),
+                            ["problems"] = app.Steps.Where(s => !s.Applied).Select(s => (object)(s.Name + " " + s.Rank + "/" + s.Max + ": " + s.Problem)).ToList(),
+                            ["steps"] = Services.Talents.BuildsRecommended.StepLines(app).Cast<object>().ToList(),
+                        });
+                    }
+                default: throw new ArgumentException("unknown command '" + cmd + "' (status, open, view, eval, level, objects, settle, bench, screenshot, reload, log, talents, talentcheck)");
             }
+        }
+
+        static string Desc(ElansAddonHub.Services.Db2.SpellView v)
+        {
+            var d = v == null ? null : !string.IsNullOrWhiteSpace(v.Description) ? v.Description : v.AuraDescription;
+            return d == null ? "" : d.Trim().Replace((char)13, (char)32).Replace((char)10, (char)32);
         }
 
         // the picture made smaller (fewer pixels: what the assistant reads costs by the pixel), as JPEG

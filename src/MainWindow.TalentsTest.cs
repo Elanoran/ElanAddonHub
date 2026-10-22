@@ -272,6 +272,15 @@ EHH.DefaultBuild = ""pack""
                 Check("Builds.lua: nothing after the table (TalentTreeOf, DefaultBuild) is mistaken for builds", hh.All(b => b.Source == "Hunter Helper" && b.ClassFile == "HUNTER"));
                 Check("Builds.lua: garbage, a cut-off table and no table at all give no builds and a plain reason",
                     BuildsRecommended.ParseHunterHelper("EHH.Builds = { { name = ", out var p1).Count == 0 && p1 != null && BuildsRecommended.ParseHunterHelper("nothing", out var p2).Count == 0 && p2 != null && BuildsRecommended.ParseHunterHelper("EHH.Builds = {}", out var p3).Count == 0 && p3 != null);
+                // 3.2: the Outpost's own builds (embedded talentbuilds.lua): the 8 classes without a helper addon, 3 builds each, 51 points each, ids unique per class
+                {
+                    BuildsRecommended.ResetBuiltInForTest();
+                    var cls = new[] { "WARRIOR", "PALADIN", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" };
+                    var all = cls.ToDictionary(c => c, c => BuildsRecommended.BuiltIn(c, out _));
+                    Check("talentbuilds.lua: the Outpost ships builds for the 8 classes without a helper addon (" + string.Join(" ", all.Select(kv => kv.Key.Substring(0, 3) + "=" + kv.Value.Count)) + "), none for the Hunter (Hunter Helper has its own), each of 51 points with a name, roles, a description and unique ids",
+                        all.Values.All(l => l.Count >= 3 && l.All(b => b.Points == 51 && b.Roles.Count > 0 && !string.IsNullOrEmpty(b.Desc) && b.Source == BuildsRecommended.BuiltInSource) && l.Select(b => b.Id).Distinct().Count() == l.Count)
+                        && all.All(kv => kv.Value.All(b => b.ClassFile == kv.Key)) && BuildsRecommended.BuiltIn("HUNTER", out _).Count == 0 && BuildsRecommended.BuiltIn("warrior", out _).Count == all["WARRIOR"].Count);
+                }
                 var hhPath = Path.Combine(work, "wow", "_classic_beta_", "Interface", "AddOns", "ElansHunterHelper", "Data", "Builds.lua");
                 Directory.CreateDirectory(Path.GetDirectoryName(hhPath));
                 File.WriteAllText(hhPath, TalHunterBuilds, new UTF8Encoding(false));
@@ -581,6 +590,31 @@ EHH.DefaultBuild = ""pack""
                 var spells = SpellParse.All(spellRaw);
                 SpellData.SetForTest(spells);
                 TalLinkReal(Check, notes, set, n => TalentData.NodeName(n));
+                // 3.2: the Outpost's own builds (talentbuilds.lua) and Hunter Helper's (when it is installed) on the game's current trees: every point legal
+                // at its level, every name a talent of the tree, 51 points. A game update that moves or renames a talent fails here and names it.
+                {
+                    var bad = new List<string>(); int nb = 0, classes = 0;
+                    foreach (var cf in new[] { "WARRIOR", "PALADIN", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" })
+                    {
+                        var t = set.ForClassFile(cf); var list = BuildsRecommended.BuiltIn(cf, out var bp);
+                        if (list.Count > 0) classes++;
+                        if (t == null || list.Count == 0) { bad.Add(cf + ": " + (t == null ? "no tree" : "no builds (" + bp + ")")); continue; }
+                        foreach (var b in list)
+                        {
+                            nb++;
+                            var app = BuildsRecommended.Apply(t, b, x => TalentData.NodeName(x), 0);
+                            var first = app.Steps.FirstOrDefault(s => !s.Applied);
+                            if (app.Points != 51 || app.Blocked > 0 || app.Unmatched.Count > 0)
+                                bad.Add(cf + " " + b.Name + ": " + app.Points + " points" + (app.Unmatched.Count > 0 ? ", not in the tree: " + string.Join(", ", app.Unmatched) : "") + (first != null ? ", first refused: " + first.Name + " point " + first.Number + " (" + first.Problem + ")" : ""));
+                        }
+                    }
+                    foreach (var x in bad.Take(8)) notes.Add("note real builds: " + x);
+                    Check("real game files, builds: the Outpost's " + nb + " builds for the 8 classes without a helper addon each lay all 51 points on the game's current tree, in order, every point legal at its level (" + bad.Count + " broken)", bad.Count == 0 && classes == 8 && nb >= 24, string.Join(" | ", bad));
+                    var hh = BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, "_classic_beta_"), out var hp);
+                    var hBad = hh.Where(b => { var app = BuildsRecommended.Apply(h, b, x => TalentData.NodeName(x), 0); return app.Points != 51 || app.Blocked > 0 || app.Unmatched.Count > 0; }).Select(b => b.Name).ToList();
+                    if (hh.Count == 0) notes.Add("note real builds: Hunter Helper is not installed here (" + hp + "): its builds were not checked");
+                    else Check("real game files, builds: Hunter Helper's " + hh.Count + " installed builds lay all 51 points on the game's Hunter tree (" + hBad.Count + " broken)", hBad.Count == 0, string.Join(", ", hBad));
+                }
                 var da = h?.Nodes.FirstOrDefault(n => TalentData.NodeName(n) == "Deadly Aspects");
                 Check("real game files: the Hunter tree has 'Deadly Aspects' (5 ranks, in the first row of Beast Mastery) and its rank text changes with the rank", da != null && da.MaxRanks == 5 && da.Row == 0 && da.Spec == 0, da == null ? "not found" : da.MaxRanks + " row " + da.Row);
                 if (da != null)

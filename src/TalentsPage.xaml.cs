@@ -487,6 +487,8 @@ namespace ElansAddonHub
                 var path = HunterBuildsFile != null ? HunterBuildsFile() : BuildsRecommended.HunterHelperFile(wowRoot(), IconStore.Flavor);
                 recBuilds = BuildsRecommended.ReadHunterHelper(path, out recProblem);
             }
+            // 3.2: every other class has the Outpost's own builds (Assets\Data\talentbuilds.lua)
+            else if (!string.IsNullOrEmpty(classFile)) recBuilds = BuildsRecommended.BuiltIn(classFile, out recProblem);
             RenderBuilds();
         }
 
@@ -510,7 +512,9 @@ namespace ElansAddonHub
                 else
                 {
                     foreach (var b in recBuilds) BuildList.Children.Add(BuildRow(b, b.Name, string.Join(" · ", b.Roles) + (b.VerifiedTo > 0 ? " · checked to level " + b.VerifiedTo : ""), b.Points + " points"));
-                    BuildsNote.Text = "From your installed Elan's Hunter Helper. Click a build to put it in the calculator.";
+                    BuildsNote.Text = recBuilds[0].Source == BuildsRecommended.BuiltInSource
+                        ? "The Outpost's own builds for this class, checked against this game's talent tree. Click a build to put it in the calculator."
+                        : "From your installed Elan's Hunter Helper. Click a build to put it in the calculator.";
                 }
             }
             else
@@ -589,7 +593,9 @@ namespace ElansAddonHub
                 if (app.Unmatched.Count > 0) DetailPanel.Children.Add(Line("Not in this game's tree: " + string.Join(", ", app.Unmatched), "Text.Secondary", Res("Brush.Warn"), 8));
                 DetailPanel.Children.Add(Line("Leveling order (one point per level)", "Text.Caption", null, 12));
                 foreach (var l in BuildsRecommended.StepLines(app)) DetailPanel.Children.Add(Line(l, "Text.Secondary", null, 2));
-                DetailPanel.Children.Add(Line("Source: " + rb.Source + ". Tree data credit as in that addon (foreverwisp.com / talentsforever.com, CC BY 4.0).", "Text.Caption", null, 12));
+                DetailPanel.Children.Add(Line(rb.Source == BuildsRecommended.BuiltInSource
+                    ? "Source: Elan's Outpost - shaped from the published WoW Forever leveling guides (Method, Warcraft Tavern, Mobalytics) and fitted to this game's own talent tree. Past the beta's level cap the order is theorycraft."
+                    : "Source: " + rb.Source + ". Tree data credit as in that addon (foreverwisp.com / talentsforever.com, CC BY 4.0).", "Text.Caption", null, 12));
                 openApplication = app;
             }
             else if (build is SavedBuild sb)

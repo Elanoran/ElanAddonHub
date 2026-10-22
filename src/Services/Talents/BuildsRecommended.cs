@@ -81,6 +81,45 @@ namespace ElansAddonHub.Services.Talents
             try { g = LuaData.ReadGlobals("Builds = " + text.Substring(open, close - open + 1)); }
             catch (Exception) { problem = "Hunter Helper's build list could not be understood."; return res; }
             if (!g.TryGetValue("Builds", out var o) || !(o is Dictionary<string, object> list)) { problem = "Hunter Helper's build list is empty."; return res; }
+            res = ParseList(list, "Hunter Helper", "HUNTER");
+            if (res.Count == 0) problem = "Hunter Helper's build list has no builds.";
+            return res;
+        }
+
+        // ---- 3.2: the Outpost's own builds for the classes without a helper addon (Assets\Data\talentbuilds.lua, embedded "Data.talentbuilds.lua":
+        // Builds = { WARRIOR = { <builds as in Hunter Helper's file> }, ... }). Read once; the talentsreal self-test checks every build on the game's trees.
+        public const string BuiltInResource = "Data.talentbuilds.lua", BuiltInSource = "Elan's Outpost";
+        static Dictionary<string, object> builtIn;
+        public static Func<string> BuiltInTextForTest;
+        public static void ResetBuiltInForTest() { builtIn = null; }
+
+        public static List<RecBuild> BuiltIn(string classFile, out string problem)
+        {
+            problem = null;
+            var file = (classFile ?? "").ToUpperInvariant();
+            try
+            {
+                if (builtIn == null)
+                {
+                    string text = BuiltInTextForTest?.Invoke();
+                    if (text == null)
+                        using (var s = typeof(BuildsRecommended).Assembly.GetManifestResourceStream(BuiltInResource))
+                        {
+                            if (s == null) { problem = "The Outpost's build list is not in this build."; return new List<RecBuild>(); }
+                            using (var r = new StreamReader(s, new UTF8Encoding(false))) text = r.ReadToEnd();
+                        }
+                    var g = LuaData.ReadGlobals(text);
+                    builtIn = g.TryGetValue("Builds", out var o) && o is Dictionary<string, object> d ? d : new Dictionary<string, object>();
+                }
+                return builtIn.TryGetValue(file, out var c) && c is Dictionary<string, object> list ? ParseList(list, BuiltInSource, file) : new List<RecBuild>();
+            }
+            catch (Exception e) { problem = "The Outpost's build list could not be read (" + e.GetType().Name + ")."; return new List<RecBuild>(); }
+        }
+
+        // the builds of one list (Hunter Helper's file, or one class of the Outpost's)
+        static List<RecBuild> ParseList(Dictionary<string, object> list, string source, string classFile)
+        {
+            var res = new List<RecBuild>();
             foreach (var kv in list.OrderBy(k => int.TryParse(k.Key, out var n) ? n : int.MaxValue))
             {
                 if (!(kv.Value is Dictionary<string, object> b)) continue;
@@ -89,7 +128,7 @@ namespace ElansAddonHub.Services.Talents
                 var rb = new RecBuild
                 {
                     Id = Clean(b.Str("id"), 40) ?? name, Name = name, Icon = Clean(b.Str("icon"), 80), Desc = Clean(b.Str("desc"), 600), Stats = Clean(b.Str("stats"), 200), Tip = Clean(b.Str("tip"), 400),
-                    VerifiedTo = Math.Max(0, Math.Min(80, b.Int("verifiedTo"))), Source = "Hunter Helper", ClassFile = "HUNTER",
+                    VerifiedTo = Math.Max(0, Math.Min(80, b.Int("verifiedTo"))), Source = source, ClassFile = classFile,
                 };
                 foreach (var r in Strings(b.Child("roles"))) rb.Roles.Add(r);
                 foreach (var p in Strings(b.Child("pets"))) rb.Pets.Add(p);
@@ -106,7 +145,6 @@ namespace ElansAddonHub.Services.Talents
                     }
                 if (rb.Order.Count > 0) res.Add(rb);
             }
-            if (res.Count == 0) problem = "Hunter Helper's build list has no builds.";
             return res;
         }
 

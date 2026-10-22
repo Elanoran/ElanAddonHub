@@ -177,6 +177,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Assets/Data/zonelore\.json$", "zonelore", "atlasclasses");
             R(@"^src/(Assets/Data/classlore\.json|Services/Atlas/ClassLore\.cs)$", "atlasclasses");     // the class and race notes (2.81)
             R(@"^src/Controls/TalentTreePanel\.cs$", "talents", "characters", "art", "atlashosts");
+            R(@"^src/Assets/Data/talentbuilds\.lua$", "talents");          // 3.2: the Outpost's own talent builds (checked on the real trees in the talents section)
             R(@"^src/Controls/FindsStrip\.cs$", "atlasbrowse", "atlaspage");
             R(@"^src/MainWindow\.Search\.cs$", "atlaspage", "atlashosts");
             R(@"^src/FodyWeavers\.(xml|xsd)$", "addons", "startup", "art", "browser");

@@ -80,6 +80,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\Data\zonelore.json" LogicalName="Data.zonelore.json" />
     <EmbeddedResource Include="Assets\Data\classlore.json" LogicalName="Data.classlore.json" />
+    <EmbeddedResource Include="Assets\Data\talentbuilds.lua" LogicalName="Data.talentbuilds.lua" />
   </ItemGroup>
 
   <!-- voice: NAudio (mic/speakers) + Concentus (Opus codec, pure C#); single-file publish packs them into the exe -->
