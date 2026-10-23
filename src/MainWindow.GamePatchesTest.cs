@@ -28,7 +28,7 @@ namespace ElansAddonHub
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "gamepatches");
             var savedFile = GameBuilds.FilePath; var savedNow = GameBuilds.Now; var savedCurrent = SettingsPage.CurrentGameBuild; var savedName = GameBuilds.TalentName;
-            var savedAtlas = SettingsPage.OpenAtlas; var savedW = Width; var savedH = Height;
+            var savedAtlas = SettingsPage.OpenAtlas; var savedW = Width; var savedH = Height; var savedGet = PatchNotes.Get; var savedLoad = settings.PatchNotesLoad;
             const string A = "wow_classic_beta|1.60.1.70450|84bea4233331e390fda8724c6f91ffa5", B = "wow_classic_beta|1.60.1.70532|ad1802f4455e427ed8b7769aab25b0c0", C = "wow_classic_beta|1.60.1.70600|0123456789abcdef0123456789abcdef";
             try
             {
@@ -36,6 +36,8 @@ namespace ElansAddonHub
                 Directory.CreateDirectory(work);
                 GameBuilds.FilePath = Path.Combine(work, "gamebuilds.json"); GameBuilds.ResetForTest();
                 GameBuilds.Now = () => new DateTime(2026, 10, 23);
+                PatchNotes.Get = (u, c) => throw new InvalidOperationException("no network in the self-test: " + u);     // Blizzard's notes come from a fixture (GamePatchesNotesTest)
+                settings.PatchNotesLoad = false;
                 Check("fixture: the history file is under the scratch folder (never the real data folder)", Path.GetFullPath(GameBuilds.FilePath).StartsWith(Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase));
 
                 // ============================================================================================ the comparisons
@@ -187,6 +189,9 @@ namespace ElansAddonHub
                 SettingsPage.CurrentGameBuild = () => null;
                 SettingsPage.PickPatchForTest(null); UpdateLayout();
                 Check("tab: without a WoW folder (no build) it says how to start, no picker", SettingsPage.PatchPickForTest.Children.Count == 0 && AllText(SettingsPage.PatchBodyForTest).Contains("Set your WoW folder"));
+                // ============================================================================================ Blizzard's notes (a fixture of the forum)
+                await GamePatchesNotesTest(work, (w, c, d) => Check(w, c, d));
+
                 SettingsPage.ShowAboutTab("about");
                 Check("tab: back to About hides Game patches", await Until(() => SettingsPage.AboutPaneForTest.IsVisible && !SettingsPage.AboutPatchesVisibleForTest));
             }
@@ -194,6 +199,7 @@ namespace ElansAddonHub
             finally
             {
                 GameBuilds.FilePath = savedFile; GameBuilds.Now = savedNow; GameBuilds.TalentName = savedName; GameBuilds.ResetForTest();
+                PatchNotes.Get = savedGet; settings.PatchNotesLoad = savedLoad;
                 SettingsPage.CurrentGameBuild = savedCurrent; SettingsPage.OpenAtlas = savedAtlas; SettingsPage.PickPatchForTest(null);
                 Width = savedW; Height = savedH;
             }

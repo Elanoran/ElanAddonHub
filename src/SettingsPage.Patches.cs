@@ -201,22 +201,136 @@ namespace ElansAddonHub
 
         // ---------------------------------------------------------------- Blizzard's notes
 
+        readonly HashSet<string> notesOpen = new HashSet<string>();     // posts shown in full (beside the one for the picked build)
+        bool notesHooked;
+
+        // Not loaded yet: what loading means and the one-time button. Loaded: the newest post that was out when the build was first seen, in full;
+        // the other ones folded to their date and first line; Refresh and Open on the forum. Everything is text (PatchNotes keeps no markup).
         FrameworkElement NotesCard(GameBuilds.Entry e, List<GameBuilds.Entry> all)
         {
             var card = new ContentControl { Style = (Style)FindResource("Card.Group"), Margin = new Thickness(0, 0, 0, 16), Tag = "notes" };
             var body = new StackPanel { Margin = new Thickness(16, 12, 16, 12) };
             card.Content = body;
-            body.Children.Add(new TextBlock { Style = (Style)FindResource("Text.Secondary"), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Text = "Blizzard posts the notes for each WoW Forever build on its forums." });
-            var open = new Button { Style = (Style)FindResource("Button.M"), Content = "Open Blizzard's notes", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 12, 0, 0) };
-            open.Click += (s, a) => OpenWeb(PatchNotes.ForumPage);
-            body.Children.Add(open);
+            TextBlock Line(string text, string style = "Text.Secondary") => new TextBlock { Style = (Style)FindResource(style), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Text = text };
+            var buttons = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+            Button Btn(string text, string style, Action click)
+            {
+                var b = new Button { Style = (Style)FindResource(style), Content = text, Margin = new Thickness(0, 0, 8, 0) };
+                b.Click += (s, a) => click();
+                buttons.Children.Add(b);
+                return b;
+            }
+
+            if (settings == null || !settings.PatchNotesLoad)
+            {
+                body.Children.Add(Line("Blizzard posts the notes for each WoW Forever build on its forums. The Outpost can show them here: it then asks Blizzard's forum for that page, without your account or anything about you, and keeps only the text Blizzard's staff wrote."));
+                Btn("Load Blizzard's notes", "Button.Primary.S", () => { if (settings != null) { settings.PatchNotesLoad = true; SettingsStore.Save(settings); } LoadNotes(false); }).Tag = "load";
+                Btn("Open on the forum", "GhostButton", () => OpenWeb(PatchNotes.ForumPage));
+                body.Children.Add(buttons);
+                return card;
+            }
+
+            var r = PatchNotes.Saved();
+            if (!notesHooked)
+            {
+                notesHooked = true;
+                PatchNotes.Changed += () => Dispatcher.BeginInvoke(new Action(() => { if (AboutPanePatches.IsVisible) FillPatches(); }));
+            }
+            if (PatchNotes.Stale(r) && !PatchNotes.Busy && r.Problem == null) LoadNotes(false);
+            if (r.Problem != null)
+                body.Children.Add(new Border { Background = (Brush)FindResource("Brush.Warn.Tint"), CornerRadius = (CornerRadius)FindResource("Radius.Card"), Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 12), Tag = "problem", Child = Line(r.Problem, "Text.Body") });
+            if (r.Posts.Count == 0)
+                body.Children.Add(Line(PatchNotes.Busy || r.Fetched == DateTime.MinValue ? "Loading Blizzard's notes…" : "Blizzard has not posted notes for WoW Forever yet."));
+            else
+            {
+                var main = PatchNotes.NewestBy(r, e.Seen);
+                if (main == null) body.Children.Add(Line("Blizzard had posted no notes yet when this build was first seen."));
+                else body.Children.Add(PostView(main, true, "The newest notes when the Outpost first saw this build"));
+                var other = r.Posts.Where(p => p != main).ToList();
+                if (other.Count > 0)
+                {
+                    body.Children.Add(new Border { Height = 1, Background = (Brush)FindResource("Brush.Divider"), Margin = new Thickness(0, 12, 0, 8) });
+                    body.Children.Add(new TextBlock { Text = "Other notes", Style = (Style)FindResource("Text.Caption"), Margin = new Thickness(0, 0, 0, 4) });
+                    foreach (var p in other) body.Children.Add(PostView(p, notesOpen.Contains(p.Url), null));
+                }
+            }
+            if (r.Fetched != DateTime.MinValue)
+                body.Children.Add(new TextBlock { Text = "From Blizzard's forum, " + r.Fetched.ToLocalTime().ToString("d MMMM HH:mm", CultureInfo.CurrentCulture), Style = (Style)FindResource("Text.Caption"), Margin = new Thickness(0, 12, 0, 0), Tag = "fetched" });
+            var refresh = Btn(PatchNotes.Busy ? "Loading…" : "Refresh", "GhostButton", () => LoadNotes(true));
+            refresh.IsEnabled = !PatchNotes.Busy; refresh.Tag = "refresh";
+            Btn("Open on the forum", "GhostButton", () => OpenWeb(PatchNotes.ForumPage));
+            body.Children.Add(buttons);
             return card;
+        }
+
+        // ask the forum (unless the saved notes are fresh, or force); the tab shows "Loading" now and the notes when they arrive (PatchNotes.Changed)
+        void LoadNotes(bool force)
+        {
+            PatchNotes.Refresh(force);
+            Dispatcher.BeginInvoke(new Action(() => { if (AboutPanePatches.IsVisible) FillPatches(); }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        // one post: date, author and title, then its text (full) or its first line (folded; a click unfolds it)
+        FrameworkElement PostView(PatchNotes.Post p, bool full, string label)
+        {
+            var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 4), Tag = "post:" + p.Number.ToString(CultureInfo.InvariantCulture) };
+            var head = new WrapPanel { Margin = new Thickness(0, 0, 0, full ? 8 : 0) };
+            head.Children.Add(new TextBlock { Text = p.Posted.ToLocalTime().ToString("d MMMM yyyy", CultureInfo.CurrentCulture), Style = (Style)FindResource("Text.Body"), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
+            head.Children.Add(new TextBlock { Text = p.Author + (string.IsNullOrEmpty(p.Title) ? "" : ", " + p.Title), Style = (Style)FindResource("Text.Caption"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
+            if (label != null) head.Children.Add(Pill(label, "Info"));
+            sp.Children.Add(head);
+            if (!full)
+            {
+                var first = p.Blocks.FirstOrDefault(b => b.Kind == PatchNotes.BlockKind.Paragraph)?.Text ?? p.Blocks[0].Text;
+                var fold = new TextBlock { Style = (Style)FindResource("Text.Secondary"), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
+                fold.Inlines.Add(new Run(first.Length > 140 ? first.Substring(0, 139).TrimEnd() + "… " : first + " "));
+                var more = new Hyperlink(new Run("Show the notes")) { Tag = p.Url };
+                more.Click += (s, a) => { notesOpen.Add(p.Url); FillPatches(); };
+                fold.Inlines.Add(more);
+                sp.Children.Add(fold);
+                return sp;
+            }
+            foreach (var b in p.Blocks)
+            {
+                if (b.Kind == PatchNotes.BlockKind.Heading) { sp.Children.Add(new TextBlock { Text = b.Text, Style = (Style)FindResource("Text.Body"), FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("Brush.Text.Primary"), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 4) }); continue; }
+                if (b.Kind == PatchNotes.BlockKind.Paragraph) { sp.Children.Add(new TextBlock { Text = b.Text, Style = (Style)FindResource("Text.Body"), Foreground = (Brush)FindResource("Brush.Text.Secondary"), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 4) }); continue; }
+                var g = new Grid { Margin = new Thickness(b.Level * 16, 2, 0, 2), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                g.Children.Add(new TextBlock { Text = b.Level == 0 ? "•" : "◦", Style = (Style)FindResource("Text.Body"), Foreground = (Brush)FindResource("Brush.Text.Tertiary") });
+                var t = new TextBlock { Text = b.Text, Style = (Style)FindResource("Text.Body"), TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Brush.Text.Secondary") };
+                Grid.SetColumn(t, 1); g.Children.Add(t);
+                sp.Children.Add(g);
+            }
+            if (label == null && notesOpen.Contains(p.Url))
+            {
+                var less = new Button { Style = (Style)FindResource("GhostButton"), Content = "Fold", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+                less.Click += (s, a) => { notesOpen.Remove(p.Url); FillPatches(); };
+                sp.Children.Add(less);
+            }
+            return sp;
         }
 
         void OpenWeb(string url)
         {
             if (OpenWebLink != null) OpenWebLink(url);
             else { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
+        }
+
+        // ---------------------------------------------------------------- dev pipe (aboutpage)
+        public async System.Threading.Tasks.Task LoadNotesForDev()
+        {
+            if (settings != null && !settings.PatchNotesLoad) { settings.PatchNotesLoad = true; SettingsStore.Save(settings); }
+            await PatchNotes.Refresh();
+            FillPatches();
+        }
+        public void ScrollForDev(double y) => Scroll.ScrollToVerticalOffset(y);
+        public string PatchesTextForDev() => string.Join("\n", WalkTree(PatchBody).OfType<TextBlock>().Select(t => string.Concat(t.Inlines.Select(InlineText))).Where(t => t.Trim().Length > 0));
+        static string InlineText(Inline i) => i is Run r ? r.Text : i is Span s ? string.Concat(s.Inlines.Select(InlineText)) : "";
+        static IEnumerable<DependencyObject> WalkTree(DependencyObject root)
+        {
+            yield return root;
+            foreach (var c in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>()) foreach (var d in WalkTree(c)) yield return d;
         }
 
         // ---------------------------------------------------------------- test hooks

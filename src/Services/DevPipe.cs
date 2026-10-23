@@ -290,7 +290,30 @@ namespace ElansAddonHub.Services
                         int w = (int)Math.Max(200, Math.Min(1920, Num(a, "width", 1200)));
                         return new Dictionary<string, object> { ["ok"] = true, ["result"] = page.GuideTextForTest + " || " + page.StatusForTest + " || builds: " + string.Join(", ", page.RecBuildsForTest.Select(x => x.Name)), ["image"] = Convert.ToBase64String(Scale(png, w)), ["mime"] = "image/jpeg" };
                     }
-                default: throw new ArgumentException("unknown command '" + cmd + "' (status, open, view, eval, level, objects, settle, bench, screenshot, reload, log, talents, talentcheck, talentpage)");
+                case "aboutpage":
+                    {
+                        // Settings > About on a tab (about | news | patches), optionally a game build picked, Blizzard's notes loaded (load: true = the one-time
+                        // click) and scrolled down by `scroll` px; a picture of the window and the tab's text
+                        main.ShowTab("settings");
+                        var sp = main.SettingsPage;
+                        sp.Show("about");
+                        sp.ShowAboutTab(a.Str("tab") ?? "patches");
+                        if (!string.IsNullOrEmpty(a.Str("build"))) sp.PickPatchForTest(a.Str("build"));
+                        if (a.Bool("load")) { await sp.LoadNotesForDev(); await Task.Delay(300); }
+                        await Task.Delay((int)Num(a, "wait", 600));
+                        sp.ScrollForDev(Num(a, "scroll", 0));
+                        main.UpdateLayout();
+                        await Task.Delay(150);
+                        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(main);
+                        var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)(main.ActualWidth * dpi.DpiScaleX), (int)(main.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, System.Windows.Media.PixelFormats.Pbgra32);
+                        bmp.Render(main);
+                        var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                        byte[] png; using (var ms = new MemoryStream()) { enc.Save(ms); png = ms.ToArray(); }
+                        int w = (int)Math.Max(200, Math.Min(1920, Num(a, "width", 1200)));
+                        return new Dictionary<string, object> { ["ok"] = true, ["result"] = sp.PatchesTextForDev(), ["image"] = Convert.ToBase64String(Scale(png, w)), ["mime"] = "image/jpeg" };
+                    }
+                default: throw new ArgumentException("unknown command '" + cmd + "' (status, open, view, eval, level, objects, settle, bench, screenshot, reload, log, talents, talentcheck, talentpage, aboutpage)");
             }
         }
 

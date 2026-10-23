@@ -116,6 +116,7 @@ namespace ElansAddonHub.Services
         // false can't tell "I chose automatic previews" from "I never touched it"; everyone now starts with click to load (VideoPreviewsAuto).
         [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; }
         [DataMember(Name = "videoPreviewsAuto")] public bool VideoPreviewsAuto { get; set; } // false (default) = a YouTube link in chat fetches its thumbnail + title only after a click on "Load preview"; true = by itself
+        [DataMember(Name = "patchNotesLoad")] public bool PatchNotesLoad { get; set; }      // false (default) = Settings > About > Game patches asks Blizzard's forum for its notes only after a click on "Load Blizzard's notes"; true = clicked once
         [DataMember(Name = "eventsStripOff")] public bool EventsStripOff { get; set; }      // false (default) = the next events show in a strip above the Lodge chat
         // the filter chips above the Calendar: which kinds are hidden (all false = everything shown). "Show in-game WoW events" (WowEventsOff) stays the master switch for the three WoW kinds.
         [DataMember(Name = "calHideLodge")] public bool CalHideLodge { get; set; }
