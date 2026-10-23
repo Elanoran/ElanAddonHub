@@ -196,6 +196,7 @@ and shows the sum, so a member re-sending data never counts twice. Guests can re
 | `LODGE_BADGES_ENABLED` (1) | `0` switches badges and the ladder off for good: not advertised, every request answers `disabled`, the Guild Master's switch in the Outpost is greyed out, the data (`data/badges.json`) stays on disk. With `1` the Guild Master can still switch it off from Outpost > Settings > Guild Master |
 | `LODGE_ARMORY_ENABLED` (1) | `0` switches the Armory off: not advertised, `armory.put` answers `disabled`, the other messages answer an error, the data stays on disk |
 | `LODGE_ATLAS_ENABLED` (1) | `0` switches the feature off: not advertised, `atlas.share` / `atlas.get` answer `disabled`, the data stays on disk |
+| `LODGE_EVENT_BUILDS` (70532) | game builds whose loot is left out of what members' Outposts get (unusual event drops; 70532 = the end of the WoW Forever beta); comma list, `none` = none. The stored data and the Cairn feed keep it |
 | `LODGE_CLASSIC_ENABLED` (1) | `0` switches the hosted Classic data off: not advertised, upload / download / delete answer 403 `disabled`, the stored bundle stays on disk (about 15 MB) |
 | `LODGE_CLASSIC_MAX_MB` (40) | largest bundle accepted |
 | `LODGE_CLASSIC_DOWNLOADS_PER_HOUR` (6) | per member |

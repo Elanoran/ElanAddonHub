@@ -19,7 +19,7 @@ public sealed class AtlasModule : IModule
     public AtlasModule(LodgeHub hub)
     {
         this.hub = hub;
-        Store = new AtlasStore(hub.Cfg.DataDir, hub.Log, hub.Clock);
+        Store = new AtlasStore(hub.Cfg.DataDir, hub.Log, hub.Clock) { EventBuilds = hub.Cfg.AtlasEventBuilds };
     }
 
     public bool Enabled => hub.Cfg.AtlasEnabled;

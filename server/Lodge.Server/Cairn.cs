@@ -340,7 +340,7 @@ public sealed class CairnContributor
             long since = 0; string epoch = null;
             for (int page = 0; page < 10_000; page++)
             {
-                var d = atlas.Get(since, epoch, _ => "", guest: true);
+                var d = atlas.Get(since, epoch, _ => "", guest: true, raw: true);
                 foreach (var (k, v) in d.ToList())
                 {
                     if (v is JsonObject vo)

@@ -62,6 +62,34 @@ public static partial class Atlas
         return d;
     }
 
+    // ---- event builds: game builds whose loot is not the game's normal loot (70532 = the last days of the WoW Forever beta: epics and other unusual
+    // drops). What the members' Outposts get leaves those builds' kills and drops out (x.b / items.b say how many); the stored member data, the
+    // aggregate and the Cairn feed keep the raw numbers (the Cairn splits by build itself). LODGE_EVENT_BUILDS changes the list ("none" = none).
+    public static readonly HashSet<int> DefaultEventBuilds = new() { 70532 };
+
+    // the counter without its event builds' part (the same counter when it has none); dup scaled with the kills
+    public static (Ctr C, long Dup) WithoutEventBuilds(Ctr c, long dup, ISet<int> builds)
+    {
+        if (c?.X == null || builds == null || builds.Count == 0) return (c, dup);
+        long kb = c.X.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
+        if (kb <= 0 && !c.X.It.Values.Any(i => i.B.Keys.Any(builds.Contains))) return (c, dup);
+        var r = new Ctr { N = Math.Max(0, c.N - kb), X = c.X.Clone() };
+        double keep = c.N > 0 ? (double)r.N / c.N : 0;
+        foreach (var z in c.Z) { long v = (long)Math.Round(z.Value * keep); if (v > 0) r.Z[z.Key] = v; }
+        foreach (var b in builds) r.X.B.Remove(b);
+        foreach (var it in c.I)
+        {
+            var ix = r.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
+            long db = ix == null ? 0 : ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
+            long drops = Math.Max(0, it.Value[0] - db);
+            if (drops <= 0) { r.X.It.Remove(it.Key); continue; }               // only ever seen in the event: left out
+            long count = it.Value[0] > 0 ? Math.Max(drops, (long)Math.Round(it.Value[1] * (double)drops / it.Value[0])) : drops;
+            r.I[it.Key] = new[] { drops, count };
+            if (ix != null) foreach (var b in builds) ix.B.Remove(b);
+        }
+        return (r, Math.Min(r.N, (long)Math.Round(dup * keep)));
+    }
+
     // the extras of a counter entry (null = none); n = the counter's own count
     public static CtrX ParseX(JsonObject o, long n)
     {

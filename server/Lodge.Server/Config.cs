@@ -43,6 +43,7 @@ public class LodgeConfig
     // ---- Atlas pool (2.15, "atlas" feature)
     public bool ArmoryEnabled { get; set; } = true;         // 2.16 "armory" feature: members may share characters; off = not advertised, put answers why "disabled", stored data stays on disk
     public bool ArmoryRepsEnabled { get; set; } = true;     // 2.27 "reputations" (part of the armory): reputations in the snapshots of members who switched it on, and "standing with a faction"; off = not advertised, reputations are dropped from new snapshots and never served
+    public HashSet<int> AtlasEventBuilds { get; set; } = new(Atlas.DefaultEventBuilds);   // LODGE_EVENT_BUILDS="70532,70600" / "none": builds whose loot members' Outposts don't get
     public bool AtlasEnabled { get; set; } = true;          // the owner can switch the feature off (it then isn't advertised; share/get answer "disabled"; stored data stays on disk)
     // ---- hosted datasets (2.17, "classic" feature): the Classic baseline files, stored once for the whole lodge
     public bool ClassicEnabled { get; set; } = true;        // the owner can switch it off (not advertised; upload / download / delete answer 403; the stored bundle stays on disk)
@@ -76,6 +77,10 @@ public class LodgeConfig
         var v = Environment.GetEnvironmentVariable(key);
         return v == null ? fallback : v.Trim();
     }
+
+    public static HashSet<int> EventBuilds(string v) => string.IsNullOrWhiteSpace(v) ? new(Atlas.DefaultEventBuilds)
+        : v.Trim().Equals("none", StringComparison.OrdinalIgnoreCase) ? new()
+        : v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => int.TryParse(x, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var b) ? b : 0).Where(b => b > 0 && b < 10_000_000).ToHashSet();
 
     static int Int(string key, int fallback, int min, int max) =>
         int.TryParse(Env(key, ""), out var v) ? Math.Clamp(v, min, max) : fallback;
@@ -126,6 +131,7 @@ public class LodgeConfig
             ArmoryEnabled = !(Env("LODGE_ARMORY_ENABLED", "1") is "0" or "false" or "no" or "off"),
             ArmoryRepsEnabled = !(Env("LODGE_REPUTATIONS_ENABLED", "1") is "0" or "false" or "no" or "off"),
             AtlasEnabled = !(Env("LODGE_ATLAS_ENABLED", "1") is "0" or "false" or "no" or "off"),
+            AtlasEventBuilds = EventBuilds(Env("LODGE_EVENT_BUILDS", "")),
             ClassicEnabled = !(Env("LODGE_CLASSIC_ENABLED", "1") is "0" or "false" or "no" or "off"),
             ClassicMaxMb = Int("LODGE_CLASSIC_MAX_MB", 40, 1, 1024),
             ClassicDownloadsPerHour = Int("LODGE_CLASSIC_DOWNLOADS_PER_HOUR", 6, 1, 1000),

@@ -658,7 +658,10 @@ public sealed partial class AtlasStore
     // Records changed after `since`, in revision order, cut into pages of about Atlas.PageBytes: with more = true ask again with since = rev.
     // full = the client's state cannot be continued (since 0, another epoch, or a revision this store never reached): it replaces everything it had.
     // The aggregate record of a source is replaced as a whole. nameOf turns a find's login into the name shown (display name). Caller holds Gate.
-    public JsonObject Get(long since, string epoch, Func<string, string> nameOf, bool guest = false)
+    public ISet<int> EventBuilds = Atlas.DefaultEventBuilds;   // builds whose loot the members' Outposts don't get (AtlasCtrExtras.cs); LodgeConfig sets it
+
+    // raw = the counters as stored, event builds included (the Cairn feed: the Cairn splits by build and leaves them out itself)
+    public JsonObject Get(long since, string epoch, Func<string, string> nameOf, bool guest = false, bool raw = false)
     {
         bool full = since <= 0 || since > rev || epoch != Epoch;
         if (full) since = 0;
@@ -689,7 +692,7 @@ public sealed partial class AtlasStore
             JsonNode node; string key = c.key.ToString(CultureInfo.InvariantCulture);
             switch (c.sec)
             {
-                case 0: case 1: case 2: case 16: case 17: case 18: case 19: case 20: case 21: { var a = aggs[Array.IndexOf(KindSec, c.sec)][c.key]; node = CtrJson(a.Sum, a.Members, true, a.Dup); break; }
+                case 0: case 1: case 2: case 16: case 17: case 18: case 19: case 20: case 21: { var a = aggs[Array.IndexOf(KindSec, c.sec)][c.key]; var (cs, dup) = raw ? (a.Sum, a.Dup) : Atlas.WithoutEventBuilds(a.Sum, a.Dup, EventBuilds); node = CtrJson(cs, a.Members, true, dup); break; }
                 case 3: node = VendorJson(vendors[c.key]); break;
                 case 4: node = QuestJson(quests[c.key]); break;
                 case 5: node = new JsonArray(spawns[c.key].Pts.Select(p => (JsonNode)new JsonObject { ["z"] = p.Z, ["x"] = p.X, ["y"] = p.Y }).ToArray()); break;

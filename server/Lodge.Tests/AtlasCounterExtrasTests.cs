@@ -47,6 +47,38 @@ public partial class AtlasTests
     }
 
     [Fact]
+    public async Task An_event_builds_loot_is_left_out_of_what_members_get_but_kept()
+    {
+        // the end of the beta (70532) drops epics: members' Outposts get the rates without that build, the store and the Cairn feed keep it
+        using var r = new FunRig();
+        var amy = r.Join("Amy", "member");
+        var items = new Dictionary<string, object>
+        {
+            ["3000"] = new { n = 8, c = 8, b = new Dictionary<string, object> { ["70450"] = 6, ["70532"] = 2 } },
+            ["19019"] = new { n = 3, c = 3, b = new Dictionary<string, object> { ["70532"] = 3 } },
+        };
+        await Share(r, amy, new { kills = new Dictionary<string, object> { ["9"] = XCtr(50, items, new { b = new Dictionary<string, object> { ["70450"] = 40, ["70532"] = 10 } }, new Dictionary<string, object> { ["1429"] = 50 }) } });
+        var k = (await GetAll(r, amy))["kills"]!["9"]!;
+        Assert.Equal(40, (long)k["n"]!);
+        Assert.Equal(6, (long)k["items"]!["3000"]!["n"]!);
+        Assert.Null(k["items"]!["19019"]);                                                       // only ever seen in the event
+        Assert.Null(k["x"]!["b"]!["70532"]);
+        Assert.Equal(40, (long)k["z"]!["1429"]!);
+        JsonNode raw;
+        lock (r.Hub.AtlasPool.Store.Gate) raw = r.Hub.AtlasPool.Store.Get(0, "", _ => "", guest: true, raw: true)["kills"]!["9"]!;
+        Assert.Equal(50, (long)raw["n"]!);                                                      // the Cairn feed: as stored
+        Assert.Equal(3, (long)raw["items"]!["19019"]!["n"]!);
+    }
+
+    [Fact]
+    public void Event_builds_come_from_the_environment()
+    {
+        Assert.Contains(70532, LodgeConfig.EventBuilds(""));
+        Assert.Equal(new HashSet<int> { 1, 2 }, LodgeConfig.EventBuilds("1, 2,x"));
+        Assert.Empty(LodgeConfig.EventBuilds("none"));
+    }
+
+    [Fact]
     public async Task Counter_extras_are_summed_and_a_corpse_two_members_looted_counts_once()
     {
         using var r = new FunRig();
