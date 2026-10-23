@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.2.1
+- **Talent builds walk you through it.** Picking a recommended build in the talent calculator now starts a guide: it says which talent to take at your next level and what comes after, rings the next pick on the tree and tags every talent the build still takes with the level of its next point. Take it, Back, Start over and Full build step along the order; the leveling order list ticks off what is done and jumps to any line you click. Load your character's talents first and the guide compares them with the build: what is already in place, what to take next, and which points the build does not spend.
+
 ## 3.2.0
 - **3D world map: Trees & ground (experimental).** A new switch in the 3D view's panel (Off / Low / Medium / High, off by default) draws the game's real trees, rocks, fences and carts with their own textures near the spot you look at, and at Medium and High the real ground textures too, fading to the map picture further out. The models are read from your game files once, in the background (Build now / Pause / Cancel, like the 3D buildings); the ground is made the first time you look at a place. If your graphics card can't draw them the switch says why, and if the view gets slow it steps a level down by itself.
 - **Cities in detail.** With Trees & ground at Medium or High, buildings near the spot you look at are drawn in full detail with their real textures, and cities get their own furnishings - lamps, benches, banners, crates and the trees in their streets.

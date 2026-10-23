@@ -100,6 +100,32 @@
               </StackPanel>
             </Grid>
 
+            <!-- the build guide: an open recommended build walked through point by point (what to take next, at which level, what comes after) -->
+            <Border x:Name="GuideBox" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12" Margin="0,0,0,12">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <Border x:Name="GuideIconBox" Width="40" Height="40" CornerRadius="8" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Accent}" BorderThickness="2" Margin="0,0,12,0" VerticalAlignment="Top">
+                  <Image x:Name="GuideIcon" Margin="2" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock x:Name="GuideTitle" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" />
+                  <TextBlock x:Name="GuideNextLine" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                  <TextBlock x:Name="GuideThen" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                  <TextBlock x:Name="GuideWarn" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Warn}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                </StackPanel>
+                <Button Grid.Column="2" x:Name="GuideClose" Style="{StaticResource IconButton}" Width="28" Height="28" VerticalAlignment="Top" ToolTip="Stop the guide (the points stay)" Click="GuideClose_Click" AutomationProperties.Name="Stop the guide">
+                  <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="12" />
+                </Button>
+                <WrapPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,10,0,0">
+                  <Button x:Name="GuideTake" Style="{StaticResource Button.Primary.M}" Content="Take it" Margin="0,0,8,0" Click="GuideTake_Click" ToolTip="Spend the next point of the build (the level moves along with it)" />
+                  <Button x:Name="GuideBack" Style="{StaticResource Button.M}" Content="Back" Margin="0,0,8,0" Click="GuideBack_Click" ToolTip="One point back along the build" />
+                  <Button x:Name="GuideStart" Style="{StaticResource Button.M}" Content="Start over" Margin="0,0,8,0" Click="GuideStart_Click" ToolTip="Back to before the first point of the build" />
+                  <Button x:Name="GuideFull" Style="{StaticResource Button.M}" Content="Full build" Margin="0,0,8,0" Click="GuideFull_Click" ToolTip="Every point of the build, as at its last level" />
+                </WrapPanel>
+              </Grid>
+            </Border>
+
             <!-- the trees (TalentTreePanel, the renderer Characters > Talents uses too): side by side, one under the other in a narrow window -->
             <ContentControl x:Name="TreeHost" HorizontalContentAlignment="Stretch" Focusable="False" />
 

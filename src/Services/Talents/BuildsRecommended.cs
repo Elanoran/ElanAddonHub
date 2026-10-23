@@ -229,24 +229,29 @@ namespace ElansAddonHub.Services.Talents
         }
 
         // "Deadly Aspects 1-5, Focused Fire 1-2 ..." grouped for a short line: consecutive points of one talent are one item with a level range
-        public static List<string> StepLines(BuildApplication app)
+        public static List<string> StepLines(BuildApplication app) => StepGroups(app).Select(g => g.Text).ToList();
+
+        public static List<StepGroup> StepGroups(BuildApplication app)
         {
-            var lines = new List<string>();
+            var groups = new List<StepGroup>();
             BuildStep first = null, last = null;
+            int at = 0, firstAt = 0;
             void Flush()
             {
                 if (first == null) return;
                 var rank = first.Rank == last.Rank ? first.Rank + "/" + first.Max : first.Rank + "-" + last.Rank + "/" + first.Max;
-                lines.Add((first.Level == last.Level ? "level " + first.Level : "levels " + first.Level + "-" + last.Level) + ": " + first.Name + " " + rank);
+                groups.Add(new StepGroup { Text = (first.Level == last.Level ? "level " + first.Level : "levels " + first.Level + "-" + last.Level) + ": " + first.Name + " " + rank, First = firstAt, Last = at - 1, NodeId = first.NodeId });
                 first = last = null;
             }
             foreach (var s in app.Steps.Where(s => s.Applied))
             {
+                at++;
                 if (first != null && first.NodeId == s.NodeId) { last = s; continue; }
-                Flush(); first = last = s;
+                Flush(); first = last = s; firstAt = at;
             }
+            at++;
             Flush();
-            return lines;
+            return groups;
         }
     }
 }

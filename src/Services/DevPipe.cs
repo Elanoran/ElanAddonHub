@@ -266,7 +266,31 @@ namespace ElansAddonHub.Services
                             ["steps"] = Services.Talents.BuildsRecommended.StepLines(app).Cast<object>().ToList(),
                         });
                     }
-                default: throw new ArgumentException("unknown command '" + cmd + "' (status, open, view, eval, level, objects, settle, bench, screenshot, reload, log, talents, talentcheck)");
+                case "talentpage":
+                    {
+                        // the Atlas Talents page on a class, optionally a recommended build's guide at a point of its order, and a picture of the window
+                        main.ShowTab("talents");
+                        var page = main.TalentsView;
+                        await WaitFor(() => Services.Db2.TalentData.Ready && page.TreeForTest != null, 120000);
+                        var cls = a.Str("class");
+                        if (!string.IsNullOrEmpty(cls)) page.ShowClass(cls.ToUpperInvariant());
+                        int bi = (int)Num(a, "build", -1);
+                        if (bi >= 0 && bi < page.RecBuildsForTest.Count) page.OpenBuild(page.RecBuildsForTest[bi]);
+                        int pts = (int)Num(a, "points", -1);
+                        if (pts >= 0) page.GuideJumpForTest(pts);
+                        page.ScrollTopForTest();
+                        await Task.Delay((int)Num(a, "wait", 800));
+                        main.UpdateLayout();
+                        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(main);
+                        var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)(main.ActualWidth * dpi.DpiScaleX), (int)(main.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, System.Windows.Media.PixelFormats.Pbgra32);
+                        bmp.Render(main);
+                        var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                        byte[] png; using (var ms = new MemoryStream()) { enc.Save(ms); png = ms.ToArray(); }
+                        int w = (int)Math.Max(200, Math.Min(1920, Num(a, "width", 1200)));
+                        return new Dictionary<string, object> { ["ok"] = true, ["result"] = page.GuideTextForTest + " || " + page.StatusForTest + " || builds: " + string.Join(", ", page.RecBuildsForTest.Select(x => x.Name)), ["image"] = Convert.ToBase64String(Scale(png, w)), ["mime"] = "image/jpeg" };
+                    }
+                default: throw new ArgumentException("unknown command '" + cmd + "' (status, open, view, eval, level, objects, settle, bench, screenshot, reload, log, talents, talentcheck, talentpage)");
             }
         }
 

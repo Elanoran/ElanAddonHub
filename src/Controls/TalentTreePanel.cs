@@ -27,6 +27,9 @@ namespace ElansAddonHub
         public int Id, Col, Row, Rank, Max, IconId, SpellId;
         public string Name = "";
         public bool Open;                    // can take a point now (the planner) / could have taken one (a character's tree): drawn undimmed
+        // the planner's build guide (0 / false = no guide): the level of the talent's next point in the build's order, the very next pick, ranks the build does not spend
+        public int GuideLevel;
+        public bool GuideNext, GuideOff;
     }
 
     // an arrow from the prerequisite (From, the talent above / to the side) to the talent it unlocks (To)
@@ -140,6 +143,8 @@ namespace ElansAddonHub
         public Image Img;
         public TextBlock Letter, Rank;
         public Border Badge;
+        public Border Guide;                 // the guide's level tag, top left
+        public TextBlock GuideText;
         public int IconId;
     }
 
@@ -378,6 +383,9 @@ namespace ElansAddonHub
             v.Rank = new TextBlock { Style = St("Text.Caption"), Foreground = Res("Brush.Text.Primary") };
             v.Badge = new Border { Background = Res("Brush.Surface3"), CornerRadius = new CornerRadius(8), Padding = new Thickness(4, 0, 4, 0), Child = v.Rank, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -8, -8), IsHitTestVisible = false };
             g.Children.Add(v.Badge);
+            v.GuideText = new TextBlock { Style = St("Text.Caption"), Foreground = Res("Brush.Text.Primary") };
+            v.Guide = new Border { Background = Res("Brush.Surface3"), CornerRadius = new CornerRadius(8), Padding = new Thickness(4, 0, 4, 0), Child = v.GuideText, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-8, -8, 0, 0), IsHitTestVisible = false, Visibility = Visibility.Collapsed, Tag = "guide" };
+            g.Children.Add(v.Guide);
             box.Child = g;
             if (Interactive)
             {
@@ -414,7 +422,17 @@ namespace ElansAddonHub
                 v.Badge.Background = c.Rank > 0 ? Res(maxed ? "Brush.Accent" : "Brush.Accent.Tint") : Res("Brush.Surface3");
                 v.Rank.Foreground = c.Rank > 0 && maxed ? Res("Brush.OnAccent") : Res("Brush.Text.Primary");
                 v.Box.BorderBrush = c.Rank > 0 ? Res(maxed ? "Brush.Badge.Gold" : "Brush.Accent") : c.Open ? Res("Brush.Text.Tertiary") : Brushes.Transparent;
-                v.Box.Opacity = c.Rank > 0 || c.Open ? 1 : 0.45;
+                v.Box.Opacity = c.Rank > 0 || c.Open ? 1 : c.GuideLevel > 0 ? 0.7 : 0.45;
+                v.Box.BorderThickness = new Thickness(c.GuideNext ? 3 : 2);
+                if (c.GuideOff) v.Box.BorderBrush = Res("Brush.Warn");
+                if (c.GuideNext) v.Box.BorderBrush = Res("Brush.Accent");
+                // the guide: "L14" = the build's next point in this talent comes at level 14; the next pick in the accent colour
+                v.Guide.Visibility = c.GuideLevel > 0 ? Visibility.Visible : Visibility.Collapsed;
+                v.GuideText.Text = c.GuideLevel > 0 ? "L" + c.GuideLevel.ToString(CultureInfo.InvariantCulture) : "";
+                v.Guide.Background = Res(c.GuideNext ? "Brush.Accent" : "Brush.Surface3");
+                v.GuideText.Foreground = Res(c.GuideNext ? "Brush.OnAccent" : "Brush.Text.Primary");
+                // the next pick glows, so it stands apart from a talent that only has some of its ranks (also ringed in the accent)
+                v.Box.Effect = c.GuideNext && Res("Brush.Accent") is SolidColorBrush ab ? new System.Windows.Media.Effects.DropShadowEffect { Color = ab.Color, BlurRadius = 16, ShadowDepth = 0, Opacity = 0.9 } : null;
                 v.Letter.Text = string.IsNullOrEmpty(c.Name) ? "?" : c.Name.Substring(0, 1).ToUpperInvariant();
                 System.Windows.Automation.AutomationProperties.SetName(v.Box, (string.IsNullOrEmpty(c.Name) ? "Talent" : c.Name) + ", rank " + c.Rank + " of " + c.Max);
                 if (c.IconId > 0 && (c.IconId != v.IconId || v.Img.Source == null)) { v.IconId = c.IconId; Bind(c.IconId, v.Img, v.Letter); }

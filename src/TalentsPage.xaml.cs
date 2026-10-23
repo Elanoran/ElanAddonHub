@@ -39,6 +39,10 @@ namespace ElansAddonHub
         string recProblem;
         object openBuild;                                      // the RecBuild / SavedBuild that is open
         BuildApplication openApplication;
+        bool guiding;                                          // the open recommended build is walked through (the guide above the trees)
+        TalentState charState;                                 // the layout last loaded from a character (the guide compares with it)
+        string charName;
+        StackPanel stepsPanel;                                 // the open build's leveling order (marked as the guide goes along)
         bool building, loadedOnce;
         readonly List<string> info = new List<string>();       // self-test breadcrumbs
 
@@ -184,6 +188,7 @@ namespace ElansAddonHub
             LegacyPanel.Visibility = TalentRules.MaxLegacyRanks(tree) > 0 ? Visibility.Visible : Visibility.Collapsed;
             session.Level = 60; session.LegacyRanks = 0;
             openBuild = null; openApplication = null; DetailBox.Visibility = Visibility.Collapsed;
+            guiding = false; charState = null; charName = null;
             ClassTitle.Foreground = ClassBrush(classFile);
             ClassTitle.Text = tree.ClassName;
             SaveName.Text = ""; SaveNotes.Text = ""; CodeBox.Text = "";
@@ -233,9 +238,22 @@ namespace ElansAddonHub
             {
                 foreach (var c in p.Model.Cells) { var n = tree.Node(c.Id); if (n != null) { c.Name = NameOf(n) ?? ""; c.IconId = IconOf(n); } }
                 TalentTreeModels.Apply(p.Model, tree, st);
+            }
+            var g = Guide();
+            var nextLevels = g == null ? new Dictionary<int, int>() : BuildGuide.NextLevels(g);
+            var off = new HashSet<int>(g?.Off.Select(o => o.Key) ?? Enumerable.Empty<int>());
+            foreach (var p in panels)
+            {
+                foreach (var c in p.Model.Cells)
+                {
+                    c.GuideLevel = nextLevels.TryGetValue(c.Id, out var lv) ? Math.Max(1, lv) : 0;
+                    c.GuideNext = g?.Next != null && g.Next.NodeId == c.Id;
+                    c.GuideOff = off.Contains(c.Id);
+                }
                 p.Update();
             }
             UpdatePointsLine();
+            UpdateGuide(g);
         }
 
         void UpdatePointsLine()
@@ -268,7 +286,7 @@ namespace ElansAddonHub
         {
             if (session == null) return Why.NoNode;
             var w = right ? session.Remove(nodeId) : session.Add(nodeId);
-            if (w == Why.Ok) { SetStatus("", false); openBuild = null; DetailBox.Visibility = Visibility.Collapsed; }
+            if (w == Why.Ok) { SetStatus("", false); if (!guiding) { openBuild = null; DetailBox.Visibility = Visibility.Collapsed; } }
             else { var n = tree.Node(nodeId); SetStatus(TalentRules.Explain(w) + (w == Why.Blocked && n != null ? ": " + WhyBlocked(n) : ""), false); }
             RefreshStates();
             return w;
@@ -301,18 +319,22 @@ namespace ElansAddonHub
         void Level_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (building || session == null || !(LevelBox.SelectedItem is int lv)) return;
+            // following the build: the level shows the build as it stands at that level
+            var g = Guide();
+            if (g != null && g.OnTrack) { int pts = BuildGuide.PointsBy(openApplication, lv); if (pts != g.Prefix) session.Load(BuildGuide.StateAt(openApplication, pts)); }
             session.Level = lv; RefreshStates();
         }
 
         void Legacy_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (building || session == null || !(LegacyBox.SelectedItem is int r)) return;
-            session.LegacyRanks = r; RefreshStates();
-            if (openBuild is RecBuild rb) ShowDetail(rb, false);
+            session.LegacyRanks = r;
+            if (openBuild is RecBuild rb) ShowDetail(rb, false);       // the point levels move: the order is laid out again
+            RefreshStates();
         }
 
         void Undo_Click(object sender, RoutedEventArgs e) { if (session != null && session.Undo()) { SetStatus("", false); RefreshStates(); } }
-        void Reset_Click(object sender, RoutedEventArgs e) { if (session == null) return; session.Reset(); openBuild = null; DetailBox.Visibility = Visibility.Collapsed; SetStatus("", false); RefreshStates(); }
+        void Reset_Click(object sender, RoutedEventArgs e) { if (session == null) return; session.Reset(); if (!guiding) { openBuild = null; DetailBox.Visibility = Visibility.Collapsed; } SetStatus("", false); RefreshStates(); }
 
         // the level box follows what a loaded layout needs (never below it)
         void FitLevel()
@@ -406,7 +428,7 @@ namespace ElansAddonHub
             if (d.Ok)
             {
                 if (!string.Equals(d.Tree.ClassFile, classFile, StringComparison.OrdinalIgnoreCase)) SelectClass(d.Tree.ClassFile);
-                session.Load(d.State); FitLevel(); openBuild = null; DetailBox.Visibility = Visibility.Collapsed;
+                session.Load(d.State); FitLevel(); openBuild = null; guiding = false; DetailBox.Visibility = Visibility.Collapsed;
                 RefreshStates();
                 SetStatus("Loaded a " + tree.ClassName + " build with " + d.State.Total + " points.", false);
                 return true;
@@ -419,7 +441,7 @@ namespace ElansAddonHub
             if (!string.Equals(l.Tree.ClassFile, classFile, StringComparison.OrdinalIgnoreCase)) SelectClass(l.Tree.ClassFile);
             session.Load(l.Order != null ? l.Order.State : l.State); FitLevel();
             var lb = new LinkBuild { Site = l.Site, ClassFile = l.Tree.ClassFile, Name = tree.ClassName + " build from " + l.Site, Order = l.Order, OrderNote = l.OrderNote };
-            openBuild = lb; openApplication = l.Order;
+            openBuild = lb; openApplication = l.Order; guiding = false;
             RefreshStates();
             ShowDetail(lb, true);
             // offered to keep: the save boxes are filled in, one click on "Save build" keeps it (the site is named in the notes)
@@ -469,9 +491,12 @@ namespace ElansAddonHub
             var loaded = CharacterTalents.Load(tree, mod, c.Level, NameOf);
             session.LegacyRanks = loaded.LegacyRanks;
             if (c.Level > 0) session.Level = Math.Max(10, Math.Min(60, c.Level));
-            session.Load(loaded.State); FitLevel(); openBuild = null; DetailBox.Visibility = Visibility.Collapsed;
+            session.Load(loaded.State); FitLevel();
+            charState = loaded.State.Clone(); charName = c.Name;
+            if (!guiding) { openBuild = null; DetailBox.Visibility = Visibility.Collapsed; }
             RefreshStates();
             var msg = c.Name + ": " + loaded.Placed + " points loaded" + (mod.Unspent > 0 ? ", " + mod.Unspent + " unspent" : "") + ".";
+            if (guiding && openBuild is RecBuild gb) msg += " Compared with " + gb.Name + ": the guide shows what to take next.";
             if (loaded.Unplaced > 0) msg += " " + loaded.Unplaced + " point" + (loaded.Unplaced == 1 ? "" : "s") + " could not be placed in this tree.";
             if (!loaded.Valid) msg += " The layout does not follow the tree's rules (a respec in progress?).";
             SetStatus(msg, false, !loaded.Valid || loaded.Unplaced > 0);
@@ -560,11 +585,15 @@ namespace ElansAddonHub
             if (build is RecBuild rb)
             {
                 var app = BuildsRecommended.Apply(tree, rb, NameOf, session.LegacyRanks);
-                session.Load(app.State); FitLevel();
-                openBuild = rb; openApplication = app;
-                RefreshStates();
+                openBuild = rb; openApplication = app; guiding = true;
+                // the guide: from the first point on, or - with a character's talents loaded - from where that character stands
+                bool fromChar = charState != null && session.State.Total > 0 && session.State.SameAs(charState);
+                if (!fromChar) { session.Load(new TalentState()); SetLevel(BuildGuide.LevelFor(app, 0)); }
                 ShowDetail(rb, true);
+                RefreshStates();
                 var msg = rb.Name + ": " + app.Points + " points" + (app.Unmatched.Count > 0 ? ". Not in this game: " + string.Join(", ", app.Unmatched) : "") + (app.Blocked > 0 ? ". " + app.Blocked + " point(s) the tree would not allow at that moment were skipped" : "") + ".";
+                msg += fromChar ? " Compared with " + charName + "'s talents: the guide above the trees says what to take next."
+                    : " The guide above the trees starts at the first point: take the highlighted talent at each level, or press Full build to see the end result.";
                 SetStatus(msg, false, app.Unmatched.Count > 0 || app.Blocked > 0);
             }
             else if (build is SavedBuild sbd)
@@ -572,7 +601,7 @@ namespace ElansAddonHub
                 var d = BuildCode.Decode(sbd.Code, id => set.ForClass(id));
                 if (!d.Ok) { SetStatus(sbd.Name + ": " + d.Error, true); return; }
                 session.Load(d.State); FitLevel();
-                openBuild = sbd; openApplication = null;
+                openBuild = sbd; openApplication = null; guiding = false;
                 RefreshStates();
                 ShowDetail(sbd, true);
                 SetStatus("Loaded " + sbd.Name + " (" + d.State.Total + " points).", false);
@@ -591,8 +620,11 @@ namespace ElansAddonHub
                 if (!string.IsNullOrEmpty(rb.Tip)) DetailPanel.Children.Add(Line("Tip: " + rb.Tip, "Text.Secondary", null, 4));
                 var app = BuildsRecommended.Apply(tree, rb, NameOf, session.LegacyRanks);
                 if (app.Unmatched.Count > 0) DetailPanel.Children.Add(Line("Not in this game's tree: " + string.Join(", ", app.Unmatched), "Text.Secondary", Res("Brush.Warn"), 8));
-                DetailPanel.Children.Add(Line("Leveling order (one point per level)", "Text.Caption", null, 12));
-                foreach (var l in BuildsRecommended.StepLines(app)) DetailPanel.Children.Add(Line(l, "Text.Secondary", null, 2));
+                DetailPanel.Children.Add(Line("Leveling order (one point per level) - click a line to see the build at that point", "Text.Caption", null, 12));
+                stepsPanel = new StackPanel();
+                DetailPanel.Children.Add(stepsPanel);
+                openApplication = app;
+                RenderSteps(Guide());
                 DetailPanel.Children.Add(Line(rb.Source == BuildsRecommended.BuiltInSource
                     ? "Source: Elan's Outpost - shaped from the published WoW Forever leveling guides (Method, Warcraft Tavern, Mobalytics) and fitted to this game's own talent tree. Past the beta's level cap the order is theorycraft."
                     : "Source: " + rb.Source + ". Tree data credit as in that addon (foreverwisp.com / talentsforever.com, CC BY 4.0).", "Text.Caption", null, 12));
@@ -633,6 +665,137 @@ namespace ElansAddonHub
             SaveName.Text = ""; SaveNotes.Text = "";
             SegSaved.IsChecked = true; RenderBuilds();
             SetStatus("Saved " + name + ".", false);
+        }
+
+        // ------------------------------------------------------------------------------------------------------------------------------ the build guide
+        // An open recommended build is walked through: the guide above the trees names the next point (talent, rank, the level it comes at) and the
+        // ones after it; the tree tags every talent the build still takes with the level of its next point ("L14") and rings the next pick. It always
+        // reads the layout on screen (BuildGuide.Progress), so clicks of your own, Undo, Reset and a character's talents are all compared with the
+        // build: points the build never spends are named, and the guide goes on from the first point still missing.
+        GuideProgress Guide() => guiding && openBuild is RecBuild && openApplication != null && session != null ? BuildGuide.Progress(openApplication, session.State) : null;
+
+        void SetLevel(int level)
+        {
+            if (level <= 0 || session == null) return;
+            building = true;
+            session.Level = Math.Min(60, Math.Max(10, level));
+            LevelBox.SelectedItem = session.Level;
+            building = false;
+        }
+
+        // the build as it stands after its first `points` points, at the level of the last of them
+        void GuideJump(int points)
+        {
+            if (Guide() == null) return;
+            session.Load(BuildGuide.StateAt(openApplication, points));
+            SetLevel(BuildGuide.LevelFor(openApplication, points));
+            SetStatus("", false);
+            RefreshStates();
+            info.Add("guide|jump|" + points);
+        }
+
+        void GuideTake_Click(object sender, RoutedEventArgs e)
+        {
+            var g = Guide();
+            if (g?.Next == null) return;
+            int need = TalentRules.LevelForPoints(tree, session.State.Total + 1, session.LegacyRanks);
+            if (need != int.MaxValue && need > session.Level) SetLevel(need);
+            var w = session.Add(g.Next.NodeId);
+            var n = tree.Node(g.Next.NodeId);
+            if (w == Why.Ok) SetStatus("", false);
+            else SetStatus(TalentRules.Explain(w) + (w == Why.Blocked && n != null ? ": " + WhyBlocked(n) : ""), false, true);
+            RefreshStates();
+            info.Add("guide|take|" + w);
+        }
+
+        void GuideBack_Click(object sender, RoutedEventArgs e) { var g = Guide(); if (g != null && g.OnTrack && g.Prefix > 0) GuideJump(g.Prefix - 1); }
+        void GuideStart_Click(object sender, RoutedEventArgs e) => GuideJump(0);
+        void GuideFull_Click(object sender, RoutedEventArgs e) { var g = Guide(); if (g != null) GuideJump(g.Total); }
+        void GuideClose_Click(object sender, RoutedEventArgs e) { guiding = false; RefreshStates(); RenderSteps(null); info.Add("guide|close"); }
+
+        // "level 15: Alpha 3/5 · levels 16-17: Beta 1-2/2" - the next few runs of the order after the next point
+        static string ThenText(IEnumerable<BuildStep> steps, int runs)
+        {
+            var parts = new List<string>();
+            BuildStep first = null, last = null;
+            foreach (var s in steps)
+            {
+                if (first != null && s.NodeId == first.NodeId) { last = s; continue; }
+                if (first != null) { parts.Add(RunText(first, last)); if (parts.Count >= runs) return string.Join(" · ", parts) + " ..."; }
+                first = last = s;
+            }
+            if (first != null) parts.Add(RunText(first, last));
+            return string.Join(" · ", parts);
+        }
+
+        static string RunText(BuildStep a, BuildStep b) => (a.Level == b.Level ? "level " + a.Level : "levels " + a.Level + "-" + b.Level) + ": " + a.Name + " " + (a.Rank == b.Rank ? a.Rank.ToString(CultureInfo.InvariantCulture) : a.Rank + "-" + b.Rank) + "/" + a.Max;
+
+        void UpdateGuide(GuideProgress g)
+        {
+            GuideBox.Visibility = g == null ? Visibility.Collapsed : Visibility.Visible;
+            if (g == null) return;
+            var rb = (RecBuild)openBuild;
+            bool asChar = charState != null && charName != null && !g.OnTrack && session.State.SameAs(charState);
+            GuideTitle.Text = "Guide: " + rb.Name + " · " + g.Followed + " of " + g.Total + " points" + (asChar ? " · " + charName + "'s talents" : "");
+            GuideIcon.Source = null;
+            var warn = new List<string>();
+            if (g.Complete)
+            {
+                GuideNextLine.Text = g.OffPoints == 0 ? "The build is complete." : "Every point of the build is in place.";
+                GuideThen.Text = "";
+                GuideIconBox.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                var next = g.Next;
+                var node = tree.Node(next.NodeId);
+                GuideIconBox.Visibility = Visibility.Visible;
+                BindIcon(node == null ? 0 : IconOf(node), GuideIcon);
+                GuideNextLine.Text = (g.OnTrack ? "Level " + next.Level + ": take " : "Next: take ") + next.Name + " (rank " + next.Rank + " of " + next.Max + ")"
+                    + (g.OnTrack ? "" : " - the build takes it at level " + next.Level);
+                var then = ThenText(g.Upcoming.Skip(1), 3);
+                GuideThen.Text = then.Length == 0 ? "That is the last point of the build." : "Then " + then;
+                if (node != null && !TalentRules.Available(tree, session.State, node)) warn.Add("Not open yet: " + WhyBlocked(node) + ".");
+            }
+            if (g.OffPoints > 0)
+                warn.Add("Not part of this build: " + string.Join(", ", g.Off.Select(o => (NameOf(tree.Node(o.Key)) ?? "a talent") + " +" + o.Value))
+                    + ". Right-click them to give the points back" + (g.OnTrack ? "" : ", or press Start over") + ".");
+            GuideWarn.Text = string.Join(" ", warn);
+            GuideWarn.Visibility = warn.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            GuideTake.IsEnabled = !g.Complete && tree.Node(g.Next.NodeId) is TalentNode nn && TalentRules.Available(tree, session.State, nn);
+            GuideBack.IsEnabled = g.OnTrack && g.Prefix > 0;
+            GuideStart.IsEnabled = session.State.Total > 0;
+            GuideFull.IsEnabled = !(g.OnTrack && g.Complete);
+            RenderSteps(g);
+        }
+
+        // the leveling order in the build's detail: done runs ticked and faded, the run with the next point marked, every line a jump
+        void RenderSteps(GuideProgress g)
+        {
+            if (stepsPanel == null || !(openBuild is RecBuild) || openApplication == null) return;
+            stepsPanel.Children.Clear();
+            var applied = BuildGuide.Applied(openApplication);
+            int nextAt = g?.Next == null ? -1 : applied.IndexOf(g.Next) + 1;
+            foreach (var sg in BuildsRecommended.StepGroups(openApplication))
+            {
+                bool done = g != null && Enumerable.Range(sg.First, sg.Last - sg.First + 1).All(i => session.State.Rank(applied[i - 1].NodeId) >= applied[i - 1].Rank);
+                bool current = nextAt >= sg.First && nextAt <= sg.Last;
+                var row = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 2, 4, 2), Margin = new Thickness(-4, 1, 0, 0), DataContext = sg, Tag = current ? "next" : done ? "done" : "", Background = current ? Res("Brush.Surface3") : Brushes.Transparent };
+                var dp = new DockPanel();
+                var mark = new TextBlock { Text = done ? "" : current ? "" : "", FontFamily = (FontFamily)Application.Current.Resources["Font.Icons"], FontSize = 11, Width = 18, VerticalAlignment = VerticalAlignment.Center, Foreground = Res(current ? "Brush.Accent" : "Brush.Text.Tertiary") };
+                dp.Children.Add(mark);
+                var text = Line(sg.Text, current ? "Text.Body" : "Text.Secondary", done && !current ? Res("Brush.Text.Tertiary") : current ? Res("Brush.Text.Primary") : null);
+                dp.Children.Add(text);
+                row.Child = dp;
+                if (guiding)
+                {
+                    row.Cursor = Cursors.Hand;
+                    row.ToolTip = "Show the build up to here";
+                    var target = sg.Last;
+                    row.MouseLeftButtonUp += (s, e) => { e.Handled = true; GuideJump(target); };
+                }
+                stepsPanel.Children.Add(row);
+            }
         }
 
         // ------------------------------------------------------------------------------------------------------------------------------ self-test hooks
@@ -693,6 +856,21 @@ namespace ElansAddonHub
         public void ForceNoBuildsForTest() { var c = classFile; classFile = "WARRIOR"; recBuilds = new List<RecBuild>(); recProblem = null; SegRec.IsChecked = true; RenderBuilds(); classFile = c; }
         public bool CharPopupOpenForTest => CharPopup.IsOpen;
         public void ClosePopupsForTest() { CharPopup.IsOpen = false; }
+        public GuideProgress GuideForTest => Guide();
+        public bool GuideVisibleForTest => GuideBox.Visibility == Visibility.Visible;
+        public string GuideTextForTest => string.Join(" | ", new[] { GuideTitle.Text, GuideNextLine.Text, GuideThen.Text, GuideWarn.Visibility == Visibility.Visible ? GuideWarn.Text : "" }.Where(x => !string.IsNullOrEmpty(x)));
+        public void GuideTakeForTest() => GuideTake_Click(null, null);
+        public void GuideBackForTest() => GuideBack_Click(null, null);
+        public void GuideStartForTest() => GuideStart_Click(null, null);
+        public void GuideFullForTest() => GuideFull_Click(null, null);
+        public void GuideCloseForTest() => GuideClose_Click(null, null);
+        public void GuideJumpForTest(int points) => GuideJump(points);
+        public bool GuideTakeEnabledForTest => GuideTake.IsEnabled;
+        public bool GuideBackEnabledForTest => GuideBack.IsEnabled;
+        public string NodeGuideTagForTest(int id) => views.TryGetValue(id, out var v) && v.Guide.Visibility == Visibility.Visible ? v.GuideText.Text : null;
+        public bool NodeGuideNextForTest(int id) => panels.SelectMany(p => p.Model.Cells).FirstOrDefault(c => c.Id == id)?.GuideNext == true;
+        public List<string> StepMarksForTest() => stepsPanel == null ? new List<string>() : stepsPanel.Children.OfType<FrameworkElement>().Select(f => (string)f.Tag).ToList();
+        public void StepClickForTest(int index) { if (stepsPanel != null && index < stepsPanel.Children.Count && stepsPanel.Children[index] is FrameworkElement f && f.DataContext is StepGroup sg) GuideJump(sg.Last); }
 
         static void Collect(DependencyObject d, List<string> into)
         {

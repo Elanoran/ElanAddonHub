@@ -450,7 +450,44 @@ EHH.DefaultBuild = ""pack""
                 var rows = page.BuildRowsForTest();
                 Check("builds: the Hunter's list is Hunter Helper's two builds, in its order", rows.SequenceEqual(new[] { "Pack Leader", "Too Eager" }), string.Join("|", rows));
                 page.OpenBuild(page.RecBuildsForTest[0]);
-                Check("builds: clicking a build puts it in the calculator (11 points), the status names what is not in this game", page.SessionForTest.State.Total == 11 && page.StatusForTest.Contains("Missing Talent") && page.StatusForTest.StartsWith("Pack Leader: 11 points"), page.StatusForTest);
+                Check("builds: clicking a build starts its guide at the first point (nothing spent yet, level 10); the status names what is not in this game and points at the guide", page.SessionForTest.State.Total == 0 && page.SessionForTest.Level == 10 && page.StatusForTest.Contains("Missing Talent") && page.StatusForTest.StartsWith("Pack Leader: 11 points") && page.StatusForTest.Contains("guide"), page.StatusForTest);
+
+                // the build guide: what to take next, at which level, what comes after
+                var gp = page.GuideForTest;
+                Check("guide: shown, 0 of 11 points, on track; next = Alpha 1/5 at level 10, then Alpha 2-5, Beta, Gamma", page.GuideVisibleForTest && gp != null && gp.Total == 11 && gp.Followed == 0 && gp.OnTrack && gp.Next.NodeId == 10 && gp.Next.Rank == 1
+                    && page.GuideTextForTest.Contains("Level 10: take Alpha (rank 1 of 5)") && page.GuideTextForTest.Contains("Then levels 11-14: Alpha 2-5/5 · levels 15-16: Beta 1-2/2"), page.GuideTextForTest);
+                Check("guide: the tree tags the build's talents with the level of their next point (Alpha L10, Beta L15, Gamma L17, Delta L20) and rings Alpha as the next pick; a talent the build skips has no tag",
+                    page.NodeGuideTagForTest(10) == "L10" && page.NodeGuideTagForTest(11) == "L15" && page.NodeGuideTagForTest(12) == "L17" && page.NodeGuideTagForTest(13) == "L20" && page.NodeGuideTagForTest(14) == null && page.NodeGuideNextForTest(10) && !page.NodeGuideNextForTest(11),
+                    page.NodeGuideTagForTest(10) + " " + page.NodeGuideTagForTest(11) + " " + page.NodeGuideTagForTest(12) + " " + page.NodeGuideTagForTest(13) + " " + page.NodeGuideTagForTest(14));
+                Check("guide: Back is off at the start, Take it is on", !page.GuideBackEnabledForTest && page.GuideTakeEnabledForTest);
+                for (int i = 0; i < 6; i++) page.GuideTakeForTest();
+                gp = page.GuideForTest;
+                Check("guide: Take it six times = Alpha 5/5 and Beta 1/2 at level 15 (the level moves along); next = Beta 2/2 at 16; Alpha's tag is gone, Beta's says L16",
+                    page.SessionForTest.State.Rank(10) == 5 && page.SessionForTest.State.Rank(11) == 1 && page.SessionForTest.Level == 15 && gp.Followed == 6 && gp.Next.NodeId == 11 && gp.Next.Rank == 2 && page.NodeGuideTagForTest(10) == null && page.NodeGuideTagForTest(11) == "L16",
+                    page.GuideTextForTest + " L" + page.SessionForTest.Level);
+                var marks = page.StepMarksForTest();
+                Check("guide: the leveling order ticks the done run (Alpha) and marks the run with the next point (Beta)", marks.Count == 4 && marks[0] == "done" && marks[1] == "next" && marks[2] == "" && marks[3] == "", string.Join(",", marks));
+                page.GuideBackForTest();
+                Check("guide: Back takes the last point back (5 points, level 14), next is Beta 1/2 again", page.SessionForTest.State.Total == 5 && page.SessionForTest.Level == 14 && page.GuideForTest.Next.NodeId == 11 && page.GuideForTest.Next.Rank == 1, "L" + page.SessionForTest.Level + " " + page.SessionForTest.State.Total);
+                page.SetLevelForTest(18);
+                Check("guide: picking level 18 shows the build as at level 18 (Alpha 5, Beta 2, Gamma 2 = 9 points)", page.SessionForTest.State.Total == 9 && page.SessionForTest.State.Rank(12) == 2, page.SessionForTest.State.Total + "");
+                page.StepClickForTest(1);
+                Check("guide: clicking the Beta line of the order jumps to its end (7 points, level 16)", page.SessionForTest.State.Total == 7 && page.SessionForTest.Level == 16, page.SessionForTest.State.Total + " L" + page.SessionForTest.Level);
+                page.GuideStartForTest();
+                page.Click(14, false);
+                gp = page.GuideForTest;
+                Check("guide: a point of your own outside the build (Epsilon) keeps the guide and is named; the guide still says Alpha 1/5 next", page.GuideVisibleForTest && !gp.OnTrack && gp.OffPoints == 1 && gp.Next.NodeId == 10 && page.GuideTextForTest.Contains("Not part of this build: Epsilon +1") && !page.GuideBackEnabledForTest, page.GuideTextForTest);
+                page.GuideStartForTest();
+                Check("guide: Start over = empty again at level 10, on track", page.SessionForTest.State.Total == 0 && page.SessionForTest.Level == 10 && page.GuideForTest.OnTrack);
+                page.GuideFullForTest();
+                gp = page.GuideForTest;
+                Check("guide: Full build = all 11 points at level 20, complete, no tags left, Take it off", page.SessionForTest.State.Total == 11 && page.SessionForTest.Level == 20 && gp.Complete && page.NodeGuideTagForTest(13) == null && !page.GuideTakeEnabledForTest && page.GuideTextForTest.Contains("The build is complete"), page.GuideTextForTest);
+                var g2 = BuildGuide.Progress(BuildsRecommended.Apply(t, hh[0], n => TalSpellName(n.SpellId), 0), new TalentState { Ranks = new Dictionary<int, int> { { 10, 5 }, { 12, 3 }, { 17, 2 } } });
+                Check("guide: Progress counts what a layout already has out of order (Alpha 5 + Gamma 3 = 8 followed, 5 in a row), next = Beta 1/2, Zeta +2 off the build",
+                    g2.Followed == 8 && g2.Prefix == 5 && g2.Next.NodeId == 11 && g2.Next.Rank == 1 && g2.OffPoints == 2 && g2.Off[0].Key == 17 && !g2.OnTrack, g2.Followed + " " + g2.Prefix + " " + g2.OffPoints);
+                var a0 = BuildsRecommended.Apply(t, hh[0], n => TalSpellName(n.SpellId), 0);
+                Check("guide: StateAt / PointsBy / LevelFor walk the order (3 points = Alpha 3; level 16 holds 7 points; the 7th point comes at level 16, the first at 10)",
+                    BuildGuide.StateAt(a0, 3).Rank(10) == 3 && BuildGuide.StateAt(a0, 3).Total == 3 && BuildGuide.PointsBy(a0, 16) == 7 && BuildGuide.LevelFor(a0, 7) == 16 && BuildGuide.LevelFor(a0, 0) == 10);
                 var detail = page.DetailTextsForTest();
                 Check("builds: the detail shows the description, stats, pets, tip, 'Not in this game's tree' and the leveling order as 'levels 10-14: Alpha 1-5/5'",
                     detail.Any(x => x.StartsWith("A string with a brace")) && detail.Any(x => x == "Stats: Agility > Stamina") && detail.Any(x => x == "Pets: bear, boar") && detail.Any(x => x.StartsWith("Not in this game's tree: Missing Talent")) && detail.Contains("levels 10-14: Alpha 1-5/5") && detail.Contains("level 20: Delta 1/1"), string.Join(" | ", detail));
@@ -479,6 +516,13 @@ EHH.DefaultBuild = ""pack""
                 page.ClosePopupsForTest();
                 page.Reset_ClickForTest();
                 Check("characters: loading Elan puts 11 points (5 Alpha, 3 Gamma, 1 Beta, 2 Zeta) in the calculator, level 20, legacy ranks inferred (2); 2 not placed", page.UseCharacter(chars.Chars[0]) && page.SessionForTest.State.Total == 11 && page.SessionForTest.Level == 20 && page.SessionForTest.LegacyRanks == 2 && page.StatusForTest.Contains("2 points could not be placed"), page.StatusForTest + " L" + page.SessionForTest.Level);
+                page.OpenBuild(page.RecBuildsForTest[0]);
+                var gc = page.GuideForTest;
+                Check("guide with a character: opening a build after loading Elan keeps Elan's talents and compares: 9 of the build's points in place (Alpha 5, Beta 1, Gamma 3), next = Beta 2/2, Zeta named as not part of the build",
+                    page.SessionForTest.State.Total == 11 && gc != null && gc.Followed == 9 && gc.Next.NodeId == 11 && gc.OffPoints == 2 && page.GuideTextForTest.Contains("Elan's talents") && page.GuideTextForTest.Contains("Next: take Beta") && page.GuideTextForTest.Contains("Not part of this build: Zeta") && page.StatusForTest.Contains("Compared with Elan"),
+                    page.GuideTextForTest + " || " + page.StatusForTest);
+                page.GuideCloseForTest();
+                Check("guide: the close button stops the guide and leaves the points", !page.GuideVisibleForTest && page.SessionForTest.State.Total == 11 && page.NodeGuideTagForTest(11) == null);
                 await Task.Delay(300);
 
                 // other classes, and the "no builds" text
@@ -496,6 +540,7 @@ EHH.DefaultBuild = ""pack""
 
                 // screenshots of the fixture page: tree with a build, tooltip
                 page.OpenBuild(page.RecBuildsForTest[0]);
+                page.GuideJumpForTest(7);
                 page.ScrollTopForTest(); await Task.Delay(300);
                 Snapshot(P("24-talents-fixture.png"));
                 SnapshotSheet(page.TipForTest(10), P("24-talents-tooltip.png"));
