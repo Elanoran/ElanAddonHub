@@ -17,6 +17,45 @@ namespace ElansAddonHub.Services
         public static readonly string[] GatherSections = { "pickpocket", "skinning", "mining", "herbalism", "salvage", "contained" };
         public const int LowSampleKills = 30;                                              // below this a rate is "too few to tell"
 
+        // ---- event builds: loot seen under a game build whose drops are not the game's normal ones is kept out of every rate.
+        // 70532 = the last days of the WoW Forever beta (October 2026): mobs drop epics and other unusual items. A counter keeps its kills and drops per build
+        // (x.b, it.b), so the Atlas takes that build's part off when it reads the Lodge's numbers; the raw numbers stay in the Toolkit, the cache and on the
+        // Lodge, so changing this list later loses nothing. Counters from a Toolkit without builds (before 0.5.10) cannot be split and stay as they are.
+        // HOOK: EventBuilds - add a build here when another event changes what drops.
+        public static readonly HashSet<int> EventBuilds = new HashSet<int> { 70532 };
+
+        // the counter without what it saw under the event builds (the same counter when it saw nothing there; null when nothing else is left)
+        public static Counter WithoutEventBuilds(Counter c, ISet<int> builds = null)
+        {
+            builds = builds ?? EventBuilds;
+            if (c?.X == null || builds.Count == 0) return c;
+            long kb = c.X.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
+            bool itemsToo = c.X.It.Values.Any(i => i.B.Keys.Any(builds.Contains));
+            if (kb <= 0 && !itemsToo) return c;
+            var r = new Counter { N = Math.Max(0, c.N - kb), Members = c.Members, EventKills = Math.Min(c.N, kb) };
+            double keep = c.N > 0 ? (double)r.N / c.N : 0;
+            foreach (var z in c.Zones) { long v = (long)Math.Round(z.Value * keep); if (v > 0) r.Zones[z.Key] = v; }
+            var x = new CounterX { Q = new Dictionary<int, long>(c.X.Q), Cl = new Dictionary<int, long>(c.X.Cl), Lo = c.X.Lo, Hi = c.X.Hi, Fp = new List<long>(c.X.Fp), Dup = (long)Math.Round(c.X.Dup * keep) };
+            foreach (var b in c.X.B) if (!builds.Contains(b.Key)) x.B[b.Key] = b.Value;
+            foreach (var it in c.Items)
+            {
+                var ix = c.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
+                long db = ix == null ? 0 : ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
+                long drops = Math.Max(0, it.Value[0] - db);
+                if (drops <= 0) continue;                                          // only ever seen in the event: left out
+                long count = it.Value[0] > 0 ? Math.Max(drops, (long)Math.Round(it.Value[1] * (double)drops / it.Value[0])) : drops;
+                r.Items[it.Key] = new[] { drops, count };
+                if (ix != null)
+                {
+                    var nx = new ItemX { Q = ix.Q, Sx = new Dictionary<int, long>(ix.Sx) };
+                    foreach (var b in ix.B) if (!builds.Contains(b.Key)) nx.B[b.Key] = b.Value;
+                    x.It[it.Key] = nx;
+                }
+            }
+            r.X = x;
+            return r.N > 0 || r.Items.Count > 0 ? r : null;
+        }
+
         public class ItemX { public int Q; public Dictionary<int, long> Sx = new Dictionary<int, long>(), B = new Dictionary<int, long>(); public bool Empty => Q == 0 && Sx.Count == 0 && B.Count == 0; }
 
         public class CounterX

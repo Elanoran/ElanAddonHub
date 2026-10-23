@@ -102,6 +102,34 @@ namespace ElansAddonHub
                     r750 != null && r750.Detail == "5 of 10 kills while on the quest (too few to tell a rate)", r750?.Detail);
                 Check("NPC page: the random suffixes and the rate since the last patch ride along",
                     r2000 != null && r2000.Extra.Contains("Random suffix: #1047 67 % · #-6 33 %") && r2000.Extra.Contains("Since the last patch: 6 of 30 kills (20.0 %)"), r2000?.Extra);
+                // ---- event builds: the end of the beta (70532) drops epics and other unusual items; that build's kills and drops stay out of the rates
+                var ev = new Lodge.LodgeAtlas();
+                ev.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
+                {
+                    ["t"] = "atlas.data", ["epoch"] = "fa2", ["rev"] = 1.0, ["full"] = true,
+                    ["kills"] = new Dictionary<string, object>
+                    {
+                        ["9"] = new Dictionary<string, object>
+                        {
+                            ["n"] = 50.0, ["m"] = 2.0,
+                            ["items"] = new Dictionary<string, object> { ["3000"] = FaItem(8, 8, new Dictionary<string, object> { ["b"] = FaMap(("70450", 6), ("70532", 2)) }), ["19019"] = FaItem(3, 3, new Dictionary<string, object> { ["b"] = FaMap(("70532", 3)) }) },
+                            ["x"] = new Dictionary<string, object> { ["b"] = FaMap(("70450", 40), ("70532", 10)) },
+                        },
+                        ["10"] = new Dictionary<string, object> { ["n"] = 4.0, ["m"] = 1.0, ["items"] = new Dictionary<string, object> { ["19019"] = FaItem(4, 4, new Dictionary<string, object> { ["b"] = FaMap(("70532", 4)) }) }, ["x"] = new Dictionary<string, object> { ["b"] = FaMap(("70532", 4)) } },
+                    },
+                }) as System.Text.Json.Nodes.JsonObject);
+                AtlasQuery.Context.Lodge = () => ev;
+                var evLoot = AtlasQuery.Build("npc:9").Section("loot");
+                var r3000 = evLoot?.Rows.FirstOrDefault(r => r.Link == "item:3000");
+                Check("event builds: the end-of-beta build (70532) is left out of a rate: 6 of 40 kills, not 8 of 50; an item seen only then (19019) is not listed; the note says why",
+                    AtlasObs.EventBuilds.Contains(70532) && r3000 != null && r3000.Detail == "6 of 40 kills (15.0 %)" && !evLoot.Rows.Any(r => r.Link == "item:19019") && evLoot.Note.Contains("10 kills from the end of the beta"),
+                    r3000?.Detail + " | " + evLoot?.Note + " | " + string.Join(",", evLoot?.Rows.Select(r => r.Link) ?? new string[0]));
+                Check("event builds: a source seen only in that build is gone, and the item's own page lists no drop for it; the raw numbers stay (cache)",
+                    ev.Loot("npc", 10) == null && ev.Drops(19019).Count == 0 && ev.ToCache().ToJsonString().Contains("70532"), ev.Drops(19019).Count + "");
+                var plainC = new AtlasObs.Counter { N = 5 }; plainC.Items[1] = new long[] { 1, 1 };
+                Check("event builds: a counter without builds (an older Toolkit) and an empty list leave the numbers alone",
+                    ReferenceEquals(AtlasObs.WithoutEventBuilds(plainC), plainC) && lodge.Loot("npc", 8) != null && AtlasObs.WithoutEventBuilds(ev.Loot("npc", 9), new HashSet<int>()) != null);
+                AtlasQuery.Context.Lodge = () => lodge;
                 Check("NPC page: the level range and class members saw (\"Level seen\")", page.Facts.Any(f => f.Label == "Level seen" && f.Value == AtlasFormat.Levels(31, 33) + " · Elite" && f.Source == AtlasLabel.Forever),
                     string.Join(" | ", page.Facts.Select(f => f.ToString())));
                 var skin = page.Section("skin"); var pick = page.Section("pick");

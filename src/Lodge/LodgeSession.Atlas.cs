@@ -321,7 +321,8 @@ namespace ElansAddonHub.Lodge
             {
                 foreach (var src in d)
                 {
-                    var c = src.Value;
+                    var c = AtlasObs.WithoutEventBuilds(src.Value);       // an event build's unusual loot stays out of the rates
+                    if (c == null) continue;
                     foreach (var it in c.Items)
                     {
                         // each corpse once; a quest item counts only the kills while its quest still wanted it (when the Toolkit knew)
@@ -403,7 +404,7 @@ namespace ElansAddonHub.Lodge
         public AtlasObs.Counter Loot(string kind, int id)
         {
             var d = kind == "npc" ? kills : kind == "obj" ? objects : kind == "fish" ? fishing : GatherOf(kind);
-            return d != null && d.TryGetValue(id, out var c) ? c : null;
+            return d != null && d.TryGetValue(id, out var c) ? AtlasObs.WithoutEventBuilds(c) : null;   // an event build's unusual loot stays out
         }
         // pickpocketing, gathering a corpse and what was inside an opened item (server 2.26, atlas9): the kinds a drop row / Loot() take
         public static readonly string[] GatherKinds = { "pick", "skin", "mine", "herb", "salvage", "item" };

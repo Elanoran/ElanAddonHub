@@ -59,6 +59,7 @@ namespace ElansAddonHub.Services
             public Dictionary<int, long> Zones = new Dictionary<int, long>();       // uiMapId -> n there
             public int Members;                                                // (lodge aggregate) how many members contributed
             public CounterX X;                                                 // 2.26 extras (AtlasObs.Extras.cs), null = none
+            public long EventKills;                                            // kills taken off as an event build's (AtlasObs.WithoutEventBuilds)
         }
 
         public class Vendor

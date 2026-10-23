@@ -87,7 +87,8 @@ namespace ElansAddonHub.Services.Atlas
                 lodgeN = unique; lodgeM = Math.Max(1, counter.Members);
                 // what the rows are based on is the section's coverage line (DataHonesty); the note keeps the fine print
                 s.Note = ((dup > 0 ? AtlasFormat.Count(dup, "corpse", "corpses") + " that several members looted counted once." : "")
-                    + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "")).Trim();
+                    + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "")
+                    + (counter.EventKills > 0 ? " " + AtlasFormat.Count(counter.EventKills, what, what + "s") + " from the end of the beta (unusual drops) left out." : "")).Trim();
                 AddLayer(m, "lodge");
             }
             AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by, out var cairnN, out var cairnM);   // the Cairn's numbers (tier 1) between the Lodge's and the Classic baseline's
