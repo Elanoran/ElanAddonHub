@@ -19,7 +19,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>3.2.0</Version>
+    <Version>3.3.0</Version>
     <!-- 64-bit: the world map builders need more than the 32-bit address space (WebView2Loader is picked per architecture) -->
     <Product>Elan's Outpost</Product>
     <Company>Elan</Company>

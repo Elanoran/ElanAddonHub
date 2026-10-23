@@ -3,8 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
-## 3.2.1
+## 3.3.0
 - **Talent builds walk you through it.** Picking a recommended build in the talent calculator now starts a guide: it says which talent to take at your next level and what comes after, rings the next pick on the tree and tags every talent the build still takes with the level of its next point. Take it, Back, Start over and Full build step along the order; the leveling order list ticks off what is done and jumps to any line you click. Load your character's talents first and the guide compares them with the build: what is already in place, what to take next, and which points the build does not spend.
+- **Game patches.** A new tab in Settings > About lists the game builds you have played on and what each one changed in your game files (items, spells, talents, dungeons, maps, zones, flight points) and in Blizzard's server hotfixes. Blizzard's own notes for WoW Forever can be loaded too: after one click on "Load Blizzard's notes" the Outpost reads the staff posts of Blizzard's development-notes forum topic (an anonymous request, nothing about you is sent) and shows them as text.
 - **End-of-beta drops kept out of the Atlas.** In the beta's last days mobs drop epics and other unusual items. Loot seen in that game build is left out of the Lodge's drop rates on creature and item pages (a note says how many kills were left out), so the numbers stay true to the normal game. Nothing is thrown away: the counts per build are kept, only the pages skip them.
 
 ## 3.2.0
