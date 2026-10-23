@@ -63,7 +63,8 @@ public static partial class Atlas
     }
 
     // ---- event builds: game builds whose loot is not the game's normal loot (70532 = the last days of the WoW Forever beta: epics and other unusual
-    // drops). What the members' Outposts get leaves those builds' kills and drops out (x.b / items.b say how many); the stored member data, the
+    // drops). What the members' Outposts get leaves those builds' kills and drops out (x.b / items.b say how many; an item without items.b loses the
+    // event kills' share of its drops); the stored member data, the
     // aggregate and the Cairn feed keep the raw numbers (the Cairn splits by build itself). LODGE_EVENT_BUILDS changes the list ("none" = none).
     public static readonly HashSet<int> DefaultEventBuilds = new() { 70532 };
 
@@ -80,7 +81,9 @@ public static partial class Atlas
         foreach (var it in c.I)
         {
             var ix = r.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
-            long db = ix == null ? 0 : ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
+            // an item without its own builds (the Toolkit strips items' builds first when its copy gets too big): its share of the event's kills
+            long db = ix != null && ix.B.Count > 0 ? ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value)
+                : c.N > 0 ? (long)Math.Round(it.Value[0] * (double)kb / c.N) : 0;
             long drops = Math.Max(0, it.Value[0] - db);
             if (drops <= 0) { r.X.It.Remove(it.Key); continue; }               // only ever seen in the event: left out
             long count = it.Value[0] > 0 ? Math.Max(drops, (long)Math.Round(it.Value[1] * (double)drops / it.Value[0])) : drops;

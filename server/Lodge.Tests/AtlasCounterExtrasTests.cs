@@ -71,6 +71,25 @@ public partial class AtlasTests
     }
 
     [Fact]
+    public async Task An_item_without_builds_loses_the_event_kills_share()
+    {
+        // the Toolkit strips items' builds when its copy is too big: a boar killed 45 of 46 times in the event, its belt (3 drops, no builds) goes;
+        // a normal drop on a mostly normal counter keeps nearly all of it
+        using var r = new FunRig();
+        var amy = r.Join("Amy", "member");
+        await Share(r, amy, new { kills = new Dictionary<string, object>
+        {
+            ["3099"] = XCtr(46, new Dictionary<string, object> { ["288830"] = new { n = 3, c = 3 } }, new { b = new Dictionary<string, object> { ["70532"] = 45 } }),
+            ["3100"] = XCtr(100, new Dictionary<string, object> { ["4865"] = new { n = 20, c = 20 } }, new { b = new Dictionary<string, object> { ["70450"] = 90, ["70532"] = 10 } }),
+        } });
+        var d = await GetAll(r, amy);
+        Assert.Equal(1, (long)d["kills"]!["3099"]!["n"]!);
+        Assert.Null(d["kills"]!["3099"]!["items"]?["288830"]);
+        Assert.Equal(90, (long)d["kills"]!["3100"]!["n"]!);
+        Assert.Equal(18, (long)d["kills"]!["3100"]!["items"]!["4865"]!["n"]!);
+    }
+
+    [Fact]
     public void Event_builds_come_from_the_environment()
     {
         Assert.Contains(70532, LodgeConfig.EventBuilds(""));

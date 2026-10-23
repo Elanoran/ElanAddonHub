@@ -126,6 +126,10 @@ namespace ElansAddonHub
                     r3000?.Detail + " | " + evLoot?.Note + " | " + string.Join(",", evLoot?.Rows.Select(r => r.Link) ?? new string[0]));
                 Check("event builds: a source seen only in that build is gone, and the item's own page lists no drop for it; the raw numbers stay (cache)",
                     ev.Loot("npc", 10) == null && ev.Drops(19019).Count == 0 && ev.ToCache().ToJsonString().Contains("70532"), ev.Drops(19019).Count + "");
+                var boar = new AtlasObs.Counter { N = 46, X = new AtlasObs.CounterX() }; boar.X.B[70532] = 45; boar.Items[288830] = new long[] { 3, 3 };
+                var boarOut = AtlasObs.WithoutEventBuilds(boar);
+                Check("event builds: an item without builds of its own (the Toolkit strips them when its copy is too big) loses the event kills' share: a boar killed 45 of 46 times in the event drops its belt (3) no more",
+                    boarOut != null && boarOut.N == 1 && !boarOut.Items.ContainsKey(288830), boarOut == null ? "null" : boarOut.N + " " + string.Join(",", boarOut.Items.Keys));
                 var plainC = new AtlasObs.Counter { N = 5 }; plainC.Items[1] = new long[] { 1, 1 };
                 Check("event builds: a counter without builds (an older Toolkit) and an empty list leave the numbers alone",
                     ReferenceEquals(AtlasObs.WithoutEventBuilds(plainC), plainC) && lodge.Loot("npc", 8) != null && AtlasObs.WithoutEventBuilds(ev.Loot("npc", 9), new HashSet<int>()) != null);

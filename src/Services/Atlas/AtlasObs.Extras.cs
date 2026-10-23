@@ -40,7 +40,9 @@ namespace ElansAddonHub.Services
             foreach (var it in c.Items)
             {
                 var ix = c.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
-                long db = ix == null ? 0 : ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
+                // an item without its own builds (the Toolkit strips items' builds first when its copy gets too big): its share of the event's kills
+                long db = ix != null && ix.B.Count > 0 ? ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value)
+                    : c.N > 0 ? (long)Math.Round(it.Value[0] * (double)kb / c.N) : 0;
                 long drops = Math.Max(0, it.Value[0] - db);
                 if (drops <= 0) continue;                                          // only ever seen in the event: left out
                 long count = it.Value[0] > 0 ? Math.Max(drops, (long)Math.Round(it.Value[1] * (double)drops / it.Value[0])) : drops;
