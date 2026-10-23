@@ -130,6 +130,15 @@ namespace ElansAddonHub
                 var boarOut = AtlasObs.WithoutEventBuilds(boar);
                 Check("event builds: an item without builds of its own (the Toolkit strips them when its copy is too big) loses the event kills' share: a boar killed 45 of 46 times in the event drops its belt (3) no more",
                     boarOut != null && boarOut.N == 1 && !boarOut.Items.ContainsKey(288830), boarOut == null ? "null" : boarOut.N + " " + string.Join(",", boarOut.Items.Keys));
+                // the lodge sums members with and without item builds: the Helm of Might (Wing's drop counted in 70532, Amy's trimmed) on a boar with many
+                // kills from before builds were counted - an event-only item goes whole; a normal item counted in 70450 stays
+                var helmC = new AtlasObs.Counter { N = 179, X = new AtlasObs.CounterX() }; helmC.X.B[70532] = 100;
+                helmC.Items[288892] = new long[] { 2, 2 }; helmC.X.It[288892] = new AtlasObs.ItemX(); helmC.X.It[288892].B[70532] = 1;
+                helmC.Items[4865] = new long[] { 30, 30 }; helmC.X.It[4865] = new AtlasObs.ItemX(); helmC.X.It[4865].B[70450] = 20;
+                var only = AtlasObs.EventOnlyItems(new[] { helmC }, id => id >= 288000);
+                var helmOut = AtlasObs.WithoutEventBuilds(helmC, null, only);
+                Check("event builds: an event-only item (every drop counted per build is the event's) leaves the counter whole even where a member sent no builds; a normal item stays",
+                    only.SetEquals(new[] { 288892 }) && helmOut.N == 79 && !helmOut.Items.ContainsKey(288892) && helmOut.Items.ContainsKey(4865), string.Join(",", only) + " | " + string.Join(",", helmOut.Items.Keys));
                 var plainC = new AtlasObs.Counter { N = 5 }; plainC.Items[1] = new long[] { 1, 1 };
                 Check("event builds: a counter without builds (an older Toolkit) and an empty list leave the numbers alone",
                     ReferenceEquals(AtlasObs.WithoutEventBuilds(plainC), plainC) && lodge.Loot("npc", 8) != null && AtlasObs.WithoutEventBuilds(ev.Loot("npc", 9), new HashSet<int>()) != null);

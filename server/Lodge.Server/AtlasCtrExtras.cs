@@ -69,11 +69,11 @@ public static partial class Atlas
     public static readonly HashSet<int> DefaultEventBuilds = new() { 70532 };
 
     // the counter without its event builds' part (the same counter when it has none); dup scaled with the kills
-    public static (Ctr C, long Dup) WithoutEventBuilds(Ctr c, long dup, ISet<int> builds)
+    public static (Ctr C, long Dup) WithoutEventBuilds(Ctr c, long dup, ISet<int> builds, ISet<int> eventOnly = null)
     {
         if (c?.X == null || builds == null || builds.Count == 0) return (c, dup);
         long kb = c.X.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
-        if (kb <= 0 && !c.X.It.Values.Any(i => i.B.Keys.Any(builds.Contains))) return (c, dup);
+        if (kb <= 0 && !c.X.It.Values.Any(i => i.B.Keys.Any(builds.Contains)) && !(eventOnly != null && c.I.Keys.Any(eventOnly.Contains))) return (c, dup);
         var r = new Ctr { N = Math.Max(0, c.N - kb), X = c.X.Clone() };
         double keep = c.N > 0 ? (double)r.N / c.N : 0;
         foreach (var z in c.Z) { long v = (long)Math.Round(z.Value * keep); if (v > 0) r.Z[z.Key] = v; }
@@ -81,9 +81,11 @@ public static partial class Atlas
         foreach (var it in c.I)
         {
             var ix = r.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
-            // an item without its own builds (the Toolkit strips items' builds first when its copy gets too big): its share of the event's kills
-            long db = ix != null && ix.B.Count > 0 ? ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value)
-                : c.N > 0 ? (long)Math.Round(it.Value[0] * (double)kb / c.N) : 0;
+            // the drops counted per build come off exactly; the rest (a Toolkit strips items' builds first when its copy gets too big, and several
+            // members' sums mix both) loses the event kills' share; an event-only item (EventOnlyItems) goes whole
+            long tagged = ix == null ? 0 : ix.B.Values.Sum(), untagged = Math.Max(0, it.Value[0] - tagged);
+            long db = eventOnly != null && eventOnly.Contains(it.Key) ? it.Value[0]
+                : (ix == null ? 0 : ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value)) + (c.N > 0 ? (long)Math.Round(untagged * (double)kb / c.N) : 0);
             long drops = Math.Max(0, it.Value[0] - db);
             if (drops <= 0) { r.X.It.Remove(it.Key); continue; }               // only ever seen in the event: left out
             long count = it.Value[0] > 0 ? Math.Max(drops, (long)Math.Round(it.Value[1] * (double)drops / it.Value[0])) : drops;
@@ -91,6 +93,24 @@ public static partial class Atlas
             if (ix != null) foreach (var b in builds) ix.B.Remove(b);
         }
         return (r, Math.Min(r.N, (long)Math.Round(dup * keep)));
+    }
+
+    // event-only items: the server revealed them (not in the game's own files: the end of the beta's Molten Core sets, weapons and "Endless" elixirs
+    // came as server data) and every drop counted per build is an event build's. Their drops leave every counter whole, also the ones a member sent
+    // without item builds. A normal item (in the game files, or counted in a normal build) only loses the event kills' share.
+    public static HashSet<int> EventOnlyItems(IEnumerable<Ctr> counters, ISet<int> builds, Func<int, bool> revealed)
+    {
+        var ev = new HashSet<int>(); var normal = new HashSet<int>();
+        if (builds == null || builds.Count == 0 || revealed == null) return new HashSet<int>();
+        foreach (var c in counters)
+        {
+            if (c?.X == null) continue;
+            foreach (var (id, ix) in c.X.It)
+                foreach (var b in ix.B) { if (builds.Contains(b.Key)) ev.Add(id); else normal.Add(id); }
+        }
+        ev.ExceptWith(normal);
+        ev.RemoveWhere(id => !revealed(id));
+        return ev;
     }
 
     // the extras of a counter entry (null = none); n = the counter's own count

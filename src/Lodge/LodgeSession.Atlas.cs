@@ -92,7 +92,7 @@ namespace ElansAddonHub.Lodge
             Epoch = ""; Rev = 0; Dropped = 0; SeenMembers = 0; Invalidate();
         }
 
-        void Invalidate() { dropIdx = null; vendorIdx = null; questIdx = null; findIdx = null; }
+        void Invalidate() { dropIdx = null; vendorIdx = null; questIdx = null; findIdx = null; eventOnly = null; }
 
         static bool ValidEpoch(string e) => !string.IsNullOrEmpty(e) && e.Length <= 32 && e.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
 
@@ -321,7 +321,7 @@ namespace ElansAddonHub.Lodge
             {
                 foreach (var src in d)
                 {
-                    var c = AtlasObs.WithoutEventBuilds(src.Value);       // an event build's unusual loot stays out of the rates
+                    var c = AtlasObs.WithoutEventBuilds(src.Value, null, EventOnly());   // an event build's unusual loot stays out of the rates
                     if (c == null) continue;
                     foreach (var it in c.Items)
                     {
@@ -401,10 +401,13 @@ namespace ElansAddonHub.Lodge
         public AtlasObs.Revealed Revealed(int itemId) { return revealed.TryGetValue(itemId, out var r) ? r : null; }
         public IEnumerable<AtlasObs.Revealed> AllRevealed => revealed.Values;
         // what one npc / object / fishing zone dropped overall (null: nothing observed)
+        // the lodge's event-only items (AtlasObs.EventOnlyItems), worked out once per answer
+        HashSet<int> eventOnly;
+        HashSet<int> EventOnly() => eventOnly ??= AtlasObs.EventOnlyItems(kills.Values.Concat(objects.Values).Concat(fishing.Values).Concat(gather.Values.SelectMany(g => g.Values)), revealed.ContainsKey);
         public AtlasObs.Counter Loot(string kind, int id)
         {
             var d = kind == "npc" ? kills : kind == "obj" ? objects : kind == "fish" ? fishing : GatherOf(kind);
-            return d != null && d.TryGetValue(id, out var c) ? AtlasObs.WithoutEventBuilds(c) : null;   // an event build's unusual loot stays out
+            return d != null && d.TryGetValue(id, out var c) ? AtlasObs.WithoutEventBuilds(c, null, EventOnly()) : null;   // an event build's unusual loot stays out
         }
         // pickpocketing, gathering a corpse and what was inside an opened item (server 2.26, atlas9): the kinds a drop row / Loot() take
         public static readonly string[] GatherKinds = { "pick", "skin", "mine", "herb", "salvage", "item" };

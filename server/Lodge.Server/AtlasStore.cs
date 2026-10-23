@@ -110,6 +110,7 @@ public sealed partial class AtlasStore
         if (root == null) return;
         var now = NowSec;
         if (root["epoch"] is JsonValue ev && ev.TryGetValue<string>(out var ep) && ep.Length is > 0 and <= 32 && ep.All(char.IsAsciiLetterOrDigit)) Epoch = ep;
+        eventSig = root["eventBuilds"] is JsonValue eb && eb.TryGetValue<string>(out var es) && es.Length <= 200 ? es : "";
         long maxRev = root["rev"] is JsonValue rv && rv.TryGetValue<long>(out var rl) && rl >= 0 ? rl : 0;
         long R(JsonNode n) { var x = n is JsonObject o && o["r"] is JsonValue v && v.TryGetValue<long>(out var l) && l > 0 ? l : 1; maxRev = Math.Max(maxRev, x); return x; }
         string By(JsonNode n) => n is JsonObject o && o["b"] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length is > 0 and <= 64 ? s : "";
@@ -658,7 +659,32 @@ public sealed partial class AtlasStore
     // Records changed after `since`, in revision order, cut into pages of about Atlas.PageBytes: with more = true ask again with since = rev.
     // full = the client's state cannot be continued (since 0, another epoch, or a revision this store never reached): it replaces everything it had.
     // The aggregate record of a source is replaced as a whole. nameOf turns a find's login into the name shown (display name). Caller holds Gate.
-    public ISet<int> EventBuilds = Atlas.DefaultEventBuilds;   // builds whose loot the members' Outposts don't get (AtlasCtrExtras.cs); LodgeConfig sets it
+    public ISet<int> EventBuilds { get; private set; } = Atlas.DefaultEventBuilds;
+    string eventSig = "";                                      // the event builds the stored epoch was handed out with (atlas.json "eventBuilds")
+    static string EventSig(IEnumerable<int> b) => string.Join(",", b.OrderBy(x => x));
+
+    // the event builds (LodgeConfig): when they differ from what the members' Outposts got their numbers with, a new epoch makes every Outpost
+    // fetch the whole pool again, so numbers it already holds lose the event's loot too (an Outpost only asks for what changed since its last answer)
+    public void UseEventBuilds(ISet<int> builds)
+    {
+        lock (Gate)
+        {
+            EventBuilds = builds ?? new HashSet<int>();
+            var sig = EventSig(EventBuilds);
+            if (sig == eventSig) return;
+            eventSig = sig;
+            Epoch = Guid.NewGuid().ToString("N")[..12];
+            rev++;
+            Dirty = true;
+            log?.LogInformation("Atlas: event builds now {Builds} - a new epoch, the members' Outposts fetch the whole pool again", sig.Length == 0 ? "none" : sig);
+        }
+    }
+    HashSet<int> eventOnly; long eventOnlyRev = -1;
+    HashSet<int> EventOnly()                                   // (under Gate) the event-only items of the whole lodge, worked out again when anything changed
+    {
+        if (eventOnly == null || eventOnlyRev != rev) { eventOnly = Atlas.EventOnlyItems(aggs.SelectMany(d => d.Values).Select(a => a.Sum), EventBuilds, revealed.ContainsKey); eventOnlyRev = rev; }
+        return eventOnly;
+    }   // builds whose loot the members' Outposts don't get (AtlasCtrExtras.cs); LodgeConfig sets it
 
     // raw = the counters as stored, event builds included (the Cairn feed: the Cairn splits by build and leaves them out itself)
     public JsonObject Get(long since, string epoch, Func<string, string> nameOf, bool guest = false, bool raw = false)
@@ -692,7 +718,7 @@ public sealed partial class AtlasStore
             JsonNode node; string key = c.key.ToString(CultureInfo.InvariantCulture);
             switch (c.sec)
             {
-                case 0: case 1: case 2: case 16: case 17: case 18: case 19: case 20: case 21: { var a = aggs[Array.IndexOf(KindSec, c.sec)][c.key]; var (cs, dup) = raw ? (a.Sum, a.Dup) : Atlas.WithoutEventBuilds(a.Sum, a.Dup, EventBuilds); node = CtrJson(cs, a.Members, true, dup); break; }
+                case 0: case 1: case 2: case 16: case 17: case 18: case 19: case 20: case 21: { var a = aggs[Array.IndexOf(KindSec, c.sec)][c.key]; var (cs, dup) = raw ? (a.Sum, a.Dup) : Atlas.WithoutEventBuilds(a.Sum, a.Dup, EventBuilds, EventOnly()); node = CtrJson(cs, a.Members, true, dup); break; }
                 case 3: node = VendorJson(vendors[c.key]); break;
                 case 4: node = QuestJson(quests[c.key]); break;
                 case 5: node = new JsonArray(spawns[c.key].Pts.Select(p => (JsonNode)new JsonObject { ["z"] = p.Z, ["x"] = p.X, ["y"] = p.Y }).ToArray()); break;
@@ -812,7 +838,7 @@ public sealed partial class AtlasStore
             foreach (var f in finds) { var j = FindJson(f, ""); j.Remove("by"); j.Remove("s"); j["b"] = f.Identity; j["w"] = f.Who; j["r"] = f.Rev; fa.Add(j); }
             var root = new JsonObject
             {
-                ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(), ["npcSpotRev"] = NpcSpotRevJson(),
+                ["v"] = 1, ["epoch"] = Epoch, ["eventBuilds"] = eventSig, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(), ["npcSpotRev"] = NpcSpotRevJson(),
                 ["vendors"] = vo, ["quests"] = qo, ["spawns"] = sp, ["items"] = io, ["finds"] = fa,
                 ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
                 ["seenMembers"] = new JsonArray(seenMembers.OrderBy(x => x, StringComparer.Ordinal).Select(x => (JsonNode)x).ToArray()),

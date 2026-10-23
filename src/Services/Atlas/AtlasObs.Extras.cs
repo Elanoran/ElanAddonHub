@@ -25,12 +25,12 @@ namespace ElansAddonHub.Services
         public static readonly HashSet<int> EventBuilds = new HashSet<int> { 70532 };
 
         // the counter without what it saw under the event builds (the same counter when it saw nothing there; null when nothing else is left)
-        public static Counter WithoutEventBuilds(Counter c, ISet<int> builds = null)
+        public static Counter WithoutEventBuilds(Counter c, ISet<int> builds = null, ISet<int> eventOnly = null)
         {
             builds = builds ?? EventBuilds;
             if (c?.X == null || builds.Count == 0) return c;
             long kb = c.X.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value);
-            bool itemsToo = c.X.It.Values.Any(i => i.B.Keys.Any(builds.Contains));
+            bool itemsToo = c.X.It.Values.Any(i => i.B.Keys.Any(builds.Contains)) || (eventOnly != null && c.Items.Keys.Any(eventOnly.Contains));
             if (kb <= 0 && !itemsToo) return c;
             var r = new Counter { N = Math.Max(0, c.N - kb), Members = c.Members, EventKills = Math.Min(c.N, kb) };
             double keep = c.N > 0 ? (double)r.N / c.N : 0;
@@ -40,9 +40,11 @@ namespace ElansAddonHub.Services
             foreach (var it in c.Items)
             {
                 var ix = c.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
-                // an item without its own builds (the Toolkit strips items' builds first when its copy gets too big): its share of the event's kills
-                long db = ix != null && ix.B.Count > 0 ? ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value)
-                    : c.N > 0 ? (long)Math.Round(it.Value[0] * (double)kb / c.N) : 0;
+                // the drops counted per build come off exactly; the rest (a Toolkit strips items' builds first when its copy gets too big, and the
+                // lodge's sums mix members with and without) loses the event kills' share; an event-only item (EventOnlyItems) goes whole
+                long tagged = ix == null ? 0 : ix.B.Values.Sum(), untagged = Math.Max(0, it.Value[0] - tagged);
+                long db = eventOnly != null && eventOnly.Contains(it.Key) ? it.Value[0]
+                    : (ix == null ? 0 : ix.B.Where(b => builds.Contains(b.Key)).Sum(b => b.Value)) + (c.N > 0 ? (long)Math.Round(untagged * (double)kb / c.N) : 0);
                 long drops = Math.Max(0, it.Value[0] - db);
                 if (drops <= 0) continue;                                          // only ever seen in the event: left out
                 long count = it.Value[0] > 0 ? Math.Max(drops, (long)Math.Round(it.Value[1] * (double)drops / it.Value[0])) : drops;
@@ -56,6 +58,25 @@ namespace ElansAddonHub.Services
             }
             r.X = x;
             return r.N > 0 || r.Items.Count > 0 ? r : null;
+        }
+
+        // event-only items: the server revealed them (not in the game's own files: the end of the beta's Molten Core sets, weapons and "Endless"
+        // elixirs came as server data) and every drop counted per build is an event build's. Their drops leave every counter whole, also the ones a
+        // member sent without item builds. A normal item (in the game files, or counted in a normal build) only loses the event kills' share.
+        public static HashSet<int> EventOnlyItems(IEnumerable<Counter> counters, Func<int, bool> revealed, ISet<int> builds = null)
+        {
+            builds = builds ?? EventBuilds;
+            var ev = new HashSet<int>(); var normal = new HashSet<int>();
+            if (builds.Count == 0 || revealed == null) return ev;
+            foreach (var c in counters)
+            {
+                if (c?.X == null) continue;
+                foreach (var ix in c.X.It)
+                    foreach (var b in ix.Value.B) { if (builds.Contains(b.Key)) ev.Add(ix.Key); else normal.Add(ix.Key); }
+            }
+            ev.ExceptWith(normal);
+            ev.RemoveWhere(id => !revealed(id));
+            return ev;
         }
 
         public class ItemX { public int Q; public Dictionary<int, long> Sx = new Dictionary<int, long>(), B = new Dictionary<int, long>(); public bool Empty => Q == 0 && Sx.Count == 0 && B.Count == 0; }

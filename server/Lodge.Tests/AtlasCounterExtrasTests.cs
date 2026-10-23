@@ -90,6 +90,55 @@ public partial class AtlasTests
     }
 
     [Fact]
+    public async Task An_event_only_item_leaves_every_counter_whole_even_where_a_member_sent_no_builds()
+    {
+        // the Helm of Might: Wing's drops carry 70532, Amy's copy was trimmed (no item builds) on a boar with many kills from before builds were
+        // counted - the item is event-only (all its counted drops are 70532), so Amy's drop goes too; a normal item counted in 70450 stays
+        using var r = new FunRig();
+        var amy = r.Join("Amy", "member"); var win = r.Join("Wing", "member");
+        await Share(r, amy, new { kills = new Dictionary<string, object> { ["3100"] = XCtr(151,
+            new Dictionary<string, object> { ["288892"] = new { n = 1, c = 1 }, ["4865"] = new { n = 30, c = 30, b = new Dictionary<string, object> { ["70450"] = 20 } } },
+            new { b = new Dictionary<string, object> { ["70532"] = 72 } }) } });
+        await Share(r, win, new { items = new Dictionary<string, object> { ["288892"] = new { n = "Helm of Might", q = 4, il = 30 } } });   // revealed by the server
+        await Share(r, win, new { kills = new Dictionary<string, object> { ["3100"] = XCtr(28,
+            new Dictionary<string, object> { ["288892"] = new { n = 1, c = 1, b = new Dictionary<string, object> { ["70532"] = 1 } } },
+            new { b = new Dictionary<string, object> { ["70532"] = 28 } }) } });
+        var k = (await GetAll(r, amy))["kills"]!["3100"]!;
+        Assert.Equal(79, (long)k["n"]!);
+        Assert.Null(k["items"]?["288892"]);
+        Assert.NotNull(k["items"]!["4865"]);
+    }
+
+    [Fact]
+    public void Event_only_items_are_revealed_items_counted_only_in_event_builds()
+    {
+        var builds = new HashSet<int> { 70532 };
+        Atlas.Ctr C(int item, long n, Dictionary<int, long>? b)
+        {
+            var c = new Atlas.Ctr { N = 100 }; c.I[item] = new[] { n, n };
+            if (b != null) { c.X = new Atlas.CtrX(); c.X.It[item] = new Atlas.ItemX { B = b }; }
+            return c;
+        }
+        var only = Atlas.EventOnlyItems(new[] { C(1, 2, new() { [70532] = 2 }), C(2, 10, new() { [70532] = 1 }), C(3, 2, new() { [70532] = 1, [70450] = 1 }), C(4, 3, null) }, builds, id => id != 2);
+        Assert.Equal(new HashSet<int> { 1 }, only);              // 2: in the game files (not revealed); 3: also dropped in a normal build; 4: no builds at all
+    }
+
+    [Fact]
+    public void A_changed_event_build_list_starts_a_new_epoch_once()
+    {
+        using var r = new FunRig();
+        var s = r.Hub.AtlasPool.Store;
+        var e1 = s.Epoch;
+        s.UseEventBuilds(new HashSet<int> { 70532 });
+        Assert.Equal(e1, s.Epoch);                                  // the rig started with the default list: nothing to fetch again
+        s.UseEventBuilds(new HashSet<int> { 70532, 70600 });
+        var e2 = s.Epoch;
+        Assert.NotEqual(e1, e2);
+        s.UseEventBuilds(new HashSet<int> { 70600, 70532 });
+        Assert.Equal(e2, s.Epoch);                                  // the same list in another order
+    }
+
+    [Fact]
     public void Event_builds_come_from_the_environment()
     {
         Assert.Contains(70532, LodgeConfig.EventBuilds(""));
