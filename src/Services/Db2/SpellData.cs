@@ -235,7 +235,7 @@ namespace ElansAddonHub.Services.Db2
             {
                 if (stamp == hotfixStamp) return;
                 hotfixStamp = stamp;
-                Publish(Overlay(have, adb, build), State.Ready, null, build);
+                Publish(GameBuilds.NoteHotfixes(Overlay(have, adb, build), build), State.Ready, null, build);
                 return;
             }
             var saved = SpellIndexFile.TryRead(CacheFile);
@@ -258,6 +258,8 @@ namespace ElansAddonHub.Services.Db2
                 GameDataProgress.Step(JobId, "Saving the spells", 0.85);
                 return parsed;
             }), out var from);
+            if (from == "game files" && saved != null && saved.Build != build && saved.Format == FormatVersion && !set.Problems.ContainsKey("all"))
+                GameBuilds.Compare("spells", saved.Build, build, saved.Set, set, GameBuilds.DiffSpells);      // a patch: what it changed (Settings > About > Game patches)
             saved = null;
             GameDataProgress.Step(JobId, "Laying the server's hotfixes over the spells", 0.9);
             if (set.Problems.ContainsKey("all") && old) { Util.Log("spell data: the new game files could not be read (" + set.Problems["all"] + "); the spells of the previous game build stay"); return; }
@@ -267,7 +269,7 @@ namespace ElansAddonHub.Services.Db2
             if (set.Spells == null && set.Factions == null && (set.Details == null)) { Publish(null, State.Unavailable, set.Problems.Values.FirstOrDefault() ?? "no table could be read", null); return; }
             LastLoadFrom = from; Stale = false;
             shipped = set; hotfixStamp = stamp;
-            Publish(Overlay(set, adb, build), State.Ready, null, build);
+            Publish(GameBuilds.NoteHotfixes(Overlay(set, adb, build), build), State.Ready, null, build);
         }
 
         // the data shown is of the previous game build (the new one is being read)

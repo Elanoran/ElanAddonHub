@@ -60,6 +60,7 @@ namespace ElansAddonHub
             bool aI = ItemData.AutoStart, aS = SpellData.AutoStart, aC = ClassData.AutoStart, aT = TalentData.AutoStart, aM = MapData.AutoStart, aSe = SeenData.AutoStart;
             var sAreaDir = AreaProbe.CacheDirOverride; var sTiles = AreaProbe.TileSourceForTest;
             var cache = Path.Combine(work, "cache");
+            var sBuilds = GameBuilds.FilePath;
             try
             {
                 Func<string> root = () => real; Func<bool> on = () => true;
@@ -68,6 +69,7 @@ namespace ElansAddonHub
                 ItemData.CacheFile = Path.Combine(cache, "itemdata.bin"); SpellData.CacheFile = Path.Combine(cache, "spelldata.bin"); ClassData.CacheFile = Path.Combine(cache, "classdata.bin");
                 TalentData.CacheFile = Path.Combine(cache, "talentdata.bin"); MapData.CacheFile = Path.Combine(cache, "mapdata.bin"); SeenData.CacheFile = Path.Combine(cache, "seendata.bin");
                 AreaProbe.CacheDirOverride = cache; AreaProbe.TileSourceForTest = null;
+                GameBuilds.FilePath = Path.Combine(cache, "gamebuilds.json"); GameBuilds.ResetForTest();
                 ClassicAtlas.Use(ci);
                 AtlasQuery.Context.Lodge = () => null;
                 if (ci != null) AtlasDerived.For(ci);          // the derived lookups are built once per loaded baseline, before any of this (not part of the game data)
@@ -109,6 +111,12 @@ namespace ElansAddonHub
                 Check("after a patch: the window stays responsive while the new files are read: no stall longer than " + UiStallBudgetMs + " ms (" + patch.StallMs + ")", patch.StallMs <= UiStallBudgetMs, patch.Stalls);
                 Check("warm start: no stall of the window longer than " + UiStallBudgetMs + " ms (" + warm.StallMs + ")", warm.StallMs <= UiStallBudgetMs, warm.Stalls);
                 Check("after a patch: all game data within " + PatchAllBudgetMs + " ms (" + patch.All + ")", patch.All >= 0 && patch.All <= PatchAllBudgetMs);
+                // the same game files under a new build: every reader compared its saved copy with them (Settings > About > Game patches) and found nothing changed
+                var pe = GameBuilds.Find("wow_classic_beta|1.60.1.99999|feedbeef00000000feedbeef00000000");
+                var compared = GameBuilds.Kinds.Where(GameBuilds.Compared).ToList();
+                Check("after a patch: the game builds history has the new build, compared with the previous one, every kind compared and 0 changes (the same files)",
+                    pe != null && pe.From != null && pe.From != pe.Build && compared.All(k => pe.Of(k) != null && pe.Of(k).Total == 0),
+                    pe == null ? "no entry" : pe.From + ": " + string.Join(", ", compared.Select(k => k + "=" + (pe.Of(k)?.Total.ToString() ?? "missing"))));
 
                 // ---- new data under an open page: offered, not swapped in under the reader; Show applies it
                 var snap = ItemData.Snapshot;
@@ -166,6 +174,7 @@ namespace ElansAddonHub
                 ItemData.WowRoot = sIRoot; ItemData.Enabled = sIEn; SeenData.WowRoot = sSRoot; SeenData.Enabled = sSEn;
                 ItemData.AutoStart = aI; SpellData.AutoStart = aS; ClassData.AutoStart = aC; TalentData.AutoStart = aT; MapData.AutoStart = aM; SeenData.AutoStart = aSe;
                 AreaProbe.CacheDirOverride = sAreaDir; AreaProbe.TileSourceForTest = sTiles;
+                GameBuilds.FilePath = sBuilds; GameBuilds.ResetForTest();
                 ClassicAtlas.Use(null);
             }
         }

@@ -85,6 +85,7 @@ namespace ElansAddonHub
             InitRealms();
             SettingsPage.Init(this, settings, LodgePage);
             SettingsPage.OpenWebLink = OpenAtlasLink;
+            SettingsPage.OpenAtlas = id => OpenInAtlas(id);                // Settings > About > Game patches: a changed item / spell / dungeon
             InventoryView.Init(() => settings.WowRoot);
             InventoryView.InitArmory(Session);
             if (settings.UpgradeWeights == null) settings.UpgradeWeights = new Dictionary<string, string>();
@@ -479,6 +480,7 @@ namespace ElansAddonHub
             if (Begin("zonelore")) { result += "\r\n" + await ZoneLoreTest(dir); End(); }
             await RealSec("zonelorereal", ZoneLoreRealTest);
             if (Begin("about")) { result += "\r\n" + await AboutTest(dir); End(); }
+            if (Begin("gamepatches")) { result += "\r\n" + await GamePatchesTest(dir); End(); }
             if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             if (Begin("coldstart")) { result += "\r\n" + await ColdStartTest(dir); End(); }

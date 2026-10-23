@@ -196,6 +196,7 @@ namespace ElansAddonHub.Services.Db2
             foreach (var kv in set.Problems) Util.Log("talent data: " + kv.Key + ": " + kv.Value);
             foreach (var n in set.Notes) Util.Log("talent data: " + n);
             if (set.Trees.Count == 0) { Publish(null, State.Unavailable, set.Problems.Values.FirstOrDefault() ?? "no talent tree was found", null); return; }
+            if (from == "game files" && saved != null && saved.Build != build && saved.Format == FormatVersion && saved.Set.Trees.Count > 0) GameBuilds.Compare("talents", saved.Build, build, saved.Set, set, GameBuilds.DiffTalents);     // a patch: what it changed (Settings > About > Game patches)
             LastLoadFrom = from; Stale = false;
             Publish(set, State.Ready, null, build);
         }

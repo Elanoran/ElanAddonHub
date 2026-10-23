@@ -181,6 +181,12 @@ namespace ElansAddonHub.Services.Maps
             if (!set.Ok && old) { Util.Log("map data: the new game files could not be read (" + set.Problem + "); the maps of the previous game build stay"); return; }
             if (!set.Ok) { Util.Log("map data: unavailable: " + set.Problem); Publish(null, null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("map data: " + n);
+            if (from == "game files" && saved != null && saved.Build != b && saved.Format == FormatVersion && saved.Set.Ok)      // a patch: what it changed (Settings > About > Game patches)
+            {
+                GameBuilds.Compare("maps", saved.Build, b, saved.Set, set, GameBuilds.DiffMaps);
+                GameBuilds.Compare("areas", saved.Build, b, saved.Set, set, GameBuilds.DiffAreas);
+                GameBuilds.Compare("flights", saved.Build, b, saved.Set, set, GameBuilds.DiffFlights);
+            }
             LastLoadFrom = from; Stale = false;
             MapIndex.AreaAt = AreaProbe.AreaAt;
             Publish(new MapIndex(set), b, State.Ready, null);

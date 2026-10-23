@@ -996,7 +996,7 @@
           <!-- ========== About ========== -->
           <StackPanel x:Name="SecAbout" Visibility="Collapsed">
             <TextBlock Text="About" Style="{StaticResource PageTitle}" />
-            <!-- tabs (EntityTab, like an Atlas page): About | What's new. Left / Right move between them. -->
+            <!-- tabs (EntityTab, like an Atlas page): About | What's new | Game patches. Left / Right move between them. -->
             <Grid Margin="0,0,0,16">
               <Border Height="1" VerticalAlignment="Bottom" Background="{StaticResource Brush.Divider}" />
               <StackPanel x:Name="AboutTabs" Orientation="Horizontal" Margin="4,0,0,0" KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Once">
@@ -1007,6 +1007,7 @@
                     <Ellipse x:Name="AboutNewsDot" Width="8" Height="8" Fill="{StaticResource Brush.Accent}" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
                   </StackPanel>
                 </RadioButton>
+                <RadioButton x:Name="AboutTabPatches" Style="{StaticResource EntityTab}" GroupName="abouttab" Content="Game patches" Checked="AboutTab_Checked" ToolTip="What each game build changed: Blizzard's notes and what the Outpost found in your game files" />
               </StackPanel>
             </Grid>
 
@@ -1079,6 +1080,12 @@
               <StackPanel x:Name="NewsList" />
               <Button x:Name="NewsMore" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,0,0,8" Click="NewsMore_Click" Visibility="Collapsed" />
               <TextBlock x:Name="NewsEmpty" Style="{StaticResource Note}" Visibility="Collapsed" />
+            </StackPanel>
+
+            <!-- Game patches: the game builds this Outpost has seen (newest first), Blizzard's notes and what changed in the game files (SettingsPage.Patches.cs) -->
+            <StackPanel x:Name="AboutPanePatches" Visibility="Collapsed">
+              <Border x:Name="PatchPickHost" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,16"><StackPanel x:Name="PatchPick" Orientation="Horizontal" /></Border>
+              <StackPanel x:Name="PatchBody" />
             </StackPanel>
           </StackPanel>
         </Grid>

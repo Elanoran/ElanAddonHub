@@ -251,6 +251,8 @@ namespace ElansAddonHub.Services.Db2
             if (!set.Ok && old) { Util.Log("item data: the new game files could not be read (" + set.Problem + "); the list of the previous game build stays"); return; }
             if (!set.Ok) { Util.Log("item data: unavailable: " + set.Problem); Publish(null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("item data: " + n);
+            GameBuilds.Seen(build);
+            if (from == "game files" && IsPrevious(saved, build)) GameBuilds.Compare("items", saved.Build, build, saved.Set, set, GameBuilds.DiffItems);   // a patch: what it changed (Settings > About > Game patches)
             LastLoadFrom = from; Stale = false;
             Publish(new ItemSnapshot(set.Client, set.Cache), State.Ready, null);
         }

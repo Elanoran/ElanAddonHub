@@ -10,9 +10,9 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub
 {
-    // --selftest "about": Settings > About. Two tabs (EntityTab): About (the campfire scene centred, View log / What's new / GitHub / welcome
+    // --selftest "about": Settings > About. Three tabs (EntityTab): About (the campfire scene centred, View log / What's new / GitHub / welcome
     // guide, credits, the trademark line on one line when it fits) and What's new (the version history: the Outpost's CHANGELOG.md inside the
-    // exe, the Elan's Hub companion's CHANGELOG.txt, the other addons' notes from the update manifest; this version / installed / newer marked).
+    // exe, the Elan's Hub companion's CHANGELOG.txt, the other addons' notes from the update manifest; this version / installed / newer marked) and Game patches (SettingsPage.Patches.cs).
     // After an update a one-time "What's new in x.y.z" note shows in the window's corner (WhatsNewNote) with a link to the tab.
     public partial class SettingsPage
     {
@@ -23,19 +23,26 @@ namespace ElansAddonHub
 
         // ---------------------------------------------------------------- tabs
 
-        void AboutTab_Checked(object sender, RoutedEventArgs e) { if (AboutTabNews != null && AboutPaneNews != null) ShowAboutTab(AboutTabNews.IsChecked == true ? "news" : "about"); }   // not while the XAML is still being read
+        void AboutTab_Checked(object sender, RoutedEventArgs e)
+        {
+            if (AboutTabNews == null || AboutPaneNews == null || AboutTabPatches == null || AboutPanePatches == null) return;   // not while the XAML is still being read
+            ShowAboutTab(AboutTabPatches.IsChecked == true ? "patches" : AboutTabNews.IsChecked == true ? "news" : "about");
+        }
 
         public void ShowAboutTab(string tab)
         {
-            if (AboutPaneAbout == null || AboutPaneNews == null) return;
-            bool news = tab == "news";
-            if (news && AboutTabNews.IsChecked != true) { AboutTabNews.IsChecked = true; return; }
-            if (!news && AboutTabAbout.IsChecked != true) { AboutTabAbout.IsChecked = true; return; }
-            var was = AboutPaneNews.Visibility == Visibility.Visible;
-            AboutPaneAbout.Visibility = news ? Visibility.Collapsed : Visibility.Visible;
-            AboutPaneNews.Visibility = news ? Visibility.Visible : Visibility.Collapsed;
-            if (news) { newsUnseen = false; AboutNewsDot.Visibility = Visibility.Collapsed; FillNews(); }
-            if (IsLoaded && was != news) Motion.PageIn(news ? AboutPaneNews : (FrameworkElement)AboutPaneAbout);
+            if (AboutPaneAbout == null || AboutPaneNews == null || AboutPanePatches == null) return;
+            if (tab != "news" && tab != "patches") tab = "about";
+            var radio = tab == "news" ? AboutTabNews : tab == "patches" ? AboutTabPatches : AboutTabAbout;
+            if (radio.IsChecked != true) { radio.IsChecked = true; return; }
+            FrameworkElement pane = tab == "news" ? AboutPaneNews : tab == "patches" ? AboutPanePatches : (FrameworkElement)AboutPaneAbout;
+            var was = pane.Visibility == Visibility.Visible;
+            AboutPaneAbout.Visibility = tab == "about" ? Visibility.Visible : Visibility.Collapsed;
+            AboutPaneNews.Visibility = tab == "news" ? Visibility.Visible : Visibility.Collapsed;
+            AboutPanePatches.Visibility = tab == "patches" ? Visibility.Visible : Visibility.Collapsed;
+            if (tab == "news") { newsUnseen = false; AboutNewsDot.Visibility = Visibility.Collapsed; FillNews(); }
+            if (tab == "patches") FillPatches();
+            if (IsLoaded && !was) Motion.PageIn(pane);
             if (aboutTimer != null) AboutRun();
         }
 
