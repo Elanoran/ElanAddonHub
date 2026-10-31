@@ -184,4 +184,55 @@ namespace ElansAddonHub.Lodge
         public List<VersionVM> VersionRows() =>
             Versions.OrderByDescending(v => v.V).Select(v => new VersionVM { Slot = this, Info = v, IsNewest = v.V == Newest?.V, CanRollBack = CanUpdate && v.V != Newest?.V }).ToList();
     }
+
+    // 2.36: a kit - a named set of files; its addons can be installed and kept updated together
+    public sealed class KitVM : Bindable
+    {
+        public string Id { get; private set; }
+        public string Name { get; private set; } = "";
+        public string Desc { get; private set; } = "";
+        public string See { get; private set; }
+        public bool CanManage { get; private set; }
+        public List<SlotVM> Slots { get; private set; } = new List<SlotVM>();
+        string error = "";
+
+        public void Update(FileKit k, IEnumerable<SlotVM> all, bool canManage)
+        {
+            Id = k.Id; Name = k.Name ?? ""; Desc = k.Desc ?? ""; See = k.See; CanManage = canManage;
+            var byId = all.ToDictionary(s => s.Id, s => s);
+            Slots = k.Slots.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
+            Refresh();
+        }
+
+        public IEnumerable<SlotVM> Addons => Slots.Where(s => s.IsAddon);
+        public string CountLine => Slots.Count == 1 ? "1 file" : Slots.Count + " files" + (Addons.Any() ? " · " + Addons.Count() + " addon" + (Addons.Count() == 1 ? "" : "s") : "");
+        public string StateLine
+        {
+            get
+            {
+                var a = Addons.ToList();
+                if (a.Count == 0) return "";
+                int have = a.Count(s => s.InstalledV > 0), old = a.Count(s => s.InstalledV > 0 && s.Newest != null && s.Newest.V > s.InstalledV);
+                if (have == 0) return "None of its addons is installed yet";
+                return have + " of " + a.Count + " addons installed" + (old > 0 ? " · " + old + " can be updated" : have == a.Count ? " · up to date" : "") + (AutoAll ? " · keeps itself updated" : "");
+            }
+        }
+        public string InstallAllLabel => Addons.Any(s => s.InstalledV == 0) ? "Install all" : Addons.Any(s => s.Newest != null && s.Newest.V > s.InstalledV) ? "Update all" : "Reinstall all";
+        public Visibility InstallAllVisibility => Addons.Any() ? Visibility.Visible : Visibility.Collapsed;
+        public bool AutoAll => Addons.Any() && Addons.All(s => s.InstalledV > 0 && s.AutoUpdate);
+        public Visibility AutoVisibility => Addons.Any(s => s.InstalledV > 0) ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ManageVisibility => CanManage ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility DescVisibility => Desc.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string SeeChip => See == "member" ? "Members" : See == "veteran" ? "Veterans" : See == "officer" ? "Officers" : "";
+        public Visibility SeeChipVisibility => SeeChip.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string Error { get => error; set { if (Set(ref error, value ?? "")) Raise(nameof(ErrorVisibility)); } }
+        public Visibility ErrorVisibility => error.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string FileNames => string.Join(", ", Slots.Select(s => s.Name));
+
+        public void Refresh()
+        {
+            foreach (var n in new[] { nameof(Name), nameof(Desc), nameof(CountLine), nameof(StateLine), nameof(InstallAllLabel), nameof(InstallAllVisibility), nameof(AutoAll), nameof(AutoVisibility),
+                nameof(ManageVisibility), nameof(DescVisibility), nameof(SeeChip), nameof(SeeChipVisibility), nameof(FileNames) }) Raise(n);
+        }
+    }
 }

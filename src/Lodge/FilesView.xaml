@@ -60,6 +60,39 @@
       </Border>
     </DataTemplate>
 
+    <!-- one kit (2.36): a named set of files - its addons install and stay updated together -->
+    <DataTemplate x:Key="KitCard">
+      <Border Width="296" Background="{StaticResource Brush.Surface2}" BorderBrush="{StaticResource Brush.Section.Character}" BorderThickness="1" CornerRadius="{StaticResource Radius.Card}"
+              Padding="14" Margin="0,0,12,12" AutomationProperties.Name="{Binding Name}" Tag="kit-card">
+        <StackPanel>
+          <DockPanel>
+            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Visibility="{Binding SeeChipVisibility}" VerticalAlignment="Center" Margin="8,0,0,0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Font.Icons}" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="&#xE7B8;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Character}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="{Binding Desc}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
+          <TextBlock Text="{Binding CountLine}" Style="{StaticResource Text.Caption}" Margin="0,6,0,0" />
+          <TextBlock Text="{Binding FileNames}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FileNames}" />
+          <TextBlock Text="{Binding StateLine}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Accent}" TextWrapping="Wrap" Margin="0,6,0,0" />
+          <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,6,0,0" />
+          <WrapPanel Margin="0,12,0,0">
+            <Button Content="{Binding InstallAllLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="KitInstall_Click" Visibility="{Binding InstallAllVisibility}" Margin="0,0,8,8"
+                    ToolTip="Install the kit's addons in WoW Forever (asks once, backs up what you have)" AutomationProperties.Name="Install all" />
+            <Button Content="Edit" Style="{StaticResource Button.S}" Tag="{Binding}" Click="KitEdit_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8" AutomationProperties.Name="Edit kit" />
+            <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="KitDelete_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8"
+                    ToolTip="Remove the kit (its files stay)" AutomationProperties.Name="Delete kit" />
+            <CheckBox Content="Keep all updated" IsChecked="{Binding AutoAll, Mode=OneWay}" Tag="{Binding}" Click="KitAuto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
+                      AutomationProperties.Name="Keep all updated" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
     <!-- one kept version in the details -->
     <DataTemplate x:Key="VersionRow">
       <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12" Margin="0,0,0,8">
@@ -99,6 +132,18 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
           <StackPanel Margin="24,16,12,24">
+            <StackPanel x:Name="KitsSection" Visibility="Collapsed">
+              <DockPanel Margin="0,0,12,8">
+                <Button x:Name="NewKitButton" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="New kit" Click="NewKit_Click" Visibility="Collapsed"
+                        ToolTip="Put several files together, like a raid night kit" />
+                <TextBlock Text="Kits" Style="{StaticResource Text.RowTitle}" VerticalAlignment="Center" />
+              </DockPanel>
+              <ItemsControl x:Name="KitList" ItemTemplate="{StaticResource KitCard}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              </ItemsControl>
+              <TextBlock x:Name="KitsEmpty" Text="No kits yet. A kit puts several files together, so members install them with one click." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,12" />
+              <TextBlock Text="Files" Style="{StaticResource Text.RowTitle}" Margin="0,4,0,8" />
+            </StackPanel>
             <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}">
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             </ItemsControl>
@@ -244,6 +289,35 @@
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
               <Button Content="Cancel" Style="{StaticResource Button.M}" Click="ECancel_Click" />
               <Button x:Name="ESave" Content="Save changes" Style="{StaticResource Button.Primary.M}" Margin="8,0,0,0" Click="ESave_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Border>
+
+      <!-- ===== a kit: name, description, who can see it, its files ===== -->
+      <Border x:Name="KitOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="Scrim_Down">
+        <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                MaxWidth="520" MaxHeight="700" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+              <StackPanel>
+                <TextBlock x:Name="KHeading" Text="New kit" Style="{StaticResource Text.Section}" />
+                <TextBlock Text="Name" Style="{StaticResource Text.Caption}" Margin="0,16,0,0" />
+                <TextBox x:Name="KName" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" Tag="Raid night kit" AutomationProperties.Name="Kit name" />
+                <TextBlock Text="Description" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBox x:Name="KDesc" Style="{StaticResource Input}" MaxLength="300" Margin="0,4,0,0" Tag="What it's for (optional)" AutomationProperties.Name="Kit description" />
+                <TextBlock Text="Who can see it" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <ComboBox x:Name="KSee" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="Who can see the kit" />
+                <TextBlock Text="Files in the kit" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <StackPanel x:Name="KSlots" Margin="0,4,0,0" />
+                <TextBlock Text="Members only see the files of a kit that they may see themselves." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <TextBlock x:Name="KError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />
+              </StackPanel>
+            </ScrollViewer>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
+              <Button Content="Cancel" Style="{StaticResource Button.M}" Click="KCancel_Click" />
+              <Button Content="Save kit" Style="{StaticResource Button.Primary.M}" Margin="8,0,0,0" Click="KSave_Click" />
             </StackPanel>
           </Grid>
         </Border>

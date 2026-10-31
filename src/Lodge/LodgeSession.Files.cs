@@ -37,6 +37,8 @@ namespace ElansAddonHub.Lodge
         public bool SupportsFiles2 { get; private set; }         // 2.33 "files2": who sees / updates a slot, description, cover picture, files.edit
         public bool SupportsFilesText { get; private set; }      // 2.34 "filestext": text slots (import strings) with a Copy button
         public bool SupportsFilesInfo { get; private set; }      // 2.35 "filesinfo": addon versions carry their tocs; Outposts say what they have installed (counts only)
+        public bool SupportsFilesKits { get; private set; }      // 2.36 "fileskits": kits - named sets of files
+        public readonly ObservableCollection<KitVM> Kits = new ObservableCollection<KitVM>();
         readonly HashSet<string> installReported = new HashSet<string>(StringComparer.Ordinal);   // "slot:v" told to this Lodge on this connection
 
         void ReadFilesFeatures(WelcomeMsg w, List<string> features)
@@ -48,6 +50,7 @@ namespace ElansAddonHub.Lodge
             SupportsFiles2 = SupportsFiles && features.Contains("files2");
             SupportsFilesText = SupportsFiles && features.Contains("filestext");
             SupportsFilesInfo = SupportsFiles && features.Contains("filesinfo");
+            SupportsFilesKits = SupportsFiles && features.Contains("fileskits");
             installReported.Clear();
             if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
             savedFiles = null; installedAddons = null;
@@ -56,7 +59,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetFiles()
         {
-            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; SupportsFilesInfo = false; installReported.Clear(); FilesLoaded = false; savedFiles = null; installedAddons = null;
+            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; SupportsFilesInfo = false; SupportsFilesKits = false; Kits.Clear(); installReported.Clear(); FilesLoaded = false; savedFiles = null; installedAddons = null;
             Slots.Clear(); FilesNoticeText = ""; FilesNoticeFor = null; FilesUsedBytes = 0;
             filesLastRequest = DateTime.MinValue;
         }
@@ -106,6 +109,15 @@ namespace ElansAddonHub.Lodge
                     s.SetAddonContext(iface, addOns == null ? null : (Func<string, bool>)(f => Directory.Exists(Path.Combine(addOns, f))));
                     if (s.InstalledV > 0) ReportInstalled(s.Id, s.InstalledV);
                 }
+            }
+            // kits: the same objects stay, newcomers are added, deleted ones go
+            var kitsIn = SupportsFilesKits ? m.Kits.Where(k => SafeFile.Id(k.Id) != null).ToList() : new List<FileKit>();
+            foreach (var gone in Kits.Where(k => kitsIn.All(d => d.Id != k.Id)).ToList()) Kits.Remove(gone);
+            for (int i = 0; i < kitsIn.Count; i++)
+            {
+                var have = Kits.FirstOrDefault(k => k.Id == kitsIn[i].Id);
+                if (have == null) { have = new KitVM(); Kits.Insert(Math.Min(i, Kits.Count), have); }
+                have.Update(kitsIn[i], Slots, CanManageFiles);
             }
             FilesLoaded = true;
             FilesChanged?.Invoke();
@@ -279,6 +291,7 @@ namespace ElansAddonHub.Lodge
                 Installed().Set(slot.Id, rec);
                 slot.SetInstalled(rec, slot.Newest);
                 ReportInstalled(slot.Id, rec.V);
+                foreach (var k in Kits.Where(k => k.Slots.Contains(slot))) k.Refresh();
                 FilesChanged?.Invoke();
                 return null;
             }
@@ -314,6 +327,57 @@ namespace ElansAddonHub.Lodge
         }
 
         public InstalledRecord InstalledOfForTest(string slotId) => Installed().Get(slotId);
+
+        // ---- 2.36 kits
+        public string SaveKit(KitVM kit, string name, string desc, string see, IEnumerable<string> slotIds)
+        {
+            if (!SupportsFilesKits) return "This lodge can't make kits - update the Lodge server";
+            if (!CanManageFiles) return FilesWhy("forbidden");
+            name = (name ?? "").Trim();
+            if (name.Length == 0) return "Give the kit a name";
+            var ids = (slotIds ?? Enumerable.Empty<string>()).Distinct().ToList();
+            if (ids.Count == 0) return "Pick the files that go in it";
+            if (ids.Count > FileKit.MaxSlots) return "A kit can hold " + FileKit.MaxSlots + " files at most";
+            _ = Send(LodgeJson.Build(new FilesKitMsg { Id = kit?.Id, Name = name, Desc = (desc ?? "").Trim(), See = see ?? "", Slots = string.Join(",", ids) }.Write));
+            return null;
+        }
+
+        public string DeleteKit(KitVM kit)
+        {
+            if (!SupportsFilesKits || kit == null) return "That kit isn't there any more";
+            if (!CanManageFiles) return FilesWhy("forbidden");
+            _ = Send(new JsonObject { ["t"] = FilesKitMsg.DeleteType, ["id"] = kit.Id });
+            return null;
+        }
+
+        // every addon of the kit that isn't installed or has a newer version, after ONE question (confirm gets the kit's addons and what changes);
+        // returns null when all went in, "" when cancelled, else what went wrong (per addon, the rest still goes)
+        public async Task<string> InstallKitAsync(KitVM kit, Func<List<SlotVM>, bool> confirm)
+        {
+            if (kit == null) return "That kit isn't there any more";
+            var todo = kit.Addons.Where(s => s.InstalledV == 0 || (s.Newest != null && s.Newest.V > s.InstalledV)).ToList();
+            if (todo.Count == 0) todo = kit.Addons.ToList();            // everything is current: Reinstall all
+            if (todo.Count == 0) return "This kit has no addons";
+            if (confirm != null && !confirm(todo)) return "";
+            var errors = new List<string>();
+            kit.Error = "";
+            foreach (var s in todo)
+            {
+                var err = await InstallSlotAsync(s, null);
+                if (!string.IsNullOrEmpty(err)) errors.Add(s.Name + ": " + err);
+            }
+            kit.Refresh();
+            if (errors.Count > 0) { kit.Error = string.Join(" · ", errors); return kit.Error; }
+            NoteFiles(kit.Name + ": " + todo.Count + " addon" + (todo.Count == 1 ? "" : "s") + " installed in WoW - type /reload in the game", kit.Id);
+            return null;
+        }
+
+        public void SetKitAuto(KitVM kit, bool on)
+        {
+            if (kit == null) return;
+            foreach (var s in kit.Addons.Where(s => s.InstalledV > 0)) SetAutoUpdate(s, on);
+            kit.Refresh();
+        }
 
         // tell the Lodge which version of an addon slot this PC has (once per version and connection; the Lodge only ever shows counts)
         void ReportInstalled(string slotId, int v)

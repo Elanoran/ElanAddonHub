@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -28,11 +29,13 @@ namespace ElansAddonHub.Lodge
             InitializeComponent();
             foreach (var r in Elans.Shared.FileSlot.SeeRanks) ESee.Items.Add(new ComboBoxItem { Content = SlotVM.SeeText(r), Tag = r });
             foreach (var r in Elans.Shared.FileSlot.EditRanks.Reverse()) EEdit.Items.Add(new ComboBoxItem { Content = SlotVM.EditText(r), Tag = r });
+            foreach (var r in Elans.Shared.FileSlot.SeeRanks) KSee.Items.Add(new ComboBoxItem { Content = SlotVM.SeeText(r), Tag = r });
             PreviewKeyDown += (s, e) =>
             {
                 if (e.Key != Key.Escape) return;
                 if (FormOverlay.Visibility == Visibility.Visible) { CloseForm(); e.Handled = true; }
                 else if (EditOverlay.Visibility == Visibility.Visible) { CloseEdit(); e.Handled = true; }
+                else if (KitOverlay.Visibility == Visibility.Visible) { CloseKit(); e.Handled = true; }
                 else if (VersionsOverlay.Visibility == Visibility.Visible) { CloseVersions(); e.Handled = true; }
             };
         }
@@ -41,6 +44,7 @@ namespace ElansAddonHub.Lodge
         {
             S = session;
             SlotList.ItemsSource = S.Slots;
+            KitList.ItemsSource = S.Kits;
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots);
             view.Filter = o => Matches(o as SlotVM);
             S.FilesChanged += Refresh;
@@ -57,6 +61,9 @@ namespace ElansAddonHub.Lodge
         {
             if (S == null) return;
             NewButton.Visibility = S.CanManageFiles ? Visibility.Visible : Visibility.Collapsed;
+            KitsSection.Visibility = S.SupportsFilesKits && (S.Kits.Count > 0 || (S.CanManageFiles && S.Slots.Count > 1)) ? Visibility.Visible : Visibility.Collapsed;
+            NewKitButton.Visibility = S.CanManageFiles ? Visibility.Visible : Visibility.Collapsed;
+            KitsEmpty.Visibility = S.Kits.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             SearchBox.Visibility = S.Slots.Count > 6 || SearchBox.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Refresh();
             int shown = S.Slots.Count(Matches);
@@ -341,6 +348,72 @@ namespace ElansAddonHub.Lodge
             finally { ESave.IsEnabled = true; }
         }
 
+        // ---- kits (2.36)
+        KitVM editKit;
+        public Func<List<SlotVM>, KitVM, bool> ConfirmKit;          // test seam: the "install these addons?" dialog
+
+        void NewKit_Click(object sender, RoutedEventArgs e) => OpenKit(null);
+        void KitEdit_Click(object sender, RoutedEventArgs e) { if ((sender as FrameworkElement)?.Tag is KitVM k) OpenKit(k); }
+
+        public void OpenKit(KitVM kit)
+        {
+            if (!S.SupportsFilesKits || !S.CanManageFiles) return;
+            editKit = kit;
+            KHeading.Text = kit == null ? "New kit" : "Edit " + kit.Name;
+            KName.Text = kit?.Name ?? ""; KDesc.Text = kit?.Desc ?? "";
+            KSee.SelectedItem = KSee.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (kit?.See ?? "guest"));
+            KSlots.Children.Clear();
+            var inKit = kit?.Slots.Select(s => s.Id).ToList() ?? new List<string>();
+            foreach (var s in S.Slots.OrderBy(s => inKit.Contains(s.Id) ? inKit.IndexOf(s.Id) : 1000).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+                KSlots.Children.Add(new CheckBox { Content = s.Name + (s.IsAddon ? "  (addon)" : s.IsText ? "  (import)" : ""), Tag = s.Id, IsChecked = inKit.Contains(s.Id), Margin = new Thickness(0, 2, 0, 2) });
+            KError.Text = "";
+            KitOverlay.Visibility = Visibility.Visible;
+            if (IsLoaded && IsVisible) Motion.PageIn(KitOverlay);
+        }
+
+        void KCancel_Click(object sender, RoutedEventArgs e) => CloseKit();
+        void CloseKit() { KitOverlay.Visibility = Visibility.Collapsed; editKit = null; }
+
+        void KSave_Click(object sender, RoutedEventArgs e) => SaveKit();
+        public string SaveKit()
+        {
+            var ids = KSlots.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
+            var err = S.SaveKit(editKit, KName.Text, KDesc.Text, (KSee.SelectedItem as ComboBoxItem)?.Tag as string ?? "guest", ids);
+            if (err != null) { KError.Text = err; return err; }
+            CloseKit();
+            return null;
+        }
+
+        void KitDelete_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is KitVM k)) return;
+            if (!Dialog.Confirm(Window.GetWindow(this), "Delete the kit " + k.Name + "?", "The kit goes; its files stay in the lodge.", "Delete", true)) return;
+            var err = S.DeleteKit(k);
+            if (err != null) k.Error = err;
+        }
+
+        void KitInstall_Click(object sender, RoutedEventArgs e) { if ((sender as FrameworkElement)?.Tag is KitVM k) _ = InstallKitAsync(k); }
+
+        public async Task<string> InstallKitAsync(KitVM kit)
+        {
+            var err = await S.InstallKitAsync(kit, todo => ConfirmKit != null ? ConfirmKit(todo, kit) : AskKit(todo, kit));
+            Refresh();
+            return err;
+        }
+
+        bool AskKit(List<SlotVM> todo, KitVM kit)
+        {
+            var lines = todo.Select(s => "  " + s.Name + (s.Newest != null ? " v" + s.Newest.V : "") + (s.InstalledV > 0 ? "  (update from v" + s.InstalledV + ")" : "  (new)"));
+            return Dialog.Confirm(Window.GetWindow(this), "Install " + kit.Name + " in WoW?",
+                "These addons go into WoW Forever's AddOns folder (what you have now is backed up first):\n" + string.Join("\n", lines)
+                + "\n\nAddons run inside the game: only install addons from people you trust. Type /reload in WoW afterwards.", todo.Count == 1 ? "Install" : "Install " + todo.Count);
+        }
+
+        void KitAuto_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as CheckBox)?.Tag is KitVM k) S.SetKitAuto(k, (sender as CheckBox).IsChecked == true);
+        }
+
         // ---- Delete
         void Delete_Click(object sender, RoutedEventArgs e)
         {
@@ -478,6 +551,7 @@ namespace ElansAddonHub.Lodge
         {
             if (FormOverlay.Visibility == Visibility.Visible) CloseForm();
             else if (EditOverlay.Visibility == Visibility.Visible) CloseEdit();
+            else if (KitOverlay.Visibility == Visibility.Visible) CloseKit();
             else CloseVersions();
         }
         void Box_Down(object sender, MouseButtonEventArgs e) => e.Handled = true;
@@ -494,6 +568,15 @@ namespace ElansAddonHub.Lodge
         public bool FormNameEditableForTest => FName.IsEnabled;
         public string FormHeadingForTest => FormHeading.Text;
         public void PickForTest(string path) => SetFormFile(path);
+        public bool KitsShownForTest => KitsSection.Visibility == Visibility.Visible;
+        public bool KitOpenForTest => KitOverlay.Visibility == Visibility.Visible;
+        public string KitErrorForTest => KError.Text;
+        public void KitSetForTest(string name, string desc, string see, params string[] slotNames)
+        {
+            KName.Text = name; KDesc.Text = desc ?? "";
+            KSee.SelectedItem = KSee.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == (see ?? "guest"));
+            foreach (var c in KSlots.Children.OfType<CheckBox>()) c.IsChecked = slotNames.Any(n => ((string)c.Content).StartsWith(n + "  ") || (string)c.Content == n);
+        }
         public void FormTextForTest(string text) { FModeText.IsChecked = true; ApplyMode(); FText.Text = text; }
         public bool FormModesShownForTest => FModePanel.Visibility == Visibility.Visible;
         public bool EditOpenForTest => EditOverlay.Visibility == Visibility.Visible;

@@ -29,6 +29,17 @@ public sealed class SlotVersion
     public List<AddonFolder> Addon { get; set; }   // 2.35: an addon version's folders as their tocs say (read on upload / when marked)
 }
 
+// 2.36: a named set of slots (kits.json next to index.json)
+public sealed class Kit
+{
+    public string Id { get; set; }
+    public string Name { get; set; }
+    public string Desc { get; set; }
+    public string See { get; set; }
+    public string CreatedBy { get; set; }
+    public List<string> Slots { get; set; } = new();
+}
+
 public sealed class Slot
 {
     public string Id { get; set; }
@@ -145,6 +156,8 @@ public sealed class FilesModule : IModule
     readonly string indexPath;
     readonly object gate = new();
     readonly List<Slot> slots = new();
+    readonly List<Kit> kits = new();
+    string KitsPath => Path.Combine(dir, "kits.json");
     long reservedBytes;
     readonly Dictionary<string, int> running = new();
     readonly ConcurrentDictionary<string, Queue<DateTime>> recent = new();
@@ -202,6 +215,12 @@ public sealed class FilesModule : IModule
         foreach (var f in Directory.GetFiles(dir, "*.bin"))
             if (!live.Contains(Path.GetFileName(f))) TryDelete(f);
         if (changed) SaveIndexLocked();
+        try
+        {
+            if (File.Exists(KitsPath)) kits.AddRange((JsonSerializer.Deserialize<List<Kit>>(File.ReadAllText(KitsPath), Json) ?? new()).Where(k => ValidBlob(k.Id) && !string.IsNullOrEmpty(k.Name)).Take(FileKit.MaxKits));
+            foreach (var k in kits) { k.Slots = (k.Slots ?? new()).Where(ValidBlob).Distinct().Take(FileKit.MaxSlots).ToList(); if (k.See != null && Array.IndexOf(FileSlot.SeeRanks, k.See) < 0) k.See = "officer"; }
+        }
+        catch (Exception e) when (e is JsonException or IOException) { hub.Log.LogWarning("Shared files: the kits could not be read ({Error})", e.GetType().Name); }
     }
 
     // temp file + rename: the index is either the old or the new one, never half written
@@ -270,6 +289,7 @@ public sealed class FilesModule : IModule
                 MaxMb = hub.Cfg.FilesMaxMb, TotalMb = hub.Cfg.FilesTotalMb, UsedBytes = slots.Sum(s => s.Versions.Sum(v => v.Size)),
                 Keep = KeptVersions, CanManage = Roles.Can(me.Role, Perm.FilesManage),
                 Slots = slots.Where(s => CanSee(me.Role, s)).OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => SlotOf(s, me.Role)).ToList(),
+                Kits = KitsFor(me.Role),
             }.Write);
     }
 
@@ -677,6 +697,71 @@ public sealed class FilesModule : IModule
         try { return (File.ReadAllBytes(path), type); } catch (IOException) { return null; }
     }
 
+    // ---------------------------------------------------------------- 2.36: kits
+
+    bool SaveKitsLocked()
+    {
+        try { var tmp = KitsPath + ".tmp"; File.WriteAllText(tmp, JsonSerializer.Serialize(kits, Json)); File.Move(tmp, KitsPath, true); return true; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { hub.Log.LogWarning("Shared files: the kits could not be saved ({Error})", e.GetType().Name); return false; }
+    }
+
+    static bool KitVisible(string role, Kit k) => Roles.Can(role, Perm.FilesManage) || Roles.AtLeast(role, k.See ?? "guest");
+
+    // the kits a viewer sees, each with only the slots the viewer sees (a kit with none left is not shown)
+    List<FileKit> KitsFor(string role) => kits.Where(k => KitVisible(role, k)).Select(k => new FileKit
+    {
+        Id = k.Id, Name = k.Name, Desc = k.Desc, See = k.See, CreatedBy = k.CreatedBy,
+        Slots = k.Slots.Where(id => Find(id) is Slot s && CanSee(role, s)).ToList(),
+    }).Where(k => k.Slots.Count > 0 || Roles.Can(role, Perm.FilesManage)).OrderBy(k => k.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+    public (bool ok, string why, string id, string name) SaveKit(Member me, FilesKitMsg req)
+    {
+        if (!Enabled) return (false, "disabled", null, null);
+        if (!Roles.Can(me.Role, Perm.FilesManage)) return (false, "forbidden", null, null);
+        var name = Names.Text(req.Name ?? "", MaxNameChars);
+        if (name.Length == 0) return (false, "bad-name", null, null);
+        var desc = Names.Text(req.Desc ?? "", FileKit.MaxDescChars);
+        var see = string.IsNullOrEmpty(req.See) || req.See == "guest" ? null : req.See;
+        if (see != null && Array.IndexOf(FileSlot.SeeRanks, see) < 0) return (false, "bad-rank", null, null);
+        var ids = (req.Slots ?? "").Split(',').Select(x => x.Trim()).Where(ValidBlob).Distinct().ToList();
+        if (ids.Count > FileKit.MaxSlots) return (false, "too-many", null, null);
+        lock (gate)
+        {
+            ids = ids.Where(id => Find(id) != null).ToList();
+            var k = req.Id == null ? null : kits.FirstOrDefault(x => x.Id == req.Id);
+            if (req.Id != null && k == null) return (false, "missing", null, null);
+            if (kits.Any(x => x != k && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))) return (false, "name-taken", null, null);
+            if (k == null)
+            {
+                if (kits.Count >= FileKit.MaxKits) return (false, "too-many", null, null);
+                k = new Kit { Id = NewId(), CreatedBy = me.Name };
+                kits.Add(k);
+            }
+            var before = (k.Name, k.Desc, k.See, Slots: k.Slots.ToList());
+            k.Name = name; k.Desc = desc.Length == 0 ? null : desc; k.See = see; k.Slots = ids;
+            if (!SaveKitsLocked())
+            {
+                if (before.Name == null) kits.Remove(k); else (k.Name, k.Desc, k.See, k.Slots) = (before.Name, before.Desc, before.See, before.Slots);
+                return (false, "save", null, null);
+            }
+            return (true, null, k.Id, k.Name);
+        }
+    }
+
+    public (bool ok, string why, string name) DeleteKit(Member me, string id)
+    {
+        if (!Enabled) return (false, "disabled", null);
+        if (!Roles.Can(me.Role, Perm.FilesManage)) return (false, "forbidden", null);
+        lock (gate)
+        {
+            var k = kits.FirstOrDefault(x => x.Id == id);
+            if (k == null) return (false, "missing", null);
+            kits.Remove(k);
+            if (!SaveKitsLocked()) { kits.Add(k); return (false, "save", null); }
+            return (true, null, k.Name);
+        }
+    }
+
     // 2.35: who has which version of an addon slot (a version the slot never had, a slot the member doesn't see or a non-addon is ignored)
     public void NoteInstalled(string who, string role, string slotId, int v)
     {
@@ -709,6 +794,12 @@ public sealed class FilesModule : IModule
             Action = action, Slot = id, Name = name, By = by, At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(), V = v,
         }.Write), m => Roles.Can(m.Role, Perm.FilesManage) || Roles.AtLeast(m.Role, min));
     }
+
+    // a kit changed: everybody who sees it (or saw it) asks for the list again
+    Task AnnounceKit(string id, string name, string by, string see) => hub.Broadcast(LodgeJson.Build(new FilesChangedMsg
+    {
+        Action = "kit", Slot = id, Name = name, By = by, At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
+    }.Write), m => Roles.Can(m.Role, Perm.FilesManage) || Roles.AtLeast(m.Role, string.IsNullOrEmpty(see) ? "guest" : see));
 
     Task Result(Member me, string op, bool ok, string why, string slot) =>
         hub.Send(me, LodgeJson.Build(new FilesResultMsg { Op = op, Ok = ok, Why = why, Slot = slot }.Write));
@@ -754,6 +845,23 @@ public sealed class FilesModule : IModule
                 if (!Enabled || !Roles.AtLeast(me.Role, "member")) return true;                 // guests share one name: they are not counted
                 if (!me.Budget.Page.TryTake()) return true;
                 NoteInstalled(ProfileRules.Key(me.Name), me.Role, req.Slot ?? "", req.V);
+                return true;
+            }
+            case FilesKitMsg.Type:
+            {
+                var req = FilesKitMsg.Read(new LodgeJsonFields(m));
+                var (ok, why, id, name) = SaveKit(me, req);
+                await Result(me, "kit", ok, why, id);
+                if (ok) { hub.Log.LogInformation("{Name} saved a file kit", me.Name); await AnnounceKit(id, name, me.Name, req.See); }
+                return true;
+            }
+            case FilesKitMsg.DeleteType:
+            {
+                var id = new LodgeJsonFields(m).Str("id") ?? "";
+                string see; lock (gate) see = kits.FirstOrDefault(x => x.Id == id)?.See;
+                var (ok, why, name) = DeleteKit(me, id);
+                await Result(me, "kit", ok, why, id);
+                if (ok) await AnnounceKit(id, name, me.Name, see);
                 return true;
             }
             case FilesRollbackMsg.Type:

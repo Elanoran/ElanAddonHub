@@ -36,6 +36,7 @@ namespace ElansAddonHub
             // "longer" = a Content-Length above the announced size
             public string Hostile;
             public readonly List<SlotRec> Slots = new List<SlotRec>();
+            public readonly List<string> KitsJson = new List<string>();      // 2.36: kits as the Lodge sends them
             int nextId = 1;
 
             public FakeFilesServer()
@@ -78,7 +79,7 @@ namespace ElansAddonHub
             // what files.list answers
             public string DataJson() =>
                 "{\"t\":\"files.data\",\"maxMb\":" + MaxMb + ",\"totalMb\":500,\"usedBytes\":" + Slots.Sum(s => s.Versions.Sum(v => (long)v.Bytes.Length)) + ",\"keep\":3,\"canManage\":"
-                + (Role == "officer" || Role == "owner" ? "true" : "false") + ",\"slots\":[" + string.Join(",", Slots.OrderBy(s => s.Name).Select(SlotJson)) + "]}";
+                + (Role == "officer" || Role == "owner" ? "true" : "false") + ",\"slots\":[" + string.Join(",", Slots.OrderBy(s => s.Name).Select(SlotJson)) + "]" + (KitsJson.Count > 0 ? ",\"kits\":[" + string.Join(",", KitsJson) + "]" : "") + "}";
 
             static readonly HashSet<string> Blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "exe", "dll", "com", "bat", "cmd", "ps1", "js", "msi", "lnk", "reg", "hta" };
 
@@ -318,10 +319,10 @@ namespace ElansAddonHub
             finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
         }
 
-        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false, bool info = false)
+        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false, bool info = false, bool kits = false)
 
         {
-            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "") + (info ? ",\"filesinfo\"" : "");
+            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "") + (info ? ",\"filesinfo\"" : "") + (kits ? ",\"fileskits\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
             bool manage = role == "owner" || role == "officer";
             return w.Substring(0, w.Length - 1) + ",\"canManageFiles\":" + (manage ? "true" : "false") + ",\"filesMaxMb\":" + maxMb + "}";
@@ -889,6 +890,56 @@ namespace ElansAddonHub
                     Session.Disconnect();
                     fake.Slots.Clear();
                 }
+
+                // ---- 2.36 "fileskits": kits - made by officers, installed and kept updated together
+                {
+                    fake.Slots.Clear(); fake.KitsJson.Clear();
+                    var kDir = Path.Combine(work, "wow3", "_forever_", "Interface", "AddOns");
+                    Directory.CreateDirectory(kDir);
+                    LodgeAddons.AddOnsDir = () => kDir;
+                    try { File.Delete(Path.Combine(Util.DataDir, "files-installed.txt")); } catch { }
+                    FakeFilesServer.SlotRec Addon(string name, string folder)
+                    {
+                        var b = File.ReadAllBytes(MakeZip(Path.Combine(work, folder + ".zip"), (folder + "/" + folder + ".toc", "## Version: 1\n"), (folder + "/a.lua", "x")));
+                        var r = new FakeFilesServer.SlotRec { Id = (fake.Slots.Count + 900).ToString("x32"), Name = name, CreatedBy = "Wing", Kind = "addon" };
+                        r.Versions.Add(new FakeFilesServer.Ver { V = 1, FileName = folder + ".zip", Sha = LodgeFiles.Hex(System.Security.Cryptography.SHA256.Create().ComputeHash(b)), By = "Wing", Note = "", Bytes = b, At = 1_790_000_000_000L });
+                        fake.Slots.Add(r); return r;
+                    }
+                    var k1 = Addon("DBM raid", "DBMRaid"); var k2 = Addon("WeakAuras", "WeakAuras");
+                    Session.Disconnect(); sent.Clear();
+                    fake.Role = "officer";
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.36.0", 1, addons: true, files2: true, text: true, info: true, kits: true));
+                    Session.FilesClientForTest(new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan"));
+                    Session.FeedForTest(fake.DataJson());
+                    LodgePage.ShowFilesForTest();
+                    var fk = LodgePage.FilesForTest;
+                    check("kits: an officer sees the Kits row (with New kit) once there are files to put together", Session.SupportsFilesKits && fk.KitsShownForTest);
+                    fk.OpenKit(null);
+                    fk.KitSetForTest("Raid night kit", "Everything for raid night", "member");
+                    check("kits: a kit without files is refused (" + fk.SaveKit() + ")", fk.KitErrorForTest.Contains("Pick the files"));
+                    fk.KitSetForTest("Raid night kit", "Everything for raid night", "member", "DBM raid", "WeakAuras");
+                    sent.Clear();
+                    var kerr = fk.SaveKit();
+                    var km = sent.FirstOrDefault(o => o.Str("t") == "files.kit");
+                    check("kits: Save kit sends its name, description, who sees it and its files (" + (kerr ?? "ok") + ")",
+                        kerr == null && km != null && km.Str("name") == "Raid night kit" && km.Str("see") == "member" && km.Str("slots").Split(',').OrderBy(x => x).SequenceEqual(new[] { k1.Id, k2.Id }.OrderBy(x => x)) && !fk.KitOpenForTest);
+                    fake.KitsJson.Add("{\"id\":" + Q(950.ToString("x32")) + ",\"name\":\"Raid night kit\",\"desc\":\"Everything for raid night\",\"see\":\"member\",\"createdBy\":\"Wing\",\"slots\":" + Q(k1.Id + "," + k2.Id) + "}");
+                    Session.FeedForTest(fake.DataJson());
+                    var kit = Session.Kits.Single();
+                    check("kits: the kit card counts its files and addons and offers Install all (" + kit.CountLine + ")", kit.Slots.Count == 2 && kit.CountLine == "2 files · 2 addons" && kit.InstallAllLabel == "Install all" && kit.StateLine.StartsWith("None"));
+                    List<SlotVM> askedFor = null;
+                    fk.ConfirmKit = (todo, kv) => { askedFor = todo; return true; };
+                    kerr = await fk.InstallKitAsync(kit);
+                    check("kits: Install all asks once for both addons and installs them (" + (kerr ?? "ok") + " / " + kit.StateLine + ")",
+                        kerr == null && askedFor != null && askedFor.Count == 2 && Directory.Exists(Path.Combine(kDir, "DBMRaid")) && Directory.Exists(Path.Combine(kDir, "WeakAuras")) && kit.StateLine.StartsWith("2 of 2 addons installed · up to date"));
+                    Session.SetKitAuto(kit, true);
+                    check("kits: Keep all updated sets every installed addon of the kit to update itself", kit.AutoAll && kit.Slots.All(s => s.AutoUpdate) && kit.StateLine.Contains("keeps itself updated"));
+                    fk.ConfirmKit = null;
+                    LodgePage.HideFilesForTest();
+                }
+                LodgeAddons.AddOnsDir = hadAddOnsDir;
+                Session.Disconnect();
+                fake.Slots.Clear(); fake.KitsJson.Clear();
 
                 // ---- the badge rules on their own
                 var s1 = new SlotVersionInfo { V = 2, Sha256 = "aa" };

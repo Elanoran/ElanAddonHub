@@ -112,7 +112,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.35.0";
+    public const string Version = "2.36.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
 
     public readonly LodgeConfig Cfg;
@@ -277,7 +277,7 @@ public partial class LodgeHub
     public string[] FeatureList()
     {
         var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights", "flightroutes", "devicenotice" };   // flightroutes: learned flight paths, FlightRoutes.cs; devicenotice (2.31.2): device.added + addedBy, device links for existing members are the Guild Master's
-        if (Cfg.FilesEnabled) { f.Add("files"); f.Add("filesaddons"); f.Add("files2"); f.Add("filestext"); f.Add("filesinfo"); }   // 2.32: addon slots (FileSlot.Kind); 2.33 files2: who sees / updates a slot, its description, cover picture, files.edit
+        if (Cfg.FilesEnabled) { f.Add("files"); f.Add("filesaddons"); f.Add("files2"); f.Add("filestext"); f.Add("filesinfo"); f.Add("fileskits"); }   // 2.32: addon slots (FileSlot.Kind); 2.33 files2: who sees / updates a slot, its description, cover picture, files.edit
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); if (Cfg.ArmoryRepsEnabled) f.Add("reputations"); }   // reputations (2.27): shared characters may carry reputations (only members who switched it on send them); "standing with a faction"
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
         if (Cairn.Enabled) f.Add("cairn");                         // the owner contributes the pooled Atlas numbers (ids and counts, no names) to the Cairn: members are told so

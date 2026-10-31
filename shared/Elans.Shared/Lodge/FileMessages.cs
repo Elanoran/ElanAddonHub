@@ -45,17 +45,20 @@ namespace Elans.Shared
         public long UsedBytes;
         public bool CanManage;
         public List<FileSlot> Slots = new List<FileSlot>();
+        public List<FileKit> Kits = new List<FileKit>();          // 2.36 "fileskits" (absent = none)
 
         public void Write(ILodgeWriter w)
         {
             w.Set("t", Type); w.Set("maxMb", MaxMb); w.Set("totalMb", TotalMb); w.Set("usedBytes", UsedBytes); w.Set("keep", Keep); w.Set("canManage", CanManage);
             var l = w.List("slots"); foreach (var s in Slots) s.Write(l.Add());
+            if (Kits.Count > 0) { var k = w.List("kits"); foreach (var x in Kits) x.Write(k.Add()); }
         }
 
         public static FilesDataMsg Read(ILodgeFields f)
         {
             var m = new FilesDataMsg { MaxMb = f.Int("maxMb"), TotalMb = f.Int("totalMb"), UsedBytes = f.Long("usedBytes"), Keep = f.Int("keep"), CanManage = f.Bool("canManage") };
             foreach (var s in f.List("slots")) m.Slots.Add(FileSlot.Read(s));
+            foreach (var k in f.List("kits").Take(FileKit.MaxKits)) m.Kits.Add(FileKit.Read(k));
             return m;
         }
     }
@@ -200,6 +203,43 @@ namespace Elans.Shared
         public static List<AddonFolder> From(AddonZip.Result r) =>
             r == null || !r.Ok ? new List<AddonFolder>() : r.Folders.Select(f => r.Info.TryGetValue(f, out var i)
                 ? new AddonFolder { F = f, V = i.Version, I = i.Interfaces.ToList(), D = i.Deps.ToList() } : new AddonFolder { F = f }).ToList();
+    }
+
+    // 2.36: a kit - a named set of slots ("Raid night kit") { id, name, desc?, see?, slots ("id,id,...": the ones this viewer sees, in order), createdBy }
+    public sealed class FileKit
+    {
+        public const int MaxKits = 50, MaxSlots = 40, MaxDescChars = 300;
+        public string Id, Name, Desc, See, CreatedBy;
+        public List<string> Slots = new List<string>();
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("id", Id); w.Set("name", Name); w.Set("createdBy", CreatedBy);
+            if (!string.IsNullOrEmpty(Desc)) w.Set("desc", Desc);
+            if (!string.IsNullOrEmpty(See)) w.Set("see", See);
+            w.Set("slots", string.Join(",", Slots));
+        }
+
+        public static FileKit Read(ILodgeFields f) => new FileKit
+        {
+            Id = f.Str("id"), Name = f.Str("name"), Desc = f.Str("desc"), CreatedBy = f.Str("createdBy"),
+            See = Array.IndexOf(FileSlot.SeeRanks, f.Str("see")) >= 0 ? f.Str("see") : null,
+            Slots = (f.Str("slots") ?? "").Split(',').Where(x => x.Length == 32 && x.All(Uri.IsHexDigit)).Take(MaxSlots).ToList(),
+        };
+    }
+
+    // 2.36: create (id absent) or change a kit { t, id?, name, desc, see, slots ("id,id,...") } / remove one { t, id } - officers and the owner
+    public sealed class FilesKitMsg
+    {
+        public const string Type = "files.kit", DeleteType = "files.kit.delete";
+        public string Id, Name, Desc, See, Slots;
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("t", Type);
+            if (Id != null) w.Set("id", Id);
+            w.Set("name", Name ?? ""); w.Set("desc", Desc ?? ""); w.Set("see", See ?? ""); w.Set("slots", Slots ?? "");
+        }
+        public static FilesKitMsg Read(ILodgeFields f) => new FilesKitMsg { Id = f.Str("id"), Name = f.Str("name"), Desc = f.Str("desc"), See = f.Str("see"), Slots = f.Str("slots") };
     }
 
     // 2.35: this Outpost has version v of an addon slot installed in WoW (0 = not any more) - only counts go back out (FileSlot.HaveNewest / HaveOlder)
