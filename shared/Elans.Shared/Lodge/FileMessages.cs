@@ -95,18 +95,34 @@ namespace Elans.Shared
     // officers), cover (> 0 = a cover picture, GET /slots/{id}/cover, the number changes with every new picture), canUpdate (this viewer may update it)
     public sealed class FileSlot
     {
-        public const string AddonKind = "addon";
+        public const string AddonKind = "addon", TextKind = "text";        // text (2.34, feature "filestext"): an import string - a WeakAura, a profile, a macro
         public static readonly string[] SeeRanks = { "guest", "member", "veteran", "officer" }, EditRanks = { "member", "veteran", "officer" };
         public string Id, Name, CreatedBy, Kind, Desc, See, Edit;
         public int Cover;
         public bool CanUpdate;
         public bool IsAddon => Kind == AddonKind;
+        public bool IsText => Kind == TextKind;
+        public const long MaxTextBytes = 256 * 1024;
+
+        // what a text slot's version must be: UTF-8 (strict), no NUL, at most MaxTextBytes; null = fine
+        public static string TextProblem(byte[] data)
+        {
+            if (data == null || data.Length == 0) return "The text is empty";
+            if (data.Length > MaxTextBytes) return "Text can be 256 KB at most";
+            try
+            {
+                var s = new System.Text.UTF8Encoding(false, true).GetString(data);
+                if (s.IndexOf('\0') >= 0) return "That isn't plain text";
+            }
+            catch (System.Text.DecoderFallbackException) { return "That isn't plain text (UTF-8)"; }
+            return null;
+        }
         public List<FileVersion> Versions = new List<FileVersion>();
 
         public void Write(ILodgeWriter w)
         {
             w.Set("id", Id); w.Set("name", Name); w.Set("createdBy", CreatedBy);
-            if (Kind == AddonKind) w.Set("kind", Kind);
+            if (Kind == AddonKind || Kind == TextKind) w.Set("kind", Kind);
             if (!string.IsNullOrEmpty(Desc)) w.Set("desc", Desc);
             if (!string.IsNullOrEmpty(See)) w.Set("see", See);
             if (!string.IsNullOrEmpty(Edit)) w.Set("edit", Edit);
@@ -119,7 +135,7 @@ namespace Elans.Shared
         {
             var s = new FileSlot
             {
-                Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : null,
+                Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : f.Str("kind") == TextKind ? TextKind : null,
                 Desc = f.Str("desc"), See = Array.IndexOf(SeeRanks, f.Str("see")) >= 0 ? f.Str("see") : null, Edit = Array.IndexOf(EditRanks, f.Str("edit")) >= 0 ? f.Str("edit") : null,
                 Cover = Math.Max(0, f.Int("cover")), CanUpdate = f.Bool("canUpdate"),
             };

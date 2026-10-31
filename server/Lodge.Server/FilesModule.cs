@@ -33,7 +33,7 @@ public sealed class Slot
     public string Id { get; set; }
     public string Name { get; set; }
     public string CreatedBy { get; set; }
-    public string Kind { get; set; }     // 2.32: "addon" = a zip of WoW addon folders (Elans.Shared.AddonZip), null = a plain file
+    public string Kind { get; set; }     // 2.32: "addon" = a zip of WoW addon folders (Elans.Shared.AddonZip); 2.34 "text" = an import string (.txt); null = a plain file
     public string Desc { get; set; }     // 2.33: a longer description (FilesModule.MaxDescChars, line breaks kept)
     public string See { get; set; }      // 2.33: the lowest rank that sees it (FileSlot.SeeRanks); null = everyone, guests included
     public string Edit { get; set; }     // 2.33: the lowest rank that may update it (FileSlot.EditRanks); null = officers
@@ -249,7 +249,7 @@ public sealed class FilesModule : IModule
 
     static FileSlot SlotOf(Slot s, string role = null) => new()
     {
-        Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Kind = s.Kind == FileSlot.AddonKind ? FileSlot.AddonKind : null, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
+        Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Kind = s.Kind == FileSlot.AddonKind || s.Kind == FileSlot.TextKind ? s.Kind : null, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
         Desc = string.IsNullOrEmpty(s.Desc) ? null : s.Desc, See = s.See, Edit = s.Edit, Cover = s.Cover != null ? Math.Max(1, s.CoverV) : 0,
         CanUpdate = role != null && CanUpdate(role, s),
     };
@@ -305,7 +305,8 @@ public sealed class FilesModule : IModule
         string sha256, long? length, Stream body, CancellationToken ct, string kind = null)
     {
         kind = (kind ?? "").Trim().ToLowerInvariant();
-        if (kind.Length > 0 && kind != FileSlot.AddonKind && kind != "file") throw new FilesException(400, "bad-kind", "Unknown kind of file");
+        if (kind.Length > 0 && kind != FileSlot.AddonKind && kind != FileSlot.TextKind && kind != "file") throw new FilesException(400, "bad-kind", "Unknown kind of file");
+        if (kind == FileSlot.TextKind && length > FileSlot.MaxTextBytes) throw new FilesException(413, "too-big", "Text can be 256 KB at most");
         var cfg = hub.Cfg;
         if (!Enabled) throw new FilesException(403, "disabled", "File sharing is switched off on this lodge");
         if (slotId == null && !Roles.Can(role, Perm.FilesManage)) throw new FilesException(403, "forbidden", "Only officers and the lodge owner can share new files");
@@ -385,6 +386,17 @@ public sealed class FilesModule : IModule
                     why = FileRules.CheckZip(zs);
                 if (why != null) throw new FilesException(415, "blocked-zip", why);
             }
+            if (kind.Length == 0 && !isNew)
+            {
+                bool wasText; lock (gate) wasText = Find(slotId)?.Kind == FileSlot.TextKind;
+                if (wasText) kind = FileSlot.TextKind;
+            }
+            if (kind == FileSlot.TextKind)
+            {
+                if (FileRules.Extension(fileName) != "txt") throw new FilesException(415, "not-text", "Text is shared as a .txt file");
+                var why = FileSlot.TextProblem(await File.ReadAllBytesAsync(part, ct));
+                if (why != null) throw new FilesException(415, "not-text", why);
+            }
             if (kind == FileSlot.AddonKind)
             {
                 if (!FileRules.IsZip(fileName)) throw new FilesException(415, "not-addon", "An addon has to be a .zip of its addon folders");
@@ -413,7 +425,7 @@ public sealed class FilesModule : IModule
                     if (!CanUpdate(role, s)) throw new FilesException(403, "forbidden", "You can't update this file");
                 }
                 var kindBefore = s.Kind;
-                if (kind == FileSlot.AddonKind) s.Kind = FileSlot.AddonKind; else if (kind == "file") s.Kind = null;
+                if (kind == FileSlot.AddonKind) s.Kind = FileSlot.AddonKind; else if (kind == FileSlot.TextKind) s.Kind = FileSlot.TextKind; else if (kind == "file") s.Kind = null;
                 if (slots.Sum(x => x.Versions.Sum(v => v.Size)) + size - (isNew ? 0 : FreedByPrune(s.Id)) > cfg.FilesTotalBytes)
                     throw new FilesException(507, "full", $"The lodge's file space ({cfg.FilesTotalMb} MB) is full - delete something first");
                 File.Move(part, Path.Combine(dir, blob + ".bin"));

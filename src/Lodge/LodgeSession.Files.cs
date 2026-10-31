@@ -35,6 +35,7 @@ namespace ElansAddonHub.Lodge
         InstalledAddons Installed() => installedAddons ?? (installedAddons = new InstalledAddons(Settings?.LodgeUrl));
         public bool SupportsAddonFiles { get; private set; }     // 2.32 "filesaddons": slots can be marked as WoW addons and installed
         public bool SupportsFiles2 { get; private set; }         // 2.33 "files2": who sees / updates a slot, description, cover picture, files.edit
+        public bool SupportsFilesText { get; private set; }      // 2.34 "filestext": text slots (import strings) with a Copy button
 
         void ReadFilesFeatures(WelcomeMsg w, List<string> features)
         {
@@ -43,6 +44,7 @@ namespace ElansAddonHub.Lodge
             CanManageFiles = SupportsFiles && w.CanManageFiles;
             SupportsAddonFiles = SupportsFiles && features.Contains("filesaddons");
             SupportsFiles2 = SupportsFiles && features.Contains("files2");
+            SupportsFilesText = SupportsFiles && features.Contains("filestext");
             if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
             savedFiles = null; installedAddons = null;
             if (!SupportsFiles) { Slots.Clear(); FilesLoaded = false; }
@@ -50,7 +52,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetFiles()
         {
-            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; FilesLoaded = false; savedFiles = null; installedAddons = null;
+            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; FilesLoaded = false; savedFiles = null; installedAddons = null;
             Slots.Clear(); FilesNoticeText = ""; FilesNoticeFor = null; FilesUsedBytes = 0;
             filesLastRequest = DateTime.MinValue;
         }
@@ -88,7 +90,7 @@ namespace ElansAddonHub.Lodge
                 var d = incoming[i];
                 var have = Slots.FirstOrDefault(s => s.Id == d.Id);
                 if (have == null) { have = new SlotVM(); Slots.Insert(Math.Min(i, Slots.Count), have); }
-                have.Update(d, CanManageFiles, Saved().Get(d.Id), SupportsAddonFiles ? Installed().Get(d.Id) : null, SupportsAddonFiles);
+                have.Update(d, CanManageFiles, Saved().Get(d.Id), SupportsAddonFiles ? Installed().Get(d.Id) : null, SupportsAddonFiles, SupportsFilesText);
                 if (SupportsFiles2) _ = LoadCoverAsync(have);
             }
             FilesLoaded = true;
@@ -145,7 +147,7 @@ namespace ElansAddonHub.Lodge
 
         // slotId null = a new slot called `name`; otherwise a new version of that slot. addon (server 2.32): true marks it as a WoW addon (the zip must be one,
         // AddonZip), false unmarks it, null says nothing (an older server)
-        public async Task<string> UploadSlotAsync(string slotId, string name, string path, string note, Action<double> progress = null, bool? addon = null)
+        public async Task<string> UploadSlotAsync(string slotId, string name, string path, string note, Action<double> progress = null, bool? addon = null, string kindOverride = null)
         {
             if (!SupportsFiles) return "This lodge doesn't share files";
             var target = slotId == null ? null : Slots.FirstOrDefault(s => s.Id == slotId);
@@ -164,7 +166,7 @@ namespace ElansAddonHub.Lodge
                 var chk = await Task.Run(() => AddonZip.Check(path));
                 if (!chk.Ok) return "That isn't an addon zip: " + chk.Problem;
             }
-            var kind = SupportsAddonFiles && addon != null ? (addon.Value ? "addon" : "file") : null;
+            var kind = kindOverride ?? (SupportsAddonFiles && addon != null ? (addon.Value ? "addon" : "file") : null);
             var slot = slotId == null ? null : Slots.FirstOrDefault(s => s.Id == slotId);
             if (slotId != null && slot == null) return FilesWhy("missing");
             try
@@ -298,6 +300,46 @@ namespace ElansAddonHub.Lodge
 
         public InstalledRecord InstalledOfForTest(string slotId) => Installed().Get(slotId);
         public void NoteFiles(string text, string slotId) { FilesNoticeText = text ?? ""; FilesNoticeFor = slotId; FilesChanged?.Invoke(); }
+
+        // ---- 2.34: text slots (import strings). Shared as a .txt of UTF-8 text; Copy fetches the newest (checked like Save, kept in files-text) and returns it
+        public async Task<string> UploadTextAsync(string slotId, string name, string text, string note, Action<double> progress = null)
+        {
+            if (!SupportsFilesText) return "This lodge can't share text - update the Lodge server";
+            text = (text ?? "").Trim();
+            var data = new System.Text.UTF8Encoding(false).GetBytes(text);
+            var why = FileSlot.TextProblem(data);
+            if (why != null) return why;
+            var dir = Path.Combine(Util.DataDir, "files-text");
+            Directory.CreateDirectory(dir);
+            var tmp = Path.Combine(dir, "upload-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            Directory.CreateDirectory(tmp);
+            var file = Path.Combine(tmp, "import.txt");
+            try
+            {
+                File.WriteAllBytes(file, data);
+                return await UploadSlotAsync(slotId, name, file, note, progress, null, "text");
+            }
+            finally { try { Directory.Delete(tmp, true); } catch { } }
+        }
+
+        public static string TextDir => Path.Combine(Util.DataDir, "files-text");
+        public async Task<(string text, string error)> FetchTextAsync(SlotVM slot)
+        {
+            var ver = slot?.Newest;
+            if (slot == null || !slot.IsText || ver == null) return (null, "That isn't text");
+            var file = Path.Combine(TextDir, slot.Id + "-" + ver.V + ".txt");
+            if (!File.Exists(file) || !string.Equals(LodgeFiles.Sha256(file), ver.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                Directory.CreateDirectory(TextDir);
+                var err = await SaveVersionAsync(slot, ver, file);
+                if (err != null) return (null, err);
+                foreach (var old in Directory.GetFiles(TextDir, slot.Id + "-*.txt")) if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch { }
+            }
+            var data = File.ReadAllBytes(file);
+            var why = FileSlot.TextProblem(data);
+            if (why != null) return (null, why);
+            return (new System.Text.UTF8Encoding(false, true).GetString(data), null);
+        }
 
         // ---- 2.33: change a slot without uploading (the answer comes as files.result: an error lands on the slot), its cover picture
         public string EditSlot(SlotVM slot, FilesEditMsg edit)

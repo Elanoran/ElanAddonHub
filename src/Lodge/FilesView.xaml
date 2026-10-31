@@ -24,8 +24,8 @@
                   <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
                 </StackPanel>
               </Border>
-              <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Scrim}" Visibility="{Binding AddonChipVisibility}" ToolTip="A WoW addon: it can be installed in WoW Forever from here">
-                <TextBlock Text="Addon" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
+              <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Scrim}" Visibility="{Binding KindChipVisibility}" ToolTip="{Binding KindChipTip}">
+                <TextBlock Text="{Binding KindChip}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
               </Border>
             </StackPanel>
             <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Info.Tint}" Visibility="{Binding BadgeVisibility}" HorizontalAlignment="Right" VerticalAlignment="Top"
@@ -49,6 +49,8 @@
                       ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
               <Button Content="Save..." Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Save_Click" Visibility="{Binding SaveCardVisibility}" Margin="0,0,8,0"
                       ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+              <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,8,0"
+                      ToolTip="Put the text on the clipboard - then paste it into WeakAuras, Plater or the macro window" AutomationProperties.Name="Copy" />
               <Button Content="Details" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" ToolTip="Description, versions and settings" AutomationProperties.Name="Details" />
             </WrapPanel>
           </StackPanel>
@@ -128,13 +130,16 @@
                           <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                         </StackPanel>
                       </Border>
-                      <Border Style="{StaticResource Chip}" Visibility="{Binding AddonChipVisibility}" Margin="8,0,0,0">
-                        <TextBlock Text="Addon" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                      <Border Style="{StaticResource Chip}" Visibility="{Binding KindChipVisibility}" Margin="8,0,0,0" ToolTip="{Binding KindChipTip}">
+                        <TextBlock Text="{Binding KindChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                       </Border>
                     </WrapPanel>
                     <TextBlock x:Name="VersionsHeading" Text="{Binding Name}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
                   </DockPanel>
                   <TextBlock Text="{Binding Desc}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                  <TextBox Text="{Binding TextPreview, Mode=OneWay}" Visibility="{Binding PreviewVisibility}" IsReadOnly="True" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
+                           MaxHeight="140" VerticalScrollBarVisibility="Auto" Background="{StaticResource Brush.Surface2}" Foreground="{StaticResource Brush.Text.Secondary}" BorderThickness="0"
+                           Padding="10,8" Margin="0,12,0,0" AutomationProperties.Name="Text preview" />
                   <Grid Margin="0,16,0,0">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
@@ -156,6 +161,8 @@
                   <WrapPanel Margin="0,16,0,0" IsEnabled="{Binding IdleEnabled}">
                     <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,8"
                             ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
+                    <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,8,8"
+                            ToolTip="Put the text on the clipboard" AutomationProperties.Name="Copy" />
                     <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,8" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
                     <Button Content="Upload a new version" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding UpdateVisibility}" Margin="0,0,8,8"
                             ToolTip="Upload a new version of this file" AutomationProperties.Name="Replace" />
@@ -246,11 +253,22 @@
                 <TextBlock x:Name="FormSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
                 <TextBlock Text="Name" Style="{StaticResource Text.Caption}" />
                 <TextBox x:Name="FName" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" Tag="What people see in the list" KeyDown="Form_KeyDown" AutomationProperties.Name="Name" />
-                <TextBlock Text="File" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
-                <DockPanel Margin="0,4,0,0">
-                  <Button x:Name="FPick" DockPanel.Dock="Left" Content="Choose file..." Style="{StaticResource Button.M}" Click="FPick_Click" />
-                  <TextBlock x:Name="FFile" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0,0,0" Text="No file chosen" />
-                </DockPanel>
+                <StackPanel x:Name="FModePanel" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
+                  <RadioButton x:Name="FModeFile" Content="A file" GroupName="files-mode" IsChecked="True" Click="FMode_Click" Margin="0,0,16,0" AutomationProperties.Name="Share a file" />
+                  <RadioButton x:Name="FModeText" Content="Text to copy (WeakAura, Plater, macro...)" GroupName="files-mode" Click="FMode_Click" AutomationProperties.Name="Share text" />
+                </StackPanel>
+                <StackPanel x:Name="FFilePanel">
+                  <TextBlock Text="File" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <DockPanel Margin="0,4,0,0">
+                    <Button x:Name="FPick" DockPanel.Dock="Left" Content="Choose file..." Style="{StaticResource Button.M}" Click="FPick_Click" />
+                    <TextBlock x:Name="FFile" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0,0,0" Text="No file chosen" />
+                  </DockPanel>
+                </StackPanel>
+                <StackPanel x:Name="FTextPanel" Visibility="Collapsed">
+                  <TextBlock Text="Text" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <TextBox x:Name="FText" Style="{StaticResource Input}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" MaxHeight="220" VerticalScrollBarVisibility="Auto"
+                           FontFamily="Consolas" FontSize="12" Margin="0,4,0,0" Tag="Paste the import string here" AutomationProperties.Name="Text to share" />
+                </StackPanel>
                 <CheckBox x:Name="FAddon" Content="This is a WoW addon" Margin="0,12,0,0" Visibility="Collapsed" Click="FAddon_Click" AutomationProperties.Name="This is a WoW addon"
                           ToolTip="Members can install it in WoW Forever from the Files page, and keep it updated" />
                 <TextBlock x:Name="FAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="24,2,0,0" />

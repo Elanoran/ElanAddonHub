@@ -165,6 +165,29 @@ namespace ElansAddonHub.Lodge
             if ((sender as CheckBox)?.Tag is SlotVM slot) S.SetAutoUpdate(slot, (sender as CheckBox).IsChecked == true);
         }
 
+        async Task LoadPreviewAsync(SlotVM slot)
+        {
+            var (text, err) = await S.FetchTextAsync(slot);
+            if (err == null) slot.TextPreview = Preview(text);
+        }
+
+        // ---- Copy (text slots, 2.34)
+        public static Action<string> SetClipboard = t => Clipboard.SetText(t);          // test seam: the real clipboard
+        void Copy_Click(object sender, RoutedEventArgs e) { if ((sender as FrameworkElement)?.Tag is SlotVM slot) _ = CopyAsync(slot); }
+
+        public async Task<string> CopyAsync(SlotVM slot)
+        {
+            var (text, err) = await S.FetchTextAsync(slot);
+            if (err != null) { slot.Error = err; return err; }
+            try { SetClipboard(text); }
+            catch (Exception) { slot.Error = "Couldn't reach the clipboard - try again"; return slot.Error; }
+            S.NoteFiles(slot.Name + " is on the clipboard - paste it in the game", slot.Id);
+            slot.TextPreview = Preview(text);
+            return null;
+        }
+
+        static string Preview(string t) => t.Length > 600 ? t.Substring(0, 600) + " ..." : t;
+
         // ---- Versions
         void Versions_Click(object sender, RoutedEventArgs e)
         {
@@ -174,6 +197,7 @@ namespace ElansAddonHub.Lodge
         public void OpenVersions(SlotVM slot)
         {
             versionsSlot = slot;
+            if (slot != null && slot.IsText && slot.TextPreview.Length == 0) _ = LoadPreviewAsync(slot);
             VersionsError.Text = "";
             FillVersions();
             VersionsOverlay.Visibility = Visibility.Visible;
@@ -344,6 +368,9 @@ namespace ElansAddonHub.Lodge
             FName.Text = slot?.Name ?? ""; FName.IsEnabled = slot == null;
             FNote.Text = ""; FFile.Text = "No file chosen"; FError.Text = "";
             FAddon.Visibility = S.SupportsAddonFiles ? Visibility.Visible : Visibility.Collapsed;
+            FModePanel.Visibility = S.SupportsFilesText && slot == null ? Visibility.Visible : Visibility.Collapsed;
+            FModeText.IsChecked = slot?.IsText == true; FModeFile.IsChecked = slot?.IsText != true; FText.Text = "";
+            ApplyMode();
             FAddon.IsChecked = slot?.IsAddon == true; FAddon.IsEnabled = true; addonTouched = false;
             FAddonWhy.Text = "";
             FGo.Content = "Upload"; FGo.IsEnabled = true; FPick.IsEnabled = true;
@@ -392,6 +419,16 @@ namespace ElansAddonHub.Lodge
                 : FAddon.IsChecked == true ? "Not an addon zip: " + chk.Problem + "." : "";
         }
 
+        bool TextMode => S.SupportsFilesText && FModeText.IsChecked == true;
+        void FMode_Click(object sender, RoutedEventArgs e) => ApplyMode();
+        void ApplyMode()
+        {
+            FFilePanel.Visibility = TextMode ? Visibility.Collapsed : Visibility.Visible;
+            FTextPanel.Visibility = TextMode ? Visibility.Visible : Visibility.Collapsed;
+            if (TextMode) { FAddon.Visibility = Visibility.Collapsed; FAddonWhy.Text = ""; }
+            else FAddon.Visibility = S.SupportsAddonFiles ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         void Form_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { FGo_Click(null, null); e.Handled = true; } }
         void FCancel_Click(object sender, RoutedEventArgs e) => CloseForm();
 
@@ -406,6 +443,21 @@ namespace ElansAddonHub.Lodge
         public async Task<string> GoAsync()
         {
             if (uploading) return null;
+            if (TextMode)
+            {
+                if (formSlot == null && FName.Text.Trim().Length == 0) { FError.Text = "Give it a name"; return FError.Text; }
+                if (FText.Text.Trim().Length == 0) { FError.Text = "Paste the text to share"; return FError.Text; }
+                uploading = true; FGo.IsEnabled = false; FError.Text = "";
+                try
+                {
+                    var terr = await S.UploadTextAsync(formSlot?.Id, FName.Text, FText.Text, FNote.Text);
+                    if (terr != null) { FError.Text = terr; return terr; }
+                    uploading = false;
+                    FormOverlay.Visibility = Visibility.Collapsed;
+                    return null;
+                }
+                finally { uploading = false; FGo.IsEnabled = true; }
+            }
             var refusal = formPath == null ? "Choose the file to share" : LodgeFiles.CheckUpload(formPath, S.FilesMaxMb);
             if (refusal != null) { FError.Text = refusal; return refusal; }
             uploading = true; FGo.IsEnabled = false; FPick.IsEnabled = false; FError.Text = "";
@@ -442,6 +494,8 @@ namespace ElansAddonHub.Lodge
         public bool FormNameEditableForTest => FName.IsEnabled;
         public string FormHeadingForTest => FormHeading.Text;
         public void PickForTest(string path) => SetFormFile(path);
+        public void FormTextForTest(string text) { FModeText.IsChecked = true; ApplyMode(); FText.Text = text; }
+        public bool FormModesShownForTest => FModePanel.Visibility == Visibility.Visible;
         public bool EditOpenForTest => EditOverlay.Visibility == Visibility.Visible;
         public void CloseEditForTest() => CloseEdit();
         public bool EditRanksShownForTest => ERanksPanel.Visibility == Visibility.Visible;

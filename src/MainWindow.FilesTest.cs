@@ -187,7 +187,7 @@ namespace ElansAddonHub
                     slot = Slots.FirstOrDefault(x => x.Id == parts[1]);
                     if (slot == null) { Refuse(c, 404, "missing", "That slot doesn't exist any more"); return; }
                 }
-                if (kind == "addon") slot.Kind = "addon"; else if (kind == "file") slot.Kind = null;
+                if (kind == "addon") slot.Kind = "addon"; else if (kind == "text") slot.Kind = "text"; else if (kind == "file") slot.Kind = null;
                 slot.Versions.Add(new Ver { V = slot.NextV++, FileName = name, Sha = sha, By = "Elan", Note = note, Bytes = bytes, At = 1_790_000_000_000L + slot.NextV * 60_000L });
                 slot.Versions = slot.Versions.OrderBy(v => v.V).ToList();
                 while (slot.Versions.Count > 3) slot.Versions.RemoveAt(0);
@@ -318,10 +318,10 @@ namespace ElansAddonHub
             finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
         }
 
-        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false)
+        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false)
 
         {
-            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "");
+            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
             bool manage = role == "owner" || role == "officer";
             return w.Substring(0, w.Length - 1) + ",\"canManageFiles\":" + (manage ? "true" : "false") + ",\"filesMaxMb\":" + maxMb + "}";
@@ -800,6 +800,55 @@ namespace ElansAddonHub
                     check("files2 on an older Lodge: no Edit dialog", !Session.SupportsFiles2 && !fv2.EditOpenForTest);
                     Session.Disconnect();
                     fake.Slots.Clear();
+                }
+
+                // ---- 2.34 "filestext": import strings - shared as text, a Copy button, a preview, new versions
+                {
+                    fake.Slots.Clear();
+                    Session.Disconnect(); sent.Clear();
+                    fake.Role = "officer";
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.34.0", 1, addons: true, files2: true, text: true));
+                    Session.FilesClientForTest(new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan"));
+                    Session.FeedForTest(fake.DataJson());
+                    LodgePage.ShowFilesForTest();
+                    var fv3 = LodgePage.FilesForTest;
+                    fv3.OpenForm(null);
+                    check("text: the share form offers 'A file' or 'Text to copy'", Session.SupportsFilesText && fv3.FormModesShownForTest);
+                    var wa1 = "!WA:2!S3xtrjoe raid pack \u2713";
+                    fv3.FormNameForTest = "Raid WeakAura";
+                    fv3.FormTextForTest(wa1);
+                    var terr = await fv3.GoAsync();
+                    check("text: pasted text is shared as an import string (kind text, the text itself) (" + (terr ?? "ok") + ")",
+                        terr == null && fake.Slots.Count == 1 && fake.Slots[0].Kind == "text" && System.Text.Encoding.UTF8.GetString(fake.Slots[0].Versions[0].Bytes) == wa1);
+                    Session.FeedForTest(fake.DataJson());
+                    var ts = Session.Slots.First();
+                    check("text: the card says Import and offers Copy (no Save on the card)", ts.IsText && ts.KindChip == "Import" && ts.CopyVisibility == System.Windows.Visibility.Visible && ts.SaveCardVisibility == System.Windows.Visibility.Collapsed);
+                    string clip = null;
+                    var hadClip = FilesView.SetClipboard;
+                    FilesView.SetClipboard = t => clip = t;
+                    try
+                    {
+                        terr = await fv3.CopyAsync(ts);
+                        check("text: Copy puts the newest text on the clipboard and shows a preview (" + (terr ?? "ok") + ")", terr == null && clip == wa1 && ts.TextPreview == wa1 && Session.FilesNoticeText.Contains("clipboard"));
+                        fv3.OpenForm(ts);
+                        check("text: a new version of a text file is text again (the form opens in text mode, no mode choice)", !fv3.FormModesShownForTest);
+                        fv3.FormTextForTest("!WA:2!newer");
+                        terr = await fv3.GoAsync();
+                        Session.FeedForTest(fake.DataJson());
+                        terr = terr ?? await fv3.CopyAsync(ts);
+                        check("text: Copy after a new version gives the new text (" + (terr ?? "ok") + ")", terr == null && clip == "!WA:2!newer" && fake.Slots[0].Versions.Count == 2);
+                    }
+                    finally { FilesView.SetClipboard = hadClip; }
+                    LodgePage.HideFilesForTest();
+                    Session.Disconnect();
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.33.0", 1, addons: true, files2: true, text: false));
+                    Session.FeedForTest(fake.DataJson());
+                    fv3.OpenForm(null);
+                    check("text on an older Lodge: no text mode, a text slot is a plain file", !fv3.FormModesShownForTest && !Session.Slots.First().IsText);
+                    fv3.CloseFormForTest();
+                    Session.Disconnect();
+                    fake.Slots.Clear();
+                    try { if (Directory.Exists(LodgeSession.TextDir)) Directory.Delete(LodgeSession.TextDir, true); } catch { }
                 }
 
                 // ---- the badge rules on their own

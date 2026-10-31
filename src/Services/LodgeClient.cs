@@ -351,7 +351,7 @@ namespace ElansAddonHub.Services
                 req.Headers.Add("X-Sha256", sha256);
                 if (slotId == null) req.Headers.Add("X-Slot-Name", Uri.EscapeDataString(slotName ?? ""));
                 req.Headers.Add("X-Note", Uri.EscapeDataString(note ?? ""));
-                if (kind == "addon" || kind == "file") req.Headers.Add("X-Slot-Kind", kind);
+                if (kind == "addon" || kind == "file" || kind == "text") req.Headers.Add("X-Slot-Kind", kind);
                 req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
                 req.Content.Headers.ContentLength = fs.Length;
                 using (var resp = await Net.Http.SendAsync(req))

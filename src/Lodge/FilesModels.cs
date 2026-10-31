@@ -51,7 +51,7 @@ namespace ElansAddonHub.Lodge
 
         public SlotVersionInfo Newest => Versions.OrderBy(v => v.V).LastOrDefault();
 
-        public void Update(FileSlot d, bool canManage, SavedRecord saved, InstalledRecord installed = null, bool addonsOn = false)
+        public void Update(FileSlot d, bool canManage, SavedRecord saved, InstalledRecord installed = null, bool addonsOn = false, bool textOn = false)
         {
             Id = d.Id; Name = d.Name ?? ""; CreatedBy = d.CreatedBy ?? "";
             Versions = d.Versions.Select(SlotVersionInfo.From).Where(v => v != null).OrderBy(v => v.V).ToList();
@@ -60,6 +60,7 @@ namespace ElansAddonHub.Lodge
             Desc = d.Desc ?? ""; See = d.See; EditRank = d.Edit;
             if (CoverV != d.Cover) { CoverV = d.Cover; if (d.Cover <= 0) CoverImage = null; }
             IsAddon = addonsOn && d.IsAddon;
+            IsText = textOn && d.IsText;
             Badge = LodgeFiles.Badge(Newest, saved);
             SetInstalled(IsAddon ? installed : null, Newest);
             RaiseAll();
@@ -76,7 +77,15 @@ namespace ElansAddonHub.Lodge
         public double CoverHeight => cover != null ? 132 : 56;            // a slim strip with the kind's icon when there is no picture
         public Visibility CoverVisibility => cover != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility PlaceholderVisibility => cover == null ? Visibility.Visible : Visibility.Collapsed;
-        public string KindGlyph => IsAddon ? "\uE74C" : "\uE8A5";        // a puzzle piece for addons, a page for files
+        public bool IsText { get; private set; }
+        public string KindGlyph => IsAddon ? "\uE74C" : IsText ? "\uE8C8" : "\uE8A5";        // a puzzle piece for addons, copy for import text, a page for files
+        public string KindChip => IsAddon ? "Addon" : IsText ? "Import" : "";
+        public string KindChipTip => IsAddon ? "A WoW addon: it can be installed in WoW Forever from here" : "An import string (a WeakAura, a profile, a macro): Copy puts it on the clipboard";
+        public Visibility KindChipVisibility => KindChip.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility CopyVisibility => IsText ? Visibility.Visible : Visibility.Collapsed;
+        string preview = "";
+        public string TextPreview { get => preview; set { preview = value ?? ""; Raise(nameof(TextPreview)); Raise(nameof(PreviewVisibility)); } }
+        public Visibility PreviewVisibility => IsText && preview.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public string DescShort => Desc.Split('\n')[0];
         public Visibility DescVisibility => Desc.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public static string SeeText(string r) => r == "member" ? "Members and up" : r == "veteran" ? "Veterans and up" : r == "officer" ? "Officers only" : "Everyone, guests too";
@@ -86,7 +95,7 @@ namespace ElansAddonHub.Lodge
         public string SeeChip => See == "member" ? "Members" : See == "veteran" ? "Veterans" : See == "officer" ? "Officers" : "";
         public Visibility SeeChipVisibility => SeeChip.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility UpdateVisibility => CanUpdate ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility SaveCardVisibility => IsAddon ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility SaveCardVisibility => IsAddon || IsText ? Visibility.Collapsed : Visibility.Visible;
 
         // ---- addons (Lodge 2.32): installed in WoW from this slot, and whether it keeps itself updated
         public bool IsAddon { get; private set; }
@@ -113,7 +122,8 @@ namespace ElansAddonHub.Lodge
             foreach (var n in new[] { nameof(Name), nameof(VersionLine), nameof(MetaLine), nameof(Note), nameof(NoteVisibility), nameof(ManageVisibility), nameof(HasOlderVisibility),
                 nameof(VersionsLabel), nameof(ProgressVisibility), nameof(Progress), nameof(BusyText), nameof(IdleEnabled),
                 nameof(CanUpdate), nameof(Desc), nameof(DescShort), nameof(DescVisibility), nameof(SeeLine), nameof(EditLine), nameof(SeeChip), nameof(SeeChipVisibility),
-                nameof(UpdateVisibility), nameof(SaveCardVisibility), nameof(KindGlyph), nameof(CoverVisibility), nameof(PlaceholderVisibility) }) Raise(n);
+                nameof(UpdateVisibility), nameof(SaveCardVisibility), nameof(KindGlyph), nameof(CoverVisibility), nameof(PlaceholderVisibility),
+                nameof(IsText), nameof(KindChip), nameof(KindChipTip), nameof(KindChipVisibility), nameof(CopyVisibility), nameof(PreviewVisibility) }) Raise(n);
         }
 
         public string Badge { get => badge; set { if (Set(ref badge, value ?? "")) { Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeTip)); } } }
