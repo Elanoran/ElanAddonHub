@@ -31,20 +31,24 @@ namespace ElansAddonHub.Lodge
         LodgeClient filesClientOverride;                   // the self-test points this at a fake server
 
         SavedFiles Saved() => savedFiles ?? (savedFiles = new SavedFiles(Settings?.LodgeUrl));
+        InstalledAddons installedAddons;
+        InstalledAddons Installed() => installedAddons ?? (installedAddons = new InstalledAddons(Settings?.LodgeUrl));
+        public bool SupportsAddonFiles { get; private set; }     // 2.32 "filesaddons": slots can be marked as WoW addons and installed
 
         void ReadFilesFeatures(WelcomeMsg w, List<string> features)
         {
             var v = ParseVersion(ServerVersion);
             SupportsFiles = features.Contains("files") && (v == null || v >= LodgeFiles.Server);
             CanManageFiles = SupportsFiles && w.CanManageFiles;
+            SupportsAddonFiles = SupportsFiles && features.Contains("filesaddons");
             if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
-            savedFiles = null;
+            savedFiles = null; installedAddons = null;
             if (!SupportsFiles) { Slots.Clear(); FilesLoaded = false; }
         }
 
         void ResetFiles()
         {
-            SupportsFiles = false; CanManageFiles = false; FilesLoaded = false; savedFiles = null;
+            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; FilesLoaded = false; savedFiles = null; installedAddons = null;
             Slots.Clear(); FilesNoticeText = ""; FilesNoticeFor = null; FilesUsedBytes = 0;
             filesLastRequest = DateTime.MinValue;
         }
@@ -82,10 +86,14 @@ namespace ElansAddonHub.Lodge
                 var d = incoming[i];
                 var have = Slots.FirstOrDefault(s => s.Id == d.Id);
                 if (have == null) { have = new SlotVM(); Slots.Insert(Math.Min(i, Slots.Count), have); }
-                have.Update(d, CanManageFiles, Saved().Get(d.Id));
+                have.Update(d, CanManageFiles, Saved().Get(d.Id), SupportsAddonFiles ? Installed().Get(d.Id) : null, SupportsAddonFiles);
             }
             FilesLoaded = true;
             FilesChanged?.Invoke();
+            // installed addons that keep themselves updated: a newer version goes in by itself
+            if (SupportsAddonFiles)
+                foreach (var s in Slots.Where(s => s.IsAddon && s.AutoUpdate && s.Newest != null && s.InstalledV > 0 && s.Newest.V > s.InstalledV && !s.Busy).ToList())
+                    _ = AutoUpdateAsync(s);
         }
 
         void OnFilesChanged(FilesChangedMsg m)
@@ -132,8 +140,9 @@ namespace ElansAddonHub.Lodge
 
         // ---- actions. Upload / save return null on success, otherwise the text to show.
 
-        // slotId null = a new slot called `name`; otherwise a new version of that slot
-        public async Task<string> UploadSlotAsync(string slotId, string name, string path, string note, Action<double> progress = null)
+        // slotId null = a new slot called `name`; otherwise a new version of that slot. addon (server 2.32): true marks it as a WoW addon (the zip must be one,
+        // AddonZip), false unmarks it, null says nothing (an older server)
+        public async Task<string> UploadSlotAsync(string slotId, string name, string path, string note, Action<double> progress = null, bool? addon = null)
         {
             if (!SupportsFiles) return "This lodge doesn't share files";
             if (!CanManageFiles) return FilesWhy("forbidden");
@@ -146,6 +155,12 @@ namespace ElansAddonHub.Lodge
             if (note.Length > LodgeFiles.MaxNoteChars) return "The note can be " + LodgeFiles.MaxNoteChars + " characters at most";
             var refusal = LodgeFiles.CheckUpload(path, FilesMaxMb);
             if (refusal != null) return refusal;
+            if (addon == true)
+            {
+                var chk = await Task.Run(() => AddonZip.Check(path));
+                if (!chk.Ok) return "That isn't an addon zip: " + chk.Problem;
+            }
+            var kind = SupportsAddonFiles && addon != null ? (addon.Value ? "addon" : "file") : null;
             var slot = slotId == null ? null : Slots.FirstOrDefault(s => s.Id == slotId);
             if (slotId != null && slot == null) return FilesWhy("missing");
             try
@@ -154,7 +169,7 @@ namespace ElansAddonHub.Lodge
                 using (Activity.Begin("Uploading " + name + " to your Lodge", Activity.Kind.Save))
                 {
                     var sha = await Task.Run(() => LodgeFiles.Sha256(path));
-                    await http.UploadSlot(slotId, name, path, note, sha, p => { if (slot != null) slot.Progress = p; progress?.Invoke(p); });
+                    await http.UploadSlot(slotId, name, path, note, sha, p => { if (slot != null) slot.Progress = p; progress?.Invoke(p); }, kind);
                 }
                 RequestFiles();
                 return null;
@@ -217,6 +232,68 @@ namespace ElansAddonHub.Lodge
             _ = Send(LodgeJson.Build(new FilesRollbackMsg { Slot = slot.Id, V = version }.Write));
             return null;
         }
+
+        // ---- addons (server 2.32): Install in WoW / Update in WoW, and "Keep it updated"
+        // the newest version is downloaded (checked against its SHA-256 like Save), checked as an addon zip on this PC, shown to confirm (null =
+        // no question: an automatic update), installed (LodgeAddons.Install) and remembered. Returns null on success, "" when cancelled, else why.
+        public async Task<string> InstallSlotAsync(SlotVM slot, Func<AddonZip.Result, bool> confirm)
+        {
+            if (!SupportsAddonFiles || slot == null || !slot.IsAddon || slot.Newest == null) return "That isn't an addon the Outpost can install";
+            var dir = LodgeAddons.AddOnsDir();
+            if (dir == null) return "WoW Forever wasn't found on this PC - check the WoW folder in Settings";
+            if (!installing.Add(slot.Id)) return "";
+            var ver = slot.Newest;
+            var tmp = Path.Combine(Util.DataDir, "lodge-addon-" + slot.Id + ".zip");
+            try
+            {
+                var err = await SaveVersionAsync(slot, ver, tmp);
+                if (err != null) return err;
+                var chk = await Task.Run(() => AddonZip.Check(tmp));
+                if (!chk.Ok) return "Not installed: " + chk.Problem;
+                if (confirm != null && !confirm(chk)) return "";
+                var before = Installed().Get(slot.Id);
+                slot.Error = ""; slot.BusyText = "Installing in WoW..."; slot.Progress = 0.5;
+                var res = await Task.Run(() => LodgeAddons.Install(dir, slot.Name, tmp, before?.Folders));
+                if (!res.Ok) return res.Error;
+                var rec = new InstalledRecord { V = ver.V, Sha = ver.Sha256, Auto = before?.Auto ?? false, Folders = res.Folders };
+                Installed().Set(slot.Id, rec);
+                slot.SetInstalled(rec, slot.Newest);
+                FilesChanged?.Invoke();
+                return null;
+            }
+            finally
+            {
+                installing.Remove(slot.Id);
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                slot.SetInstalled(Installed().Get(slot.Id), slot.Newest);      // the download marked it saved: what is in WoW decides the badge
+                slot.SetIdle();
+            }
+        }
+        readonly HashSet<string> installing = new HashSet<string>(StringComparer.Ordinal);
+
+        // a newer version of an addon set to keep itself updated: installed without asking when it is the same addon (the same folders);
+        // a version that changes the folders waits for a click (the slot shows Update in WoW)
+        async Task AutoUpdateAsync(SlotVM slot)
+        {
+            var rec = Installed().Get(slot.Id);
+            if (rec == null || !rec.Auto) return;
+            var err = await InstallSlotAsync(slot, chk => chk.Folders.Count == rec.Folders.Count && chk.Folders.All(f => rec.Folders.Contains(f, StringComparer.OrdinalIgnoreCase)));
+            if (err == null) { var t = slot.Name + " was updated to v" + slot.InstalledV + " in WoW - type /reload in the game"; FilesNoticeText = t; FilesNoticeFor = slot.Id; FilesNotice?.Invoke(t); }
+            else if (err == "") slot.Error = "This version changes which addon folders it has - press Update in WoW to check and install it";
+            else slot.Error = err;
+        }
+
+        public void SetAutoUpdate(SlotVM slot, bool on)
+        {
+            var rec = slot == null ? null : Installed().Get(slot.Id);
+            if (rec == null) return;
+            rec.Auto = on; Installed().Set(slot.Id, rec);
+            slot.SetInstalled(rec, slot.Newest);
+            if (on && slot.Newest != null && slot.Newest.V > rec.V && !slot.Busy) _ = AutoUpdateAsync(slot);
+        }
+
+        public InstalledRecord InstalledOfForTest(string slotId) => Installed().Get(slotId);
+        public void NoteFiles(string text, string slotId) { FilesNoticeText = text ?? ""; FilesNoticeFor = slotId; FilesChanged?.Invoke(); }
 
         public void ClearFilesNotice() { FilesNoticeText = ""; FilesNoticeFor = null; FilesChanged?.Invoke(); }
         public SavedRecord SavedOfForTest(string slotId) => Saved().Get(slotId);

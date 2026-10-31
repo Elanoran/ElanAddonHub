@@ -341,7 +341,8 @@ namespace ElansAddonHub.Services
 
         // ---- shared files (server 2.14): PUT /slots/new or /slots/{id} (headers X-Slot-Name, X-File-Name, X-Note URL-encoded, X-Sha256, Content-Length),
         // GET /slots/{id}/{v}. The answer to an upload is the slot as JSON; a refusal carries {error, reason}, whose text is already friendly.
-        public async Task<JsonObject> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null)
+        // kind (server 2.32 "filesaddons"): "addon" marks a WoW addon zip, "file" unmarks it, null = say nothing (an older server)
+        public async Task<JsonObject> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null, string kind = null)
         {
             using (var fs = File.OpenRead(file))
             using (var req = Request(HttpMethod.Put, "/slots/" + (slotId ?? "new")))
@@ -350,6 +351,7 @@ namespace ElansAddonHub.Services
                 req.Headers.Add("X-Sha256", sha256);
                 if (slotId == null) req.Headers.Add("X-Slot-Name", Uri.EscapeDataString(slotName ?? ""));
                 req.Headers.Add("X-Note", Uri.EscapeDataString(note ?? ""));
+                if (kind == "addon" || kind == "file") req.Headers.Add("X-Slot-Kind", kind);
                 req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
                 req.Content.Headers.ContentLength = fs.Length;
                 using (var resp = await Net.Http.SendAsync(req))

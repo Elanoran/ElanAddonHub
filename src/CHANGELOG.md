@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.4.0
+- **Install addons straight from your Lodge.** When an officer shares an addon in Lodge > Files, they tick "This is a WoW addon" (ticked by itself for a zip of addon folders). Everyone then gets **Install in WoW**: the Outpost downloads it, checks the zip on your PC (only addon folders with their own .toc, no programs or scripts, no unsafe paths), asks you, backs up what you have, and puts it in WoW Forever's AddOns folder - everything is put back if anything goes wrong. When a new version is shared the card says **Update in WoW**, and **Keep it updated** installs new versions by itself (a version that changes the addon's folders still asks). Needs Lodge server 2.32.
+
 ## 3.3.3
 - **Talent builds survive a patch.** When a patch changes a class's talent tree, the calculator repairs a recommended build that no longer fits instead of leaving it broken: a removed talent's points and ranks above a talent's new maximum are freed, a talent whose row would not open in time is taken a little later and the next fitting talent of the build comes first, and any points left go to talents the build already takes. The build's detail says what was adjusted, and Settings > About > Game patches lists the builds a patch changed under its talent changes.
 

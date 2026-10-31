@@ -248,7 +248,7 @@ async Task<IResult> PutSlot(HttpContext ctx, string slotId)
     try
     {
         var view = await shared.Upload(by, who.Rank, rateKey, slotId, Unesc(ctx, "X-Slot-Name"), Unesc(ctx, "X-File-Name"), Unesc(ctx, "X-Note"),
-            ctx.Request.Headers["X-Sha256"].ToString(), ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted);
+            ctx.Request.Headers["X-Sha256"].ToString(), ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted, Unesc(ctx, "X-Slot-Kind"));
         return Results.Json(view);
     }
     catch (FilesException e) { return FilesFail(e); }

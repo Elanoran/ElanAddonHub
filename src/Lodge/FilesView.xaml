@@ -13,23 +13,32 @@
                     Margin="12,0,0,0" ToolTip="{Binding BadgeTip}">
               <TextBlock Text="{Binding Badge}" Foreground="{StaticResource Brush.Info}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
             </Border>
+            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Visibility="{Binding AddonChipVisibility}" VerticalAlignment="Center" Margin="12,0,0,0"
+                    ToolTip="A WoW addon: it can be installed in WoW Forever from here">
+              <TextBlock Text="Addon" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+            </Border>
             <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
           </DockPanel>
           <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
           <TextBlock Text="{Binding MetaLine}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0" />
           <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Accent}" TextWrapping="Wrap" Margin="0,8,0,0" />
           <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,12,0,0">
             <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
             <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
           </StackPanel>
           <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
           <WrapPanel Margin="0,12,0,0" IsEnabled="{Binding IdleEnabled}">
-            <Button Content="Save..." Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,0" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+            <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,0"
+                    ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
+            <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,0" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
             <Button Content="{Binding VersionsLabel}" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" Margin="0,0,8,0" ToolTip="Earlier versions" AutomationProperties.Name="Versions" />
             <Button Content="Replace" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,0"
                     ToolTip="Upload a new version of this file" AutomationProperties.Name="Replace" />
             <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding ManageVisibility}"
                     ToolTip="Remove this file and all its versions" AutomationProperties.Name="Delete" />
+            <CheckBox Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="8,0,0,0"
+                      ToolTip="Install new versions in WoW by themselves when someone uploads one (you'll be asked if a version changes the addon's folders)" AutomationProperties.Name="Keep it updated" />
           </WrapPanel>
         </StackPanel>
       </Border>
@@ -121,6 +130,9 @@
                   <Button x:Name="FPick" DockPanel.Dock="Left" Content="Choose file..." Style="{StaticResource Button.M}" Click="FPick_Click" />
                   <TextBlock x:Name="FFile" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0,0,0" Text="No file chosen" />
                 </DockPanel>
+                <CheckBox x:Name="FAddon" Content="This is a WoW addon" Margin="0,12,0,0" Visibility="Collapsed" Click="FAddon_Click" AutomationProperties.Name="This is a WoW addon"
+                          ToolTip="Members can install it in WoW Forever from the Files page, and keep it updated" />
+                <TextBlock x:Name="FAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="24,2,0,0" />
                 <TextBlock Text="Note" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="FNote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed (optional)" KeyDown="Form_KeyDown" AutomationProperties.Name="Note" />
                 <TextBlock x:Name="FError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />

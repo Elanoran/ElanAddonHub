@@ -33,6 +33,7 @@ public sealed class Slot
     public string Id { get; set; }
     public string Name { get; set; }
     public string CreatedBy { get; set; }
+    public string Kind { get; set; }     // 2.32: "addon" = a zip of WoW addon folders (Elans.Shared.AddonZip), null = a plain file
     public int NextV { get; set; } = 1;  // version numbers are never reused (not even after a roll back)
     public List<SlotVersion> Versions { get; set; } = new();
 }
@@ -207,7 +208,7 @@ public sealed class FilesModule : IModule
 
     static FileSlot SlotOf(Slot s) => new()
     {
-        Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
+        Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Kind = s.Kind == FileSlot.AddonKind ? FileSlot.AddonKind : null, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
     };
 
     static JsonObject SlotJson(Slot s) => LodgeJson.Build(SlotOf(s).Write);
@@ -253,9 +254,13 @@ public sealed class FilesModule : IModule
     }
 
     // slotId null = a new slot called slotName. Returns the slot as the clients see it.
+    // kind (header X-Slot-Kind, 2.32): "addon" marks the slot as a WoW addon - the file must then be an addon zip (AddonZip.Check); "file" unmarks it;
+    // absent (an older Outpost) keeps what the slot was
     public async Task<JsonObject> Upload(string by, string role, string rateKey, string slotId, string slotName, string fileName, string note,
-        string sha256, long? length, Stream body, CancellationToken ct)
+        string sha256, long? length, Stream body, CancellationToken ct, string kind = null)
     {
+        kind = (kind ?? "").Trim().ToLowerInvariant();
+        if (kind.Length > 0 && kind != FileSlot.AddonKind && kind != "file") throw new FilesException(400, "bad-kind", "Unknown kind of file");
         var cfg = hub.Cfg;
         if (!Enabled) throw new FilesException(403, "disabled", "File sharing is switched off on this lodge");
         if (!Roles.Can(role, Perm.FilesManage)) throw new FilesException(403, "forbidden", "Only officers and the lodge owner can upload files");
@@ -334,6 +339,14 @@ public sealed class FilesModule : IModule
                     why = FileRules.CheckZip(zs);
                 if (why != null) throw new FilesException(415, "blocked-zip", why);
             }
+            if (kind == FileSlot.AddonKind)
+            {
+                if (!FileRules.IsZip(fileName)) throw new FilesException(415, "not-addon", "An addon has to be a .zip of its addon folders");
+                Elans.Shared.AddonZip.Result ar;
+                await using (var zs = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    ar = Elans.Shared.AddonZip.Check(zs);
+                if (!ar.Ok) throw new FilesException(415, "not-addon", ar.Problem);
+            }
 
             // commit: content to its server-generated name, then the index (tmp + rename), then old versions go
             var pruned = new List<SlotVersion>();
@@ -352,6 +365,8 @@ public sealed class FilesModule : IModule
                 {
                     s = Find(slotId) ?? throw new FilesException(404, "missing", "That slot doesn't exist any more");
                 }
+                var kindBefore = s.Kind;
+                if (kind == FileSlot.AddonKind) s.Kind = FileSlot.AddonKind; else if (kind == "file") s.Kind = null;
                 if (slots.Sum(x => x.Versions.Sum(v => v.Size)) + size - (isNew ? 0 : FreedByPrune(s.Id)) > cfg.FilesTotalBytes)
                     throw new FilesException(507, "full", $"The lodge's file space ({cfg.FilesTotalMb} MB) is full - delete something first");
                 File.Move(part, Path.Combine(dir, blob + ".bin"));
@@ -370,7 +385,7 @@ public sealed class FilesModule : IModule
                 if (!SaveIndexLocked())
                 {
                     // undo in memory and on disk: nothing changed from the outside
-                    s.NextV--; s.Versions.Clear(); s.Versions.AddRange(before);
+                    s.NextV--; s.Versions.Clear(); s.Versions.AddRange(before); s.Kind = kindBefore;
                     if (isNew) slots.Remove(s);
                     TryDelete(Path.Combine(dir, blob + ".bin"));
                     throw new FilesException(500, "save", "The server couldn't store the file");

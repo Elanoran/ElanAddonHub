@@ -106,6 +106,43 @@ namespace ElansAddonHub.Lodge
             return err;
         }
 
+        // ---- Install in WoW (addons, Lodge 2.32)
+        public Func<Elans.Shared.AddonZip.Result, SlotVM, bool> ConfirmInstall;     // test seam: the confirm dialog (modal)
+
+        void Install_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is SlotVM slot) _ = InstallAsync(slot);
+        }
+
+        public async Task<string> InstallAsync(SlotVM slot)
+        {
+            var err = await S.InstallSlotAsync(slot, chk => ConfirmInstall != null ? ConfirmInstall(chk, slot) : AskInstall(chk, slot));
+            if (!string.IsNullOrEmpty(err)) slot.Error = err;
+            else if (err == null) S.NoteFiles(slot.Name + " v" + slot.InstalledV + " is installed in WoW - type /reload in the game (or start it)", slot.Id);
+            Refresh();
+            return err;
+        }
+
+        bool AskInstall(Elans.Shared.AddonZip.Result chk, SlotVM slot)
+        {
+            var dir = LodgeAddons.AddOnsDir() ?? "";
+            var lines = chk.Folders.Select(f =>
+            {
+                var have = System.IO.Directory.Exists(System.IO.Path.Combine(dir, f));
+                var v = chk.Versions.TryGetValue(f, out var x) && x.Length > 0 ? " " + x : "";
+                return "  " + f + v + (have ? "  (replaces the one installed - it is backed up first)" : "  (new)");
+            });
+            var by = slot.Newest == null ? "" : DisplayNames.Shown(slot.Newest.UploadedBy);
+            return Dialog.Confirm(Window.GetWindow(this), (slot.InstalledV == 0 ? "Install " : "Update ") + slot.Name + " in WoW?",
+                "Shared by " + by + ". These addon folders go into WoW Forever's AddOns folder:\n" + string.Join("\n", lines)
+                + "\n\nAddons run inside the game: only install addons from people you trust. Type /reload in WoW afterwards.", slot.InstalledV == 0 ? "Install" : "Update");
+        }
+
+        void Auto_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as CheckBox)?.Tag is SlotVM slot) S.SetAutoUpdate(slot, (sender as CheckBox).IsChecked == true);
+        }
+
         // ---- Versions
         void Versions_Click(object sender, RoutedEventArgs e)
         {
@@ -178,6 +215,9 @@ namespace ElansAddonHub.Lodge
                                         : "Replaces what everyone gets; the older version stays available under Versions.";
             FName.Text = slot?.Name ?? ""; FName.IsEnabled = slot == null;
             FNote.Text = ""; FFile.Text = "No file chosen"; FError.Text = "";
+            FAddon.Visibility = S.SupportsAddonFiles ? Visibility.Visible : Visibility.Collapsed;
+            FAddon.IsChecked = slot?.IsAddon == true; FAddon.IsEnabled = true; addonTouched = false;
+            FAddonWhy.Text = "";
             FGo.Content = "Upload"; FGo.IsEnabled = true; FPick.IsEnabled = true;
             FormOverlay.Visibility = Visibility.Visible;
             if (IsLoaded && IsVisible) Motion.PageIn(FormOverlay);
@@ -207,6 +247,21 @@ namespace ElansAddonHub.Lodge
                 FName.Text = stem.Length > LodgeFiles.MaxNameChars ? stem.Substring(0, LodgeFiles.MaxNameChars) : stem;
             }
             FError.Text = LodgeFiles.CheckUpload(path, S.FilesMaxMb) ?? "";
+            CheckAddonChoice();
+        }
+
+        // the addon checkbox follows the file: an addon zip ticks it (unless the uploader decided), anything else can't be marked
+        bool addonTouched;
+        void FAddon_Click(object sender, RoutedEventArgs e) { addonTouched = true; CheckAddonChoice(); }
+        void CheckAddonChoice()
+        {
+            if (!S.SupportsAddonFiles || formPath == null) { FAddonWhy.Text = ""; return; }
+            var chk = LodgeFiles.IsZipName(formPath) ? Elans.Shared.AddonZip.Check(formPath) : null;
+            if (chk == null) { FAddon.IsChecked = false; FAddon.IsEnabled = false; FAddonWhy.Text = "Only a .zip of addon folders can be marked as an addon."; return; }
+            FAddon.IsEnabled = true;
+            if (!addonTouched) FAddon.IsChecked = chk.Ok || formSlot?.IsAddon == true;
+            FAddonWhy.Text = chk.Ok ? "Addon folders: " + string.Join(", ", chk.Folders.Select(f => f + (chk.Versions.TryGetValue(f, out var v) && v.Length > 0 ? " " + v : ""))) + "."
+                : FAddon.IsChecked == true ? "Not an addon zip: " + chk.Problem + "." : "";
         }
 
         void Form_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { FGo_Click(null, null); e.Handled = true; } }
@@ -228,7 +283,8 @@ namespace ElansAddonHub.Lodge
             uploading = true; FGo.IsEnabled = false; FPick.IsEnabled = false; FError.Text = "";
             try
             {
-                var err = await S.UploadSlotAsync(formSlot?.Id, FName.Text, formPath, FNote.Text, p => Dispatcher.BeginInvoke(new Action(() => FGo.Content = "Uploading " + (int)(p * 100) + "%")));
+                bool? addon = S.SupportsAddonFiles ? FAddon.IsChecked == true : (bool?)null;
+                var err = await S.UploadSlotAsync(formSlot?.Id, FName.Text, formPath, FNote.Text, p => Dispatcher.BeginInvoke(new Action(() => FGo.Content = "Uploading " + (int)(p * 100) + "%")), addon);
                 if (err != null) { FError.Text = err; return err; }
                 uploading = false;
                 FormOverlay.Visibility = Visibility.Collapsed;
@@ -256,6 +312,8 @@ namespace ElansAddonHub.Lodge
         public bool FormNameEditableForTest => FName.IsEnabled;
         public string FormHeadingForTest => FormHeading.Text;
         public void PickForTest(string path) => SetFormFile(path);
+        public bool? FormAddonForTest { get => FAddon.Visibility == Visibility.Visible ? FAddon.IsChecked : null; set { FAddon.IsChecked = value; addonTouched = true; CheckAddonChoice(); } }
+        public string FormAddonWhyForTest => FAddonWhy.Text;
         public void CloseFormForTest() => CloseForm();
         public void CloseVersionsForTest() => CloseVersions();
         public int VersionRowsForTest => VersionList.Items.Count;

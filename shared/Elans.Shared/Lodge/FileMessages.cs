@@ -58,21 +58,25 @@ namespace Elans.Shared
         }
     }
 
-    // a slot { id (32 hex, server-made), name, createdBy, versions: [FileVersion] (oldest first) }
+    // a slot { id (32 hex, server-made), name, createdBy, kind?, versions: [FileVersion] (oldest first) }; kind "addon" (server 2.32,
+    // feature "filesaddons") = a zip of WoW addon folders the Outpost can install (Elans.Shared.AddonZip); absent = a plain file
     public sealed class FileSlot
     {
-        public string Id, Name, CreatedBy;
+        public const string AddonKind = "addon";
+        public string Id, Name, CreatedBy, Kind;
+        public bool IsAddon => Kind == AddonKind;
         public List<FileVersion> Versions = new List<FileVersion>();
 
         public void Write(ILodgeWriter w)
         {
             w.Set("id", Id); w.Set("name", Name); w.Set("createdBy", CreatedBy);
+            if (Kind == AddonKind) w.Set("kind", Kind);
             var l = w.List("versions"); foreach (var v in Versions) v.Write(l.Add());
         }
 
         public static FileSlot Read(ILodgeFields f)
         {
-            var s = new FileSlot { Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy") };
+            var s = new FileSlot { Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : null };
             foreach (var v in f.List("versions")) s.Versions.Add(FileVersion.Read(v));
             return s;
         }

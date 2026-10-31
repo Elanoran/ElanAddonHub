@@ -15,6 +15,7 @@ namespace ElansAddonHub.Lodge
     // just spares an upload that would be refused. Mirrors server/Lodge.Server/FilesModule.cs (FileRules).
     public static class LodgeFiles
     {
+        public static bool IsZipName(string path) => Elans.Shared.DangerousFiles.Extension(Path.GetFileName(path ?? "")) == "zip";
         public static readonly Version Server = new Version(2, 14, 0);
 
         // 3.1.1: the one list (Elans.Shared.DangerousFiles) - the same types are refused for an upload and warned about before a download / save

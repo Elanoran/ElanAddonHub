@@ -23,7 +23,7 @@ namespace ElansAddonHub
         sealed class FakeFilesServer
         {
             public sealed class Ver { public int V; public string FileName, Sha, By, Note; public byte[] Bytes; public long At; }
-            public sealed class SlotRec { public string Id, Name, CreatedBy; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
+            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
 
             readonly HttpListener listener = new HttpListener();
             public readonly string Url;
@@ -72,7 +72,7 @@ namespace ElansAddonHub
                 "{\"v\":" + v.V + ",\"fileName\":" + Q(v.FileName) + ",\"size\":" + v.Bytes.Length + ",\"sha256\":" + Q(v.Sha) + ",\"uploadedBy\":" + Q(v.By) + ",\"at\":" + v.At + ",\"note\":" + Q(v.Note) + "}";
 
             public string SlotJson(SlotRec s) =>
-                "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
+                "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + (s.Kind != null ? ",\"kind\":" + Q(s.Kind) : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
 
             // what files.list answers
             public string DataJson() =>
@@ -152,6 +152,12 @@ namespace ElansAddonHub
                     }
                     catch (InvalidDataException) { Refuse(c, 415, "blocked-zip", "That is not a valid zip file"); return; }
                 }
+                var kind = req.Headers["X-Slot-Kind"];
+                if (kind == "addon")
+                {
+                    var ac = Elans.Shared.AddonZip.Check(new MemoryStream(bytes));
+                    if (!ac.Ok) { Refuse(c, 415, "not-addon", ac.Problem); return; }
+                }
                 SlotRec slot;
                 if (parts[1] == "new")
                 {
@@ -165,6 +171,7 @@ namespace ElansAddonHub
                     slot = Slots.FirstOrDefault(x => x.Id == parts[1]);
                     if (slot == null) { Refuse(c, 404, "missing", "That slot doesn't exist any more"); return; }
                 }
+                if (kind == "addon") slot.Kind = "addon"; else if (kind == "file") slot.Kind = null;
                 slot.Versions.Add(new Ver { V = slot.NextV++, FileName = name, Sha = sha, By = "Elan", Note = note, Bytes = bytes, At = 1_790_000_000_000L + slot.NextV * 60_000L });
                 slot.Versions = slot.Versions.OrderBy(v => v.V).ToList();
                 while (slot.Versions.Count > 3) slot.Versions.RemoveAt(0);
@@ -295,10 +302,10 @@ namespace ElansAddonHub
             finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
         }
 
-        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1)
+        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false)
 
         {
-            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "");
+            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
             bool manage = role == "owner" || role == "officer";
             return w.Substring(0, w.Length - 1) + ",\"canManageFiles\":" + (manage ? "true" : "false") + ",\"filesMaxMb\":" + maxMb + "}";
@@ -316,6 +323,7 @@ namespace ElansAddonHub
             var work = Path.Combine(dir, "lodgefiles");
             FakeFilesServer fake = null;
             var savedFile = Path.Combine(Util.DataDir, "files-saved.txt");
+            var hadAddOnsDir = LodgeAddons.AddOnsDir;
             var hadHook = Dialog.TestHook;
             var hadLodgeUrl = settings.LodgeUrl;
             try
@@ -567,6 +575,118 @@ namespace ElansAddonHub
                 Session.Disconnect();
                 check("disconnect: the files state is cleared", !Session.SupportsFiles && Session.Slots.Count == 0 && !LodgePage.FilesRowVisibleForTest);
 
+                // ---- addons (Lodge 2.32 "filesaddons"): marked on upload, installed in WoW from the Files page, updated, kept updated
+                {
+                    var addOns = Path.Combine(work, "wow", "_forever_", "Interface", "AddOns");
+                    Directory.CreateDirectory(addOns);
+                    LodgeAddons.AddOnsDir = () => addOns;
+                    try { File.Delete(Path.Combine(Util.DataDir, "files-installed.txt")); } catch { }
+                    fake.Slots.Clear();
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.32.0", 1, addons: true));
+                    Session.FilesClientForTest(new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan"));
+                    Session.FeedForTest(fake.DataJson());
+                    check("addons: a 2.32 Lodge with 'filesaddons' turns the feature on", Session.SupportsAddonFiles);
+                    LodgePage.ShowFilesForTest();
+                    var fv = LodgePage.FilesForTest;
+
+                    var a1 = MakeZip(Path.Combine(work, "rxp1.zip"), ("RXPGuides/RXPGuides.toc", "## Interface: 16001\n## Version: 1.0\n"), ("RXPGuides/core.lua", "v1"), ("RXPGuides_Old/RXPGuides_Old.toc", ""));
+                    fv.OpenForm(null);
+                    fv.PickForTest(Path.Combine(work, "notes.txt"));
+                    check("addons form: a file that isn't a zip can't be marked (" + fv.FormAddonWhyForTest + ")", fv.FormAddonForTest == false && fv.FormAddonWhyForTest.StartsWith("Only a .zip"));
+                    fv.PickForTest(a1);
+                    check("addons form: an addon zip ticks 'This is a WoW addon' by itself and names its folders (" + fv.FormAddonWhyForTest + ")", fv.FormAddonForTest == true && fv.FormAddonWhyForTest.Contains("RXPGuides 1.0") && fv.FormAddonWhyForTest.Contains("RXPGuides_Old"));
+                    fv.FormNameForTest = "RXP Guides";
+                    var aerr = await fv.GoAsync();
+                    check("addons upload: the slot is marked as an addon on the Lodge (" + (aerr ?? "ok") + ")", aerr == null && fake.Slots.Count == 1 && fake.Slots[0].Kind == "addon");
+                    var looseZip = MakeZip(Path.Combine(work, "loose.zip"), ("readme.txt", "x"));
+                    var berr = await Session.UploadSlotAsync(null, "Loose", looseZip, "", null, true);
+                    check("addons upload: a zip that isn't an addon can't be shared as one - this PC says why first (" + berr + ")", berr != null && berr.Contains("outside an addon folder") && fake.Slots.Count == 1);
+                    Session.FeedForTest(fake.DataJson());
+                    var rs = Session.Slots.First(s => s.Name == "RXP Guides");
+                    check("addons list: the slot shows the Addon chip and Install in WoW", rs.IsAddon && rs.InstallVisibility == System.Windows.Visibility.Visible && rs.InstallLabel == "Install in WoW" && rs.InstalledV == 0);
+
+                    // the member already has their own copy of RXPGuides: it is backed up, then replaced
+                    Directory.CreateDirectory(Path.Combine(addOns, "RXPGuides"));
+                    File.WriteAllText(Path.Combine(addOns, "RXPGuides", "core.lua"), "mine");
+                    File.WriteAllText(Path.Combine(addOns, "RXPGuides", "RXPGuides.toc"), "## Version: 0.9\n");
+                    Elans.Shared.AddonZip.Result askedChk = null;
+                    fv.ConfirmInstall = (chk, s) => { askedChk = chk; return true; };
+                    aerr = await fv.InstallAsync(rs);
+                    var bkRoot = Path.Combine(AddonSources.BackupRoot, "lodge-" + AddonSources.SafeName("RXP Guides"));
+                    bool backedUp = Directory.Exists(bkRoot) && Directory.GetDirectories(bkRoot).Any(d => File.Exists(Path.Combine(d, "RXPGuides", "core.lua")) && File.ReadAllText(Path.Combine(d, "RXPGuides", "core.lua")) == "mine");
+                    check("addons install: asked first (both folders), installed into AddOns, the member's own copy backed up, remembered as v1 (" + (aerr ?? "ok") + ")",
+                        aerr == null && askedChk != null && askedChk.Folders.Count == 2 && File.ReadAllText(Path.Combine(addOns, "RXPGuides", "core.lua")) == "v1" && Directory.Exists(Path.Combine(addOns, "RXPGuides_Old"))
+                        && backedUp && rs.InstalledV == 1 && rs.InstallLabel == "Reinstall" && Session.InstalledOfForTest(rs.Id)?.Folders.Count == 2 && Session.FilesNoticeText.Contains("/reload"));
+                    check("addons install: nothing is left behind in AddOns (no temporary folders)", !Directory.GetDirectories(addOns).Any(d => Path.GetFileName(d).StartsWith(".elanshub")));
+                    fv.ConfirmInstall = (chk, s) => false;
+                    var coreBefore = File.ReadAllText(Path.Combine(addOns, "RXPGuides", "core.lua"));
+                    aerr = await fv.InstallAsync(rs);
+                    check("addons install: No in the question changes nothing", aerr == "" && coreBefore == "v1");
+
+                    // keep it updated: v2 (the same folders) goes in by itself
+                    fv.ConfirmInstall = (chk, s) => true;
+                    Session.SetAutoUpdate(rs, true);
+                    var a2 = MakeZip(Path.Combine(work, "rxp2.zip"), ("RXPGuides/RXPGuides.toc", "## Version: 1.1\n"), ("RXPGuides/core.lua", "v2"), ("RXPGuides_Old/RXPGuides_Old.toc", ""));
+                    aerr = await Session.UploadSlotAsync(rs.Id, null, a2, "fixes", null, true);
+                    Session.FeedForTest(fake.DataJson());
+                    for (int i = 0; i < 100 && rs.InstalledV != 2; i++) await Task.Delay(50);
+                    check("addons keep it updated: v2 went into WoW by itself and the notice says to /reload (" + (aerr ?? "ok") + ")",
+                        rs.InstalledV == 2 && File.ReadAllText(Path.Combine(addOns, "RXPGuides", "core.lua")) == "v2" && Session.FilesNoticeText.Contains("updated to v2") && rs.InstalledLine.Contains("keeps itself updated"));
+
+                    // v3 drops a folder: not without asking; the click then installs it and takes the dropped folder out (backed up)
+                    var a3 = MakeZip(Path.Combine(work, "rxp3.zip"), ("RXPGuides/RXPGuides.toc", "## Version: 1.2\n"), ("RXPGuides/core.lua", "v3"));
+                    aerr = await Session.UploadSlotAsync(rs.Id, null, a3, "", null, true);
+                    Session.FeedForTest(fake.DataJson());
+                    for (int i = 0; i < 40 && rs.Error.Length == 0; i++) await Task.Delay(50);
+                    check("addons keep it updated: a version that changes the folders waits for a click (" + rs.Error + ")",
+                        rs.InstalledV == 2 && rs.Error.Contains("changes which addon folders") && rs.InstallLabel == "Update in WoW" && rs.Badge == "Update");
+                    aerr = await fv.InstallAsync(rs);
+                    check("addons update: the click installs v3 and takes out the folder it no longer has (" + (aerr ?? "ok") + ")",
+                        aerr == null && rs.InstalledV == 3 && File.ReadAllText(Path.Combine(addOns, "RXPGuides", "core.lua")) == "v3" && !Directory.Exists(Path.Combine(addOns, "RXPGuides_Old")));
+
+                    // WoW holding a file open mid-swap: everything is put back
+                    LodgeAddons.SwapHook = f => throw new IOException("locked");
+                    aerr = await fv.InstallAsync(rs);
+                    LodgeAddons.SwapHook = null;
+                    check("addons install: a failure mid-swap puts everything back (" + aerr + ")", aerr != null && aerr.Contains("put back") && File.ReadAllText(Path.Combine(addOns, "RXPGuides", "core.lua")) == "v3"
+                        && !Directory.GetDirectories(addOns).Any(d => Path.GetFileName(d).StartsWith(".elanshub")));
+
+                    // a git checkout is someone's work: never replaced
+                    var dev = MakeZip(Path.Combine(work, "dev.zip"), ("DevA/DevA.toc", ""), ("DevA/a.lua", "new"));
+                    aerr = await Session.UploadSlotAsync(null, "Dev addon", dev, "", null, true);
+                    Directory.CreateDirectory(Path.Combine(addOns, "DevA", ".git"));
+                    File.WriteAllText(Path.Combine(addOns, "DevA", "a.lua"), "work in progress");
+                    Session.FeedForTest(fake.DataJson());
+                    aerr = await fv.InstallAsync(Session.Slots.First(s => s.Name == "Dev addon"));
+                    check("addons install: a git checkout (development copy) is never replaced (" + aerr + ")", aerr != null && aerr.Contains("development copy") && File.ReadAllText(Path.Combine(addOns, "DevA", "a.lua")) == "work in progress");
+
+                    // a Lodge that marks something as an addon that isn't one: this PC checks again and refuses
+                    var hostile = new FakeFilesServer.SlotRec { Id = 99.ToString("x32"), Name = "Not really", CreatedBy = "Elan", Kind = "addon" };
+                    var hb = File.ReadAllBytes(MakeZip(Path.Combine(work, "hostile.zip"), ("evil.txt", "x"), ("A/A.toc", "")));
+                    hostile.Versions.Add(new FakeFilesServer.Ver { V = 1, FileName = "a.zip", Sha = LodgeFiles.Hex(System.Security.Cryptography.SHA256.Create().ComputeHash(hb)), By = "Elan", Note = "", Bytes = hb, At = 1_790_000_000_000L });
+                    fake.Slots.Add(hostile);
+                    Session.FeedForTest(fake.DataJson());
+                    aerr = await fv.InstallAsync(Session.Slots.First(s => s.Name == "Not really"));
+                    check("addons install: a slot the Lodge calls an addon but isn't one is refused on this PC (" + aerr + ")", aerr != null && aerr.StartsWith("Not installed") && !File.Exists(Path.Combine(addOns, "evil.txt")) && !Directory.Exists(Path.Combine(addOns, "A")));
+
+                    LodgeAddons.AddOnsDir = () => null;
+                    aerr = await fv.InstallAsync(rs);
+                    check("addons install: no WoW Forever on this PC says so", aerr != null && aerr.Contains("WoW Forever wasn't found"));
+                    LodgeAddons.AddOnsDir = () => addOns;
+                    fv.ConfirmInstall = null;
+                    LodgePage.HideFilesForTest();
+
+                    // an older Lodge (no 'filesaddons'): no checkbox, no install button, the upload says nothing about kinds
+                    Session.Disconnect();
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.31.0", 1, addons: false));
+                    Session.FeedForTest(fake.DataJson());
+                    var old = Session.Slots.FirstOrDefault(s => s.Name == "RXP Guides");
+                    fv.OpenForm(null);
+                    check("addons on an older Lodge: no checkbox in the form and no Install button", !Session.SupportsAddonFiles && fv.FormAddonForTest == null && old != null && !old.IsAddon && old.InstallVisibility == System.Windows.Visibility.Collapsed);
+                    fv.CloseFormForTest();
+                    Session.Disconnect();
+                }
+
                 // ---- the badge rules on their own
                 var s1 = new SlotVersionInfo { V = 2, Sha256 = "aa" };
                 check("badge rules: never saved = New; same content = none; other content = Updated; no version = none",
@@ -587,6 +707,8 @@ namespace ElansAddonHub
                 try { Session.Disconnect(); } catch { }
                 try { fake?.Stop(); } catch { }
                 try { File.Delete(savedFile); } catch { }
+                try { File.Delete(Path.Combine(Util.DataDir, "files-installed.txt")); } catch { }
+                LodgeAddons.AddOnsDir = hadAddOnsDir; LodgeAddons.SwapHook = null;
             }
             return "lodgefiles selftest: " + (ok ? "PASSED" : "FAILED") + "\r\n  " + string.Join("\r\n  ", notes);
         }
