@@ -73,6 +73,7 @@ namespace ElansAddonHub.Lodge
             session.MemberBadgesLoaded += OnMemberBadges;
             session.FilesChanged += UpdateFilesChrome;
             session.FilesNotice += ShowFilesNotice;
+            session.FilesChanged += FilesBarRebind;
             session.CalendarChanged += UpdateCalendarChrome;
             ChatCard.SizeChanged += (s, e) => { if (e.WidthChanged) UpdateEventsStrip(); };   // how many pills fit follows the width
             session.OlderRequested += OnOlderRequested;

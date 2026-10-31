@@ -58,7 +58,7 @@ namespace ElansAddonHub.Lodge
             Versions = d.Versions.Select(SlotVersionInfo.From).Where(v => v != null).OrderBy(v => v.V).ToList();
             CanManage = canManage;
             CanUpdate = canManage || d.CanUpdate;
-            Desc = d.Desc ?? ""; See = d.See; EditRank = d.Edit;
+            Desc = d.Desc ?? ""; See = d.See; EditRank = d.Edit; Cat = d.Cat;
             if (CoverV != d.Cover) { CoverV = d.Cover; if (d.Cover <= 0) CoverImage = null; }
             IsAddon = addonsOn && d.IsAddon;
             IsText = textOn && d.IsText;
@@ -73,6 +73,10 @@ namespace ElansAddonHub.Lodge
         public string Desc { get; private set; } = "";
         public string See { get; private set; }
         public string EditRank { get; private set; }
+        public string Cat { get; private set; }
+        // the filter a card belongs to: addons and import strings by their kind, the rest by the category the Lodge says ("" = none)
+        public string Filter => IsAddon ? "addon" : IsText ? "text" : Cat ?? "";
+        public static string CatLabel(string c) => c == "addon" ? "Addons" : c == "text" ? "Import strings" : c == "ui" ? "UI packs" : c == "guide" ? "Guides" : c == "map" ? "Maps" : c == "build" ? "Talent builds" : c == "other" ? "Other" : "Files";
         public int CoverV { get; private set; }
         System.Windows.Media.ImageSource cover;
         public System.Windows.Media.ImageSource CoverImage { get => cover; set { cover = value; Raise(nameof(CoverImage)); Raise(nameof(CoverVisibility)); Raise(nameof(PlaceholderVisibility)); Raise(nameof(CoverHeight)); } }

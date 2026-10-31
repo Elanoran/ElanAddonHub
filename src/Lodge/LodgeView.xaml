@@ -604,14 +604,23 @@
               </DockPanel>
             </Border>
             <!-- a file changed (shared files, server 2.14): who did what, calm and dismissible; it opens the Files page -->
-            <Border x:Name="FilesBar" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Margin="16,8,16,0" Padding="12,4,4,4"
+            <Border x:Name="FilesBar" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Margin="16,8,16,0" Padding="8,6,4,6"
                     AutomationProperties.Name="Shared files changed">
               <DockPanel>
                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="FilesBarClose_Click"
                         ToolTip="Dismiss" AutomationProperties.Name="Dismiss file notice" />
-                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Open Files" Click="FilesBarOpen_Click" Margin="8,0,0,0" VerticalAlignment="Center" />
-                <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <TextBlock x:Name="FilesBarText" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <Button x:Name="FilesBarOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Open Files" Click="FilesBarOpen_Click" Margin="8,0,0,0" VerticalAlignment="Center" />
+                <Button x:Name="FilesBarAction" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Visibility="Collapsed" Click="FilesBarAction_Click" Margin="8,0,0,0" VerticalAlignment="Center"
+                        AutomationProperties.Name="Install, copy or save the changed file" />
+                <Grid Width="36" Height="36" Margin="0,0,10,0" VerticalAlignment="Center">
+                  <Border CornerRadius="6" Background="{StaticResource Brush.Surface3}" />
+                  <TextBlock x:Name="FilesBarGlyph" Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <Border x:Name="FilesBarCover" CornerRadius="6" Visibility="Collapsed" />
+                </Grid>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock x:Name="FilesBarText" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock x:Name="FilesBarSub" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
+                </StackPanel>
               </DockPanel>
             </Border>
             <!-- upcoming events: a strip of fixed height (64) under the header. It is 0 high and collapsed when there is nothing to show; it grows / shrinks with

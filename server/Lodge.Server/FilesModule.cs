@@ -47,6 +47,7 @@ public sealed class Slot
     public string CreatedBy { get; set; }
     public string Kind { get; set; }     // 2.32: "addon" = a zip of WoW addon folders (Elans.Shared.AddonZip); 2.34 "text" = an import string (.txt); null = a plain file
     public string Desc { get; set; }     // 2.33: a longer description (FilesModule.MaxDescChars, line breaks kept)
+    public string Cat { get; set; }      // 2.37: what a plain file is (FileSlot.Cats), null = not said
     public string See { get; set; }      // 2.33: the lowest rank that sees it (FileSlot.SeeRanks); null = everyone, guests included
     public string Edit { get; set; }     // 2.33: the lowest rank that may update it (FileSlot.EditRanks); null = officers
     public string Cover { get; set; }    // 2.33: the cover picture's blob (32 hex, server-made) and its type
@@ -271,7 +272,7 @@ public sealed class FilesModule : IModule
     static FileSlot SlotOf(Slot s, string role = null) => new()
     {
         Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Kind = s.Kind == FileSlot.AddonKind || s.Kind == FileSlot.TextKind ? s.Kind : null, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
-        Desc = string.IsNullOrEmpty(s.Desc) ? null : s.Desc, See = s.See, Edit = s.Edit, Cover = s.Cover != null ? Math.Max(1, s.CoverV) : 0,
+        Desc = string.IsNullOrEmpty(s.Desc) ? null : s.Desc, See = s.See, Edit = s.Edit, Cat = Array.IndexOf(FileSlot.Cats, s.Cat) >= 0 ? s.Cat : null, Cover = s.Cover != null ? Math.Max(1, s.CoverV) : 0,
         CanUpdate = role != null && CanUpdate(role, s),
         HaveNewest = s.Kind == FileSlot.AddonKind && s.Installs != null && s.Versions.Count > 0 ? s.Installs.Values.Count(v => v == s.Versions.Max(x => x.V)) : 0,
         HaveOlder = s.Kind == FileSlot.AddonKind && s.Installs != null && s.Versions.Count > 0 ? s.Installs.Values.Count(v => v > 0 && v < s.Versions.Max(x => x.V)) : 0,
@@ -584,6 +585,7 @@ public sealed class FilesModule : IModule
         if (req.See != null && (!admin || (req.See.Length > 0 && Array.IndexOf(FileSlot.SeeRanks, req.See) < 0))) return (false, admin ? "bad-rank" : "forbidden", null);
         if (req.Edit != null && (!admin || (req.Edit.Length > 0 && Array.IndexOf(FileSlot.EditRanks, req.Edit) < 0))) return (false, admin ? "bad-rank" : "forbidden", null);
         if (req.Kind != null && req.Kind != FileSlot.AddonKind && req.Kind != "file") return (false, "bad-kind", null);
+        if (req.Cat != null && req.Cat.Length > 0 && Array.IndexOf(FileSlot.Cats, req.Cat) < 0) return (false, "bad-cat", null);
         if (req.Desc != null) desc = CleanDesc(req.Desc);
         string note = req.NoteV > 0 ? Names.Text(req.Note ?? "", MaxNoteChars) : null;
         string addonCheckBlob = null, addonCheckName = null;
@@ -614,19 +616,20 @@ public sealed class FilesModule : IModule
         {
             var s = Find(req.Slot);
             if (s == null) return (false, "missing", null);
-            var before = (s.Name, s.Desc, s.See, s.Edit, s.Kind, s.Cover, s.CoverType, Notes: s.Versions.Select(v => v.Note).ToList());
+            var before = (s.Name, s.Desc, s.See, s.Edit, s.Kind, s.Cover, s.CoverType, Notes: s.Versions.Select(v => v.Note).ToList(), s.Cat);
             string coverGone = null;
             if (newName != null) s.Name = newName;
             if (desc != null) s.Desc = desc.Length == 0 ? null : desc;
             if (req.See != null) s.See = req.See.Length == 0 || req.See == "guest" ? null : req.See;
             if (req.Edit != null) s.Edit = req.Edit.Length == 0 || req.Edit == "officer" ? null : req.Edit;
             if (req.Kind != null) s.Kind = req.Kind == FileSlot.AddonKind ? FileSlot.AddonKind : null;
+            if (req.Cat != null) s.Cat = req.Cat.Length == 0 ? null : req.Cat;
             if (markedInfo != null && s.Versions.Count > 0) s.Versions.OrderBy(v => v.V).Last().Addon = markedInfo;
             if (note != null) s.Versions.First(v => v.V == req.NoteV).Note = note;
             if (req.Cover == false && s.Cover != null) { coverGone = Path.Combine(dir, s.Cover + ".bin"); s.Cover = null; s.CoverType = null; }
             if (!SaveIndexLocked())
             {
-                (s.Name, s.Desc, s.See, s.Edit, s.Kind, s.Cover, s.CoverType) = (before.Name, before.Desc, before.See, before.Edit, before.Kind, before.Cover, before.CoverType);
+                (s.Name, s.Desc, s.See, s.Edit, s.Kind, s.Cover, s.CoverType, s.Cat) = (before.Name, before.Desc, before.See, before.Edit, before.Kind, before.Cover, before.CoverType, before.Cat);
                 for (int i = 0; i < s.Versions.Count; i++) s.Versions[i].Note = before.Notes[i];
                 return (false, "save", null);
             }

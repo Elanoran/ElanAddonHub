@@ -23,7 +23,7 @@ namespace ElansAddonHub
         sealed class FakeFilesServer
         {
             public sealed class Ver { public int V; public string FileName, Sha, By, Note, AddonJson; public byte[] Bytes; public long At; }
-            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind, Desc, See, Edit; public int Cover, HaveNewest, HaveOlder; public byte[] CoverBytes; public bool CanUpdate; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
+            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind, Desc, See, Edit, Cat; public int Cover, HaveNewest, HaveOlder; public byte[] CoverBytes; public bool CanUpdate; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
 
             readonly HttpListener listener = new HttpListener();
             public readonly string Url;
@@ -74,7 +74,7 @@ namespace ElansAddonHub
 
             public string SlotJson(SlotRec s) =>
                 "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + (s.Kind != null ? ",\"kind\":" + Q(s.Kind) : "") + (s.Desc != null ? ",\"desc\":" + Q(s.Desc) : "") + (s.See != null ? ",\"see\":" + Q(s.See) : "")
-                + (s.Edit != null ? ",\"edit\":" + Q(s.Edit) : "") + (s.Cover > 0 ? ",\"cover\":" + s.Cover : "") + (s.CanUpdate ? ",\"canUpdate\":true" : "") + (s.HaveNewest > 0 ? ",\"haveNewest\":" + s.HaveNewest : "") + (s.HaveOlder > 0 ? ",\"haveOlder\":" + s.HaveOlder : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
+                + (s.Edit != null ? ",\"edit\":" + Q(s.Edit) : "") + (s.Cat != null ? ",\"cat\":" + Q(s.Cat) : "") + (s.Cover > 0 ? ",\"cover\":" + s.Cover : "") + (s.CanUpdate ? ",\"canUpdate\":true" : "") + (s.HaveNewest > 0 ? ",\"haveNewest\":" + s.HaveNewest : "") + (s.HaveOlder > 0 ? ",\"haveOlder\":" + s.HaveOlder : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
 
             // what files.list answers
             public string DataJson() =>
@@ -319,10 +319,10 @@ namespace ElansAddonHub
             finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
         }
 
-        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false, bool info = false, bool kits = false)
+        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false, bool info = false, bool kits = false, bool cats = false)
 
         {
-            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "") + (info ? ",\"filesinfo\"" : "") + (kits ? ",\"fileskits\"" : "");
+            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "") + (info ? ",\"filesinfo\"" : "") + (kits ? ",\"fileskits\"" : "") + (cats ? ",\"filescats\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
             bool manage = role == "owner" || role == "officer";
             return w.Substring(0, w.Length - 1) + ",\"canManageFiles\":" + (manage ? "true" : "false") + ",\"filesMaxMb\":" + maxMb + "}";
@@ -940,6 +940,66 @@ namespace ElansAddonHub
                 LodgeAddons.AddOnsDir = hadAddOnsDir;
                 Session.Disconnect();
                 fake.Slots.Clear(); fake.KitsJson.Clear();
+
+                // ---- 2.37 "filescats": category chips, the category in Edit; 3.5: the update card above the chat
+                {
+                    fake.Slots.Clear(); fake.KitsJson.Clear();
+                    var cDir = Path.Combine(work, "wow4", "_forever_", "Interface", "AddOns");
+                    Directory.CreateDirectory(cDir);
+                    LodgeAddons.AddOnsDir = () => cDir;
+                    try { File.Delete(Path.Combine(Util.DataDir, "files-installed.txt")); } catch { }
+                    FakeFilesServer.SlotRec R(string id, string name, string kind = null, string cat = null, byte[] bytes = null, string file = null)
+                    {
+                        var b = bytes ?? System.Text.Encoding.UTF8.GetBytes(name);
+                        var r = new FakeFilesServer.SlotRec { Id = id, Name = name, CreatedBy = "Wing", Kind = kind, Cat = cat };
+                        r.Versions.Add(new FakeFilesServer.Ver { V = 1, FileName = file ?? name + ".txt", Sha = LodgeFiles.Hex(System.Security.Cryptography.SHA256.Create().ComputeHash(b)), By = "Wing", Note = "", Bytes = b, At = 1_790_000_000_000L });
+                        fake.Slots.Add(r); return r;
+                    }
+                    var az = File.ReadAllBytes(MakeZip(Path.Combine(work, "boss.zip"), ("BossMods/BossMods.toc", "## Version: 3\n"), ("BossMods/a.lua", "x")));
+                    var boss = R(1.ToString("x32"), "Boss mods", "addon", null, az, "boss.zip");
+                    R(2.ToString("x32"), "Nameplates", "addon"); R(3.ToString("x32"), "Raid WA", "text");
+                    R(4.ToString("x32"), "Leveling guide", null, "guide"); R(5.ToString("x32"), "Dungeon guide", null, "guide");
+                    R(6.ToString("x32"), "Molten Core map", null, "map"); var plain = R(7.ToString("x32"), "Loot list");
+                    Session.Disconnect(); sent.Clear();
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.37.0", 1, addons: true, files2: true, text: true, info: true, kits: true, cats: true));
+                    Session.FilesClientForTest(new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan"));
+                    Session.FeedForTest(fake.DataJson());
+                    LodgePage.ShowFilesForTest();
+                    var fc = LodgePage.FilesForTest;
+                    var chips = fc.ChipsForTest;
+                    check("cats: over 6 files the chips show All and every kind the list has (" + string.Join(", ", chips) + ")", chips.SequenceEqual(new[] { "All", "Addons", "Import strings", "Guides", "Maps" }));
+                    fc.ChipForTest("Guides");
+                    check("cats: Guides shows the two guides", fc.CardsShownForTest == 2);
+                    fc.ChipForTest("All");
+                    ShowTab("lodge"); await Task.Delay(400); Snapshot(Path.Combine(dir, "files-chips.png"));
+                    fc.OpenEdit(Session.Slots.First(s => s.Name == "Loot list"));
+                    check("cats: Edit of a plain file offers 'What it is'", fc.EditCatShownForTest);
+                    fc.EditCatForTest("other");
+                    sent.Clear();
+                    var cerr = await fc.SaveEditAsync();
+                    check("cats: the category is sent (" + (cerr ?? "ok") + ")", cerr == null && sent.Any(o => o.Str("t") == "files.edit" && o.Str("cat") == "other"));
+                    fc.OpenEdit(Session.Slots.First(s => s.Name == "Boss mods"));
+                    check("cats: an addon has no category to pick (its kind says it)", !fc.EditCatShownForTest);
+                    fc.CloseEditForTest();
+                    // the update card: Wing uploads v2 of the boss mods while I'm in the chat
+                    LodgePage.HideFilesForTest();
+                    Session.FeedForTest(FilesChangedFrame("version", "Wing", "Boss mods", 1));
+                    Session.FeedForTest(fake.DataJson());
+                    check("update card: the notice above the chat carries the file's version and its action - Install in WoW (" + LodgePage.FilesBarActionForTest + " / " + LodgePage.FilesBarSubForTest + ")",
+                        LodgePage.FilesBarVisibleForTest && LodgePage.FilesBarActionForTest == "Install in WoW" && LodgePage.FilesBarSubForTest.StartsWith("v1 · boss.zip"));
+                    await Task.Delay(300); Snapshot(Path.Combine(dir, "files-updatecard.png"));
+                    fc.ConfirmInstall = (chk, s) => true;
+                    LodgePage.FilesBarActionClickForTest();
+                    var bs = Session.Slots.First(s => s.Name == "Boss mods");
+                    for (int i = 0; i < 200 && (bs.InstalledV == 0 || !LodgePage.FilesBarTextForTest.Contains("/reload")); i++) await Task.Delay(50);
+                    check("update card: its button installs the addon right from the chat (" + LodgePage.FilesBarTextForTest + " | v" + bs.InstalledV + " err=" + bs.Error + " busy=" + bs.Busy + " notice=" + Session.FilesNoticeText + ")",
+                        bs.InstalledV == 1 && Directory.Exists(Path.Combine(cDir, "BossMods")) && LodgePage.FilesBarTextForTest.Contains("/reload"));
+                    fc.ConfirmInstall = null;
+                    LodgePage.CloseFilesBarForTest();
+                    LodgeAddons.AddOnsDir = hadAddOnsDir;
+                    Session.Disconnect();
+                    fake.Slots.Clear();
+                }
 
                 // ---- the badge rules on their own
                 var s1 = new SlotVersionInfo { V = 2, Sha256 = "aa" };

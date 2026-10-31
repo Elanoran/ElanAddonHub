@@ -30,6 +30,8 @@ namespace ElansAddonHub.Lodge
             foreach (var r in Elans.Shared.FileSlot.SeeRanks) ESee.Items.Add(new ComboBoxItem { Content = SlotVM.SeeText(r), Tag = r });
             foreach (var r in Elans.Shared.FileSlot.EditRanks.Reverse()) EEdit.Items.Add(new ComboBoxItem { Content = SlotVM.EditText(r), Tag = r });
             foreach (var r in Elans.Shared.FileSlot.SeeRanks) KSee.Items.Add(new ComboBoxItem { Content = SlotVM.SeeText(r), Tag = r });
+            ECat.Items.Add(new ComboBoxItem { Content = "Not said", Tag = "" });
+            foreach (var c in Elans.Shared.FileSlot.Cats) ECat.Items.Add(new ComboBoxItem { Content = SlotVM.CatLabel(c), Tag = c });
             PreviewKeyDown += (s, e) =>
             {
                 if (e.Key != Key.Escape) return;
@@ -65,6 +67,7 @@ namespace ElansAddonHub.Lodge
             NewKitButton.Visibility = S.CanManageFiles ? Visibility.Visible : Visibility.Collapsed;
             KitsEmpty.Visibility = S.Kits.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             SearchBox.Visibility = S.Slots.Count > 6 || SearchBox.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            BuildChips();
             System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Refresh();
             int shown = S.Slots.Count(Matches);
             EmptyState.Visibility = shown == 0 && S.FilesLoaded ? Visibility.Visible : Visibility.Collapsed;
@@ -81,9 +84,30 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- search: name and description, any word order
+        // ---- category chips (2.37): All plus every kind of file the list has; shown once the list is long
+        string catFilter = "";
+        void BuildChips()
+        {
+            var cats = S.Slots.Select(s => s.Filter).Where(f => f.Length > 0).Distinct().OrderBy(f => Array.IndexOf(new[] { "addon", "text", "ui", "guide", "map", "build", "other" }, f)).ToList();
+            if (catFilter.Length > 0 && !cats.Contains(catFilter)) catFilter = "";
+            bool show = S.Slots.Count > 6 && cats.Count > 1;
+            CatChips.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            var want = string.Join(",", cats) + "|" + catFilter;
+            if (!show || (CatChips.Tag as string) == want) return;
+            CatChips.Tag = want;
+            CatChips.Children.Clear();
+            foreach (var c in new[] { "" }.Concat(cats))
+            {
+                var rb = new RadioButton { Style = (Style)FindResource("Segment"), GroupName = "files-cat", Content = c.Length == 0 ? "All" : SlotVM.CatLabel(c), Tag = c, IsChecked = c == catFilter, Margin = new Thickness(0, 0, 6, 6) };
+                rb.Checked += (s, e) => { catFilter = (string)((RadioButton)s).Tag; CatChips.Tag = null; Refresh(); };
+                CatChips.Children.Add(rb);
+            }
+        }
+
         bool Matches(SlotVM s)
         {
             if (s == null) return false;
+            if (catFilter.Length > 0 && s.Filter != catFilter) return false;
             var q = (SearchBox?.Text ?? "").Trim();
             if (q.Length == 0) return true;
             var hay = (s.Name + " " + s.Desc + " " + (s.IsAddon ? "addon" : "")).ToLowerInvariant();
@@ -261,6 +285,8 @@ namespace ElansAddonHub.Lodge
             ENote.Text = slot.Newest?.Note ?? "";
             EAddon.Visibility = S.SupportsAddonFiles ? Visibility.Visible : Visibility.Collapsed;
             EAddon.IsChecked = slot.IsAddon;
+            ECatPanel.Visibility = S.SupportsFilesCats && !slot.IsAddon && !slot.IsText ? Visibility.Visible : Visibility.Collapsed;
+            ECat.SelectedItem = ECat.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.Cat ?? ""));
             ESee.SelectedItem = ESee.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.See ?? "guest"));
             EEdit.SelectedItem = EEdit.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.EditRank ?? "officer"));
             ShowEditPicture(slot.CoverImage);
@@ -328,6 +354,7 @@ namespace ElansAddonHub.Lodge
             if (desc != s.Desc) { m.Desc = desc; any = true; }
             if (s.Newest != null && ENote.Text.Trim() != (s.Newest.Note ?? "")) { m.NoteV = s.Newest.V; m.Note = ENote.Text.Trim(); any = true; }
             if (S.SupportsAddonFiles && (EAddon.IsChecked == true) != s.IsAddon) { m.Kind = EAddon.IsChecked == true ? "addon" : "file"; any = true; }
+            if (ECatPanel.Visibility == Visibility.Visible && ((ECat.SelectedItem as ComboBoxItem)?.Tag as string ?? "") != (s.Cat ?? "")) { m.Cat = (ECat.SelectedItem as ComboBoxItem)?.Tag as string ?? ""; any = true; }
             if (editPicture == "" && s.CoverV > 0) { m.Cover = false; any = true; }
             ESave.IsEnabled = false;
             try
@@ -569,6 +596,10 @@ namespace ElansAddonHub.Lodge
         public string FormHeadingForTest => FormHeading.Text;
         public void PickForTest(string path) => SetFormFile(path);
         public bool KitsShownForTest => KitsSection.Visibility == Visibility.Visible;
+        public System.Collections.Generic.List<string> ChipsForTest => CatChips.Visibility == Visibility.Visible ? CatChips.Children.OfType<RadioButton>().Select(r => (string)r.Content).ToList() : new System.Collections.Generic.List<string>();
+        public void ChipForTest(string label) { var rb = CatChips.Children.OfType<RadioButton>().First(r => (string)r.Content == label); rb.IsChecked = true; }
+        public void EditCatForTest(string cat) => ECat.SelectedItem = ECat.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == cat);
+        public bool EditCatShownForTest => ECatPanel.Visibility == Visibility.Visible;
         public bool KitOpenForTest => KitOverlay.Visibility == Visibility.Visible;
         public string KitErrorForTest => KError.Text;
         public void KitSetForTest(string name, string desc, string see, params string[] slotNames)

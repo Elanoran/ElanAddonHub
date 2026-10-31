@@ -65,6 +65,8 @@ namespace ElansAddonHub.Lodge
         {
             if (filesShown || string.IsNullOrEmpty(text)) return;      // the page itself shows the change
             FilesBarText.Text = text;
+            barSlot = Session?.FilesNoticeFor;
+            BindBar();
             FilesBar.Visibility = Visibility.Visible;
             if (filesBarTimer == null)
             {
@@ -81,7 +83,43 @@ namespace ElansAddonHub.Lodge
         }
 
         void FilesBarClose_Click(object sender, RoutedEventArgs e) => HideFilesBar();
-        void FilesBarOpen_Click(object sender, RoutedEventArgs e) => ShowFiles();
+        void FilesBarOpen_Click(object sender, RoutedEventArgs e)
+        {
+            var slot = BarSlot();
+            ShowFiles();
+            if (slot != null) FilesPage.OpenVersions(slot);
+        }
+
+        // ---- 3.5: the notice as an update card - the file's picture, its version and the one thing to do with it (install / update, copy, save)
+        string barSlot;
+        SlotVM BarSlot() => barSlot == null || Session == null ? null : Session.Slots.FirstOrDefault(s => s.Id == barSlot);
+
+        void BindBar()
+        {
+            var s = BarSlot();
+            bool live = s != null && s.Newest != null;
+            FilesBarAction.Visibility = live ? Visibility.Visible : Visibility.Collapsed;
+            FilesBarAction.Content = !live ? "" : s.IsAddon ? s.InstallLabel : s.IsText ? "Copy" : "Save...";
+            FilesBarOpen.Content = live ? "Details" : "Open Files";
+            FilesBarSub.Text = live ? s.VersionLine : "";
+            FilesBarSub.Visibility = live ? Visibility.Visible : Visibility.Collapsed;
+            FilesBarGlyph.Text = live ? s.KindGlyph : "\uE8A5";
+            var img = live ? s.CoverImage : null;
+            FilesBarCover.Background = img == null ? null : new System.Windows.Media.ImageBrush(img) { Stretch = System.Windows.Media.Stretch.UniformToFill };
+            FilesBarCover.Visibility = img == null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        // the list arrives after the notice: the card fills in when it does
+        void FilesBarRebind() { if (FilesBar.Visibility == Visibility.Visible) BindBar(); }
+
+        async void FilesBarAction_Click(object sender, RoutedEventArgs e)
+        {
+            var s = BarSlot();
+            if (s == null) return;
+            string err = s.IsAddon ? await FilesPage.InstallAsync(s) : s.IsText ? await FilesPage.CopyAsync(s) : await FilesPage.SaveAsync(s, s.Newest, null, null);
+            if (!string.IsNullOrEmpty(err)) FilesBarText.Text = err;
+            else if (err == null) { FilesBarText.Text = Session.FilesNoticeText.Length > 0 ? Session.FilesNoticeText : FilesBarText.Text; BindBar(); }
+        }
 
         // ---- test hooks
         public FilesView FilesForTest => FilesPage;
@@ -94,5 +132,8 @@ namespace ElansAddonHub.Lodge
         public string FilesBarTextForTest => FilesBarText.Text;
         public void OpenFilesBarForTest() => FilesBarOpen_Click(null, null);
         public void CloseFilesBarForTest() => FilesBarClose_Click(null, null);
+        public string FilesBarActionForTest => FilesBarAction.Visibility == Visibility.Visible ? (string)FilesBarAction.Content : null;
+        public string FilesBarSubForTest => FilesBarSub.Text;
+        public void FilesBarActionClickForTest() => FilesBarAction_Click(null, null);
     }
 }

@@ -69,7 +69,7 @@ namespace Elans.Shared
     public sealed class FilesEditMsg
     {
         public const string Type = "files.edit";
-        public string Slot, Name, Desc, See, Edit, Kind, Note;
+        public string Slot, Name, Desc, See, Edit, Kind, Note, Cat;      // cat (2.37): one of FileSlot.Cats, "" = none
         public int NoteV;
         public bool? Cover;
 
@@ -81,6 +81,7 @@ namespace Elans.Shared
             if (See != null) w.Set("see", See);
             if (Edit != null) w.Set("edit", Edit);
             if (Kind != null) w.Set("kind", Kind);
+            if (Cat != null) w.Set("cat", Cat);
             if (NoteV > 0) { w.Set("noteV", NoteV); w.Set("note", Note ?? ""); }
             if (Cover != null) w.Set("cover", Cover.Value);
         }
@@ -88,7 +89,7 @@ namespace Elans.Shared
         public static FilesEditMsg Read(ILodgeFields f) => new FilesEditMsg
         {
             Slot = f.Str("slot"), Name = f.Str("name"), Desc = f.Str("desc"), See = f.Str("see"), Edit = f.Str("edit"), Kind = f.Str("kind"),
-            NoteV = f.Int("noteV"), Note = f.Str("note"), Cover = f.Has("cover") ? f.Bool("cover") : (bool?)null,
+            NoteV = f.Int("noteV"), Note = f.Str("note"), Cover = f.Has("cover") ? f.Bool("cover") : (bool?)null, Cat = f.Str("cat"),
         };
     }
 
@@ -101,7 +102,8 @@ namespace Elans.Shared
     {
         public const string AddonKind = "addon", TextKind = "text";        // text (2.34, feature "filestext"): an import string - a WeakAura, a profile, a macro
         public static readonly string[] SeeRanks = { "guest", "member", "veteran", "officer" }, EditRanks = { "member", "veteran", "officer" };
-        public string Id, Name, CreatedBy, Kind, Desc, See, Edit;
+        public static readonly string[] Cats = { "ui", "guide", "map", "build", "other" };      // 2.37 "filescats": what a plain file is (addons and text are their kind)
+        public string Id, Name, CreatedBy, Kind, Desc, See, Edit, Cat;
         public int Cover;
         public bool CanUpdate;
         public int HaveNewest, HaveOlder;              // 2.35 (addon slots): how many people have the newest / an older version installed (counts only, no names)
@@ -132,6 +134,7 @@ namespace Elans.Shared
             if (!string.IsNullOrEmpty(See)) w.Set("see", See);
             if (!string.IsNullOrEmpty(Edit)) w.Set("edit", Edit);
             if (Cover > 0) w.Set("cover", Cover);
+            if (!string.IsNullOrEmpty(Cat)) w.Set("cat", Cat);
             if (CanUpdate) w.Set("canUpdate", true);
             if (HaveNewest > 0) w.Set("haveNewest", HaveNewest);
             if (HaveOlder > 0) w.Set("haveOlder", HaveOlder);
@@ -144,6 +147,7 @@ namespace Elans.Shared
             {
                 Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : f.Str("kind") == TextKind ? TextKind : null,
                 Desc = f.Str("desc"), See = Array.IndexOf(SeeRanks, f.Str("see")) >= 0 ? f.Str("see") : null, Edit = Array.IndexOf(EditRanks, f.Str("edit")) >= 0 ? f.Str("edit") : null,
+                Cat = Array.IndexOf(Cats, f.Str("cat")) >= 0 ? f.Str("cat") : null,
                 Cover = Math.Max(0, f.Int("cover")), CanUpdate = f.Bool("canUpdate"), HaveNewest = Math.Max(0, f.Int("haveNewest")), HaveOlder = Math.Max(0, f.Int("haveOlder")),
             };
             foreach (var v in f.List("versions")) s.Versions.Add(FileVersion.Read(v));

@@ -135,6 +135,20 @@ public class FilesRanksTests
     }
 
     [Fact]
+    public async Task A_category_is_set_with_edit_and_listed()
+    {
+        using var r = new FunRig();
+        var o = r.Join("Wing", "officer");
+        var id = (string)(await Up(r, o, null, "Raid map", "map.png", "x"u8.ToArray()))["id"]!;
+        Assert.True((bool)(await Edit(r, o, new { t = "files.edit", slot = id, cat = "map" }))["ok"]!);
+        Assert.Equal("map", (string)((JsonArray)r.Hub.SharedFiles.ListJson(o)["slots"]!)[0]!["cat"]!);
+        Assert.Equal("bad-cat", (string)(await Edit(r, o, new { t = "files.edit", slot = id, cat = "warez" }))["why"]!);
+        Assert.True((bool)(await Edit(r, o, new { t = "files.edit", slot = id, cat = "" }))["ok"]!);
+        Assert.Null(((JsonArray)r.Hub.SharedFiles.ListJson(o)["slots"]!)[0]!["cat"]);
+        Assert.Contains("filescats", r.Hub.FeatureList());
+    }
+
+    [Fact]
     public void Descriptions_keep_line_breaks_and_lose_control_characters()
     {
         Assert.Equal("a\nb", FilesModule.CleanDesc(" a\r\nb\u0001 "));

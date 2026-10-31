@@ -38,6 +38,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsFilesText { get; private set; }      // 2.34 "filestext": text slots (import strings) with a Copy button
         public bool SupportsFilesInfo { get; private set; }      // 2.35 "filesinfo": addon versions carry their tocs; Outposts say what they have installed (counts only)
         public bool SupportsFilesKits { get; private set; }      // 2.36 "fileskits": kits - named sets of files
+        public bool SupportsFilesCats { get; private set; }      // 2.37 "filescats": a plain file's category (UI pack, guide, map, build)
         public readonly ObservableCollection<KitVM> Kits = new ObservableCollection<KitVM>();
         readonly HashSet<string> installReported = new HashSet<string>(StringComparer.Ordinal);   // "slot:v" told to this Lodge on this connection
 
@@ -51,6 +52,7 @@ namespace ElansAddonHub.Lodge
             SupportsFilesText = SupportsFiles && features.Contains("filestext");
             SupportsFilesInfo = SupportsFiles && features.Contains("filesinfo");
             SupportsFilesKits = SupportsFiles && features.Contains("fileskits");
+            SupportsFilesCats = SupportsFiles && features.Contains("filescats");
             installReported.Clear();
             if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
             savedFiles = null; installedAddons = null;
@@ -59,7 +61,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetFiles()
         {
-            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; SupportsFilesInfo = false; SupportsFilesKits = false; Kits.Clear(); installReported.Clear(); FilesLoaded = false; savedFiles = null; installedAddons = null;
+            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; SupportsFilesInfo = false; SupportsFilesKits = false; SupportsFilesCats = false; Kits.Clear(); installReported.Clear(); FilesLoaded = false; savedFiles = null; installedAddons = null;
             Slots.Clear(); FilesNoticeText = ""; FilesNoticeFor = null; FilesUsedBytes = 0;
             filesLastRequest = DateTime.MinValue;
         }
@@ -156,7 +158,7 @@ namespace ElansAddonHub.Lodge
         {
             switch (why)
             {
-                case "forbidden": return "Only officers and the lodge owner can change shared files";
+                case "forbidden": return "You can't change this file - officers and the Guild Master decide who may";
                 case "missing": return "That file isn't there any more";
                 case "disabled": return "File sharing is switched off on this lodge";
                 case "already-newest": return "That is already the newest version";
