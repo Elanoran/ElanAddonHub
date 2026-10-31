@@ -127,7 +127,7 @@ public sealed class RealmsTests
         t.Forever();
         await t.Poll();
         var idx = t.Net.Requests.Where(r => r.Contains("connected-realm/index")).ToList();
-        Assert.Equal(new[] { "dynamic-eu", "dynamic-classic-eu", "dynamic-classic1x-eu", "dynamic-classicann-eu" }, idx.Select(r => r[(r.IndexOf("ns=") + 3)..]).ToArray());
+        Assert.Equal(new[] { "dynamic-eu", "dynamic-classic-eu", "dynamic-classic1x-eu", "dynamic-classicann-eu", "dynamic-forever-eu", "dynamic-classicforever-eu", "dynamic-classicf-eu", "dynamic-wowf-eu" }, idx.Select(r => r[(r.IndexOf("ns=") + 3)..]).ToArray());
         Assert.All(idx, r => Assert.Contains("eu.api.blizzard.com", r));
         Assert.True(t.M.Available);
         var rs = t.M.Current;
@@ -152,6 +152,21 @@ public sealed class RealmsTests
         await o.Poll();
         Assert.Equal(new[] { "dynamic-custom-eu" }, o.Net.Requests.Where(r => r.Contains("connected-realm/index")).Select(r => r[(r.IndexOf("ns=") + 3)..]).ToArray());
         Assert.Single(o.M.Current);
+    }
+
+    [Fact]
+    public async Task A_namespace_of_forever_alone_counts_every_realm_whatever_it_is_called()
+    {
+        // launch realms need not have "Forever" in their names: in WoW Forever's own namespace they all count; elsewhere the names still decide
+        using var t = new Rig();
+        t.Net.Namespaces["dynamic-eu"] = new() { [100] = FakeBlizzard.Connected(100, "UP", "Tarren Mill") };
+        t.Net.Namespaces["dynamic-wowf-eu"] = new() { [3001] = FakeBlizzard.Connected(3001, "UP", "Hogger", "NORMAL", "Normal", "Europe"), [3002] = FakeBlizzard.Connected(3002, "UP", "Nethergarde", "PVP", "PvP", "Europe") };
+        await t.Poll();
+        Assert.True(t.M.Available);
+        Assert.Equal(new[] { "Hogger", "Nethergarde" }, t.M.Current.Select(r => r.Name).ToArray());
+        Assert.All(t.M.Current, r => Assert.Equal("dynamic-wowf-eu", r.Namespace));
+        Assert.True(RealmsModule.ForeverOnly("dynamic-forever-us"));
+        Assert.False(RealmsModule.ForeverOnly("dynamic-classic-eu"));
     }
 
     [Fact]
@@ -439,7 +454,7 @@ public sealed class RealmsTests
         Assert.Contains("realms", on.R.Hub.FeatureList());
         var (m, _) = (on.R.Join("Mia", "member"), 0);
         Assert.Contains("realms", ((JsonArray)on.R.Hub.Welcome(m)["features"]!).Select(x => (string)x!));
-        Assert.Equal("2.31.5", LodgeHub.Version);
+        Assert.Equal("2.31.6", LodgeHub.Version);
     }
 
     [Fact]

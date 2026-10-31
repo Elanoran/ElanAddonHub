@@ -19,7 +19,8 @@ namespace Lodge;
 //
 // Which namespace holds WoW Forever is not known up front: the first poll probes dynamic-{region}, dynamic-classic-{region},
 // dynamic-classic1x-{region} (or LODGE_REALMS_NAMESPACES) and keeps the connected realms whose realm name, slug or category says
-// "Forever". Later polls only fetch those. Nothing found = available false, polled every 15 minutes.
+// "Forever" - in a namespace of WoW Forever's own (Namespaces: dynamic-forever-{region} and the like, guessed for the launch) every realm. Later
+// polls only fetch those. Nothing found = available false, polled every 15 minutes.
 public sealed class RealmEntry
 {
     public int Id;                 // connected realm id
@@ -192,8 +193,14 @@ public sealed class RealmsModule : IModule
         var over = hub.Cfg.RealmsNamespaces?.Where(n => Regex.IsMatch(n, "^[a-z0-9-]{3,40}$")).ToArray() ?? Array.Empty<string>();
         if (over.Length > 0) return over;
         var r = Region;
-        return new[] { "dynamic-" + r, "dynamic-classic-" + r, "dynamic-classic1x-" + r, "dynamic-classicann-" + r };
+        // the beta's realms were in none of the public ones; the released game (client product "wowf") likely gets a namespace of its own - the
+        // guesses after classicann cost one 404 each until it shows up
+        return new[] { "dynamic-" + r, "dynamic-classic-" + r, "dynamic-classic1x-" + r, "dynamic-classicann-" + r,
+            "dynamic-forever-" + r, "dynamic-classicforever-" + r, "dynamic-classicf-" + r, "dynamic-wowf-" + r };
     }
+
+    // a namespace that holds WoW Forever alone: every realm in it is a Forever realm, whatever it is called (launch realms need not say "Forever")
+    public static bool ForeverOnly(string ns) => Regex.IsMatch(ns ?? "", "^dynamic-(forever|classicforever|classicf|wowf)-[a-z]+$");
 
     // ---------------------------------------------------------------- what clients get
 
@@ -329,7 +336,7 @@ public sealed class RealmsModule : IModule
                 catch (RealmsHttpException e) when (e.Status is 404 or 400) { continue; }   // one odd realm must not stop the probe; 401 / 429 / 5xx do
                 if (c == null) continue;
                 foreach (var r in c.Realms) if (seen.Count < 80) seen.Add(r.Name + (r.Category.Length > 0 ? " [" + r.Category + "]" : ""));
-                var hits = c.Realms.Where(RealmsParse.IsForever).ToList();
+                var hits = ForeverOnly(ns) ? c.Realms.ToList() : c.Realms.Where(RealmsParse.IsForever).ToList();
                 if (hits.Count == 0) continue;
                 forever += hits.Count;
                 keep.Add((ns, id));
