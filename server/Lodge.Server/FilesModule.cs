@@ -34,6 +34,12 @@ public sealed class Slot
     public string Name { get; set; }
     public string CreatedBy { get; set; }
     public string Kind { get; set; }     // 2.32: "addon" = a zip of WoW addon folders (Elans.Shared.AddonZip), null = a plain file
+    public string Desc { get; set; }     // 2.33: a longer description (FilesModule.MaxDescChars, line breaks kept)
+    public string See { get; set; }      // 2.33: the lowest rank that sees it (FileSlot.SeeRanks); null = everyone, guests included
+    public string Edit { get; set; }     // 2.33: the lowest rank that may update it (FileSlot.EditRanks); null = officers
+    public string Cover { get; set; }    // 2.33: the cover picture's blob (32 hex, server-made) and its type
+    public string CoverType { get; set; }
+    public int CoverV { get; set; }      // goes up with every new picture (clients cache by it)
     public int NextV { get; set; } = 1;  // version numbers are never reused (not even after a roll back)
     public List<SlotVersion> Versions { get; set; } = new();
 }
@@ -102,6 +108,35 @@ public sealed class FilesModule : IModule
     public const int MaxSlots = 200;
     public const int MaxNameChars = 60;
     public const int MaxNoteChars = 200;
+    public const int MaxDescChars = 1000, MaxDescLines = 20;
+    public const long MaxCoverBytes = 2 * 1024 * 1024;
+
+    // 2.33: who sees a slot, who may update it (a new version, roll back, its description / kind / notes / picture). Officers and the owner see
+    // every slot and may update every slot (FilesManage); a slot that is hidden from someone does not exist for them (404, never "forbidden").
+    public static bool CanSee(string role, Slot s) => Roles.Can(role, Perm.FilesManage) || Roles.AtLeast(role, s.See ?? "guest");
+    public static bool CanUpdate(string role, Slot s) => Roles.Can(role, Perm.FilesManage) || (s.Edit != null && Roles.AtLeast(role, s.Edit) && CanSee(role, s));
+
+    // a description: line breaks kept (at most MaxDescLines), other control characters out, trimmed, at most MaxDescChars
+    public static string CleanDesc(string d)
+    {
+        var t = (d ?? "").Replace("\r\n", "\n").Replace('\r', '\n');
+        var sb = new StringBuilder();
+        foreach (var c in t) if (c == '\n' || !char.IsControl(c)) sb.Append(c);
+        var lines = sb.ToString().Split('\n').Select(l => l.TrimEnd()).Take(MaxDescLines);
+        t = string.Join("\n", lines).Trim();
+        return t.Length > MaxDescChars ? t.Substring(0, MaxDescChars).TrimEnd() : t;
+    }
+
+    // a picture by its first bytes (never by what the client says): png, jpg, gif, webp; null = not one of them
+    public static string ImageType(byte[] head)
+    {
+        if (head == null || head.Length < 12) return null;
+        if (head[0] == 0x89 && head[1] == 0x50 && head[2] == 0x4E && head[3] == 0x47) return "png";
+        if (head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF) return "jpg";
+        if (head[0] == 0x47 && head[1] == 0x49 && head[2] == 0x46 && head[3] == 0x38) return "gif";
+        if (head[0] == 0x52 && head[1] == 0x49 && head[2] == 0x46 && head[3] == 0x46 && head[8] == 0x57 && head[9] == 0x45 && head[10] == 0x42 && head[11] == 0x50) return "webp";
+        return null;
+    }
 
     readonly LodgeHub hub;
     readonly string dir;
@@ -155,7 +190,13 @@ public sealed class FilesModule : IModule
             if (s.Versions.RemoveAll(v => !ValidBlob(v.Blob) || !File.Exists(BlobPath(v))) > 0) changed = true;
             if (s.Versions.Count == 0) { slots.Remove(s); changed = true; }
         }
-        var live = slots.SelectMany(s => s.Versions).Select(v => v.Blob + ".bin").ToHashSet();
+        foreach (var s in slots)
+        {
+            if (s.Cover != null && (!ValidBlob(s.Cover) || !File.Exists(Path.Combine(dir, s.Cover + ".bin")))) { s.Cover = null; s.CoverType = null; changed = true; }
+            if (s.See != null && Array.IndexOf(FileSlot.SeeRanks, s.See) < 0) { s.See = "officer"; changed = true; }       // unknown = the safe side
+            if (s.Edit != null && Array.IndexOf(FileSlot.EditRanks, s.Edit) < 0) { s.Edit = null; changed = true; }
+        }
+        var live = slots.SelectMany(s => s.Versions).Select(v => v.Blob + ".bin").Concat(slots.Where(s => s.Cover != null).Select(s => s.Cover + ".bin")).ToHashSet();
         foreach (var f in Directory.GetFiles(dir, "*.bin"))
             if (!live.Contains(Path.GetFileName(f))) TryDelete(f);
         if (changed) SaveIndexLocked();
@@ -206,12 +247,16 @@ public sealed class FilesModule : IModule
         V = v.V, FileName = v.FileName, Size = v.Size, Sha256 = v.Sha256, UploadedBy = v.UploadedBy, At = v.At, Note = v.Note ?? "",
     };
 
-    static FileSlot SlotOf(Slot s) => new()
+    static FileSlot SlotOf(Slot s, string role = null) => new()
     {
         Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Kind = s.Kind == FileSlot.AddonKind ? FileSlot.AddonKind : null, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
+        Desc = string.IsNullOrEmpty(s.Desc) ? null : s.Desc, See = s.See, Edit = s.Edit, Cover = s.Cover != null ? Math.Max(1, s.CoverV) : 0,
+        CanUpdate = role != null && CanUpdate(role, s),
     };
 
-    static JsonObject SlotJson(Slot s) => LodgeJson.Build(SlotOf(s).Write);
+    static JsonObject SlotJson(Slot s, string role = null) => LodgeJson.Build(SlotOf(s, role).Write);
+
+    JsonObject SlotJsonFor(string id, string role) { lock (gate) { var s = Find(id); return s == null || !CanSee(role, s) ? null : SlotJson(s, role); } }
 
     public JsonObject ListJson(Member me)
     {
@@ -220,13 +265,13 @@ public sealed class FilesModule : IModule
             {
                 MaxMb = hub.Cfg.FilesMaxMb, TotalMb = hub.Cfg.FilesTotalMb, UsedBytes = slots.Sum(s => s.Versions.Sum(v => v.Size)),
                 Keep = KeptVersions, CanManage = Roles.Can(me.Role, Perm.FilesManage),
-                Slots = slots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(SlotOf).ToList(),
+                Slots = slots.Where(s => CanSee(me.Role, s)).OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => SlotOf(s, me.Role)).ToList(),
             }.Write);
     }
 
-    public JsonObject SlotView(string id)
+    public JsonObject SlotView(string id, string role = null)
     {
-        lock (gate) { var s = Find(id); return s == null ? null : SlotJson(s); }
+        lock (gate) { var s = Find(id); return s == null || (role != null && !CanSee(role, s)) ? null : SlotJson(s, role); }
     }
 
     Slot Find(string id) => slots.FirstOrDefault(s => s.Id == id);
@@ -263,7 +308,7 @@ public sealed class FilesModule : IModule
         if (kind.Length > 0 && kind != FileSlot.AddonKind && kind != "file") throw new FilesException(400, "bad-kind", "Unknown kind of file");
         var cfg = hub.Cfg;
         if (!Enabled) throw new FilesException(403, "disabled", "File sharing is switched off on this lodge");
-        if (!Roles.Can(role, Perm.FilesManage)) throw new FilesException(403, "forbidden", "Only officers and the lodge owner can upload files");
+        if (slotId == null && !Roles.Can(role, Perm.FilesManage)) throw new FilesException(403, "forbidden", "Only officers and the lodge owner can share new files");
         sha256 = (sha256 ?? "").Trim().ToLowerInvariant();
         if (sha256.Length != 64 || !sha256.All(Uri.IsHexDigit)) throw new FilesException(400, "bad-sha", "The upload needs its SHA-256");
         if (length == null) throw new FilesException(411, "length", "The upload needs a Content-Length");
@@ -286,7 +331,8 @@ public sealed class FilesModule : IModule
             else
             {
                 var s = Find(slotId);
-                if (s == null) throw new FilesException(404, "missing", "That slot doesn't exist any more");
+                if (s == null || !CanSee(role, s)) throw new FilesException(404, "missing", "That slot doesn't exist any more");
+                if (!CanUpdate(role, s)) throw new FilesException(403, "forbidden", "You can't update this file");
             }
             if (slots.Sum(s => s.Versions.Sum(v => v.Size)) + reservedBytes + length.Value - FreedByPrune(slotId) > cfg.FilesTotalBytes)
                 throw new FilesException(507, "full", $"The lodge's file space ({cfg.FilesTotalMb} MB) is full - delete something first");
@@ -364,6 +410,7 @@ public sealed class FilesModule : IModule
                 else
                 {
                     s = Find(slotId) ?? throw new FilesException(404, "missing", "That slot doesn't exist any more");
+                    if (!CanUpdate(role, s)) throw new FilesException(403, "forbidden", "You can't update this file");
                 }
                 var kindBefore = s.Kind;
                 if (kind == FileSlot.AddonKind) s.Kind = FileSlot.AddonKind; else if (kind == "file") s.Kind = null;
@@ -396,7 +443,7 @@ public sealed class FilesModule : IModule
             hub.Log.LogInformation("{Name} shared a file ({Action}, {Size} bytes)", by, action, size);
             hub.Badges.Note(by, "files");
             _ = Announce(action, id, slotNameOut, ver, by);
-            return view;
+            return SlotJsonFor(id, role) ?? view;
         }
         finally
         {
@@ -420,13 +467,14 @@ public sealed class FilesModule : IModule
     // ---------------------------------------------------------------- download
 
     // opened under the lock, so a delete a moment later can't pull the file out from under the reader (on Linux the handle stays valid)
-    public FileStream OpenVersion(string slotId, int v, out SlotVersion ver)
+    public FileStream OpenVersion(string slotId, int v, out SlotVersion ver, string role = "owner")
     {
         ver = null;
         if (!Enabled) throw new FilesException(403, "disabled", "File sharing is switched off on this lodge");
         lock (gate)
         {
             var s = Find(slotId);
+            if (s != null && !CanSee(role, s)) s = null;
             ver = s?.Versions.FirstOrDefault(x => x.V == v);
             if (ver == null) throw new FilesException(404, "missing", "That file isn't there any more");
             try { return new FileStream(BlobPath(ver), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 81920, useAsync: true); }
@@ -442,16 +490,19 @@ public sealed class FilesModule : IModule
         if (!Enabled) return (false, "disabled");
         if (!Roles.Can(me.Role, Perm.FilesManage)) return (false, "forbidden");
         List<SlotVersion> gone;
+        string coverGone = null;
         lock (gate)
         {
             var s = Find(slotId);
             if (s == null) return (false, "missing");
             gone = s.Versions.ToList();
+            if (s.Cover != null) coverGone = Path.Combine(dir, s.Cover + ".bin");
             name = s.Name;
             slots.Remove(s);
             if (!SaveIndexLocked()) { slots.Add(s); return (false, "save"); }
         }
         foreach (var v in gone) TryDelete(BlobPath(v));
+        if (coverGone != null) TryDelete(coverGone);
         return (true, null);
     }
 
@@ -460,12 +511,12 @@ public sealed class FilesModule : IModule
     {
         name = null; current = 0;
         if (!Enabled) return (false, "disabled");
-        if (!Roles.Can(me.Role, Perm.FilesManage)) return (false, "forbidden");
         List<SlotVersion> gone;
         lock (gate)
         {
             var s = Find(slotId);
-            if (s == null) return (false, "missing");
+            if (s == null || !CanSee(me.Role, s)) return (false, "missing");
+            if (!CanUpdate(me.Role, s)) return (false, "forbidden");
             var target = s.Versions.FirstOrDefault(x => x.V == v);
             if (target == null) return (false, "missing");
             name = s.Name; current = v;
@@ -479,12 +530,144 @@ public sealed class FilesModule : IModule
         return (true, null);
     }
 
+    // ---------------------------------------------------------------- 2.33: edit without uploading, the cover picture
+
+    public async Task<(bool ok, string why, string name)> EditAsync(Member me, FilesEditMsg req)
+    {
+        if (!Enabled) return (false, "disabled", null);
+        bool admin = Roles.Can(me.Role, Perm.FilesManage);
+        string newName = null, desc = null;
+        if (req.Name != null)
+        {
+            if (!admin) return (false, "forbidden", null);
+            newName = Names.Text(req.Name, MaxNameChars);
+            if (newName.Length == 0) return (false, "bad-name", null);
+        }
+        if (req.See != null && (!admin || (req.See.Length > 0 && Array.IndexOf(FileSlot.SeeRanks, req.See) < 0))) return (false, admin ? "bad-rank" : "forbidden", null);
+        if (req.Edit != null && (!admin || (req.Edit.Length > 0 && Array.IndexOf(FileSlot.EditRanks, req.Edit) < 0))) return (false, admin ? "bad-rank" : "forbidden", null);
+        if (req.Kind != null && req.Kind != FileSlot.AddonKind && req.Kind != "file") return (false, "bad-kind", null);
+        if (req.Desc != null) desc = CleanDesc(req.Desc);
+        string note = req.NoteV > 0 ? Names.Text(req.Note ?? "", MaxNoteChars) : null;
+        string addonCheckBlob = null, addonCheckName = null;
+        lock (gate)
+        {
+            var s = Find(req.Slot);
+            if (s == null || !CanSee(me.Role, s)) return (false, "missing", null);
+            if (!CanUpdate(me.Role, s)) return (false, "forbidden", null);
+            if (newName != null && slots.Any(x => x != s && string.Equals(x.Name, newName, StringComparison.OrdinalIgnoreCase))) return (false, "name-taken", null);
+            if (req.NoteV > 0 && s.Versions.All(v => v.V != req.NoteV)) return (false, "missing", null);
+            if (req.Kind == FileSlot.AddonKind && s.Kind != FileSlot.AddonKind)
+            {
+                var newest = s.Versions.OrderBy(v => v.V).LastOrDefault();
+                if (newest == null || !FileRules.IsZip(newest.FileName)) return (false, "not-addon", null);
+                addonCheckBlob = BlobPath(newest); addonCheckName = s.Id;
+            }
+        }
+        if (addonCheckBlob != null)
+        {
+            AddonZip.Result ar;
+            try { await using var fs = new FileStream(addonCheckBlob, FileMode.Open, FileAccess.Read, FileShare.Read); ar = AddonZip.Check(fs); }
+            catch (IOException) { return (false, "missing", null); }
+            if (!ar.Ok) return (false, "not-addon", null);
+        }
+        lock (gate)
+        {
+            var s = Find(req.Slot);
+            if (s == null) return (false, "missing", null);
+            var before = (s.Name, s.Desc, s.See, s.Edit, s.Kind, s.Cover, s.CoverType, Notes: s.Versions.Select(v => v.Note).ToList());
+            string coverGone = null;
+            if (newName != null) s.Name = newName;
+            if (desc != null) s.Desc = desc.Length == 0 ? null : desc;
+            if (req.See != null) s.See = req.See.Length == 0 || req.See == "guest" ? null : req.See;
+            if (req.Edit != null) s.Edit = req.Edit.Length == 0 || req.Edit == "officer" ? null : req.Edit;
+            if (req.Kind != null) s.Kind = req.Kind == FileSlot.AddonKind ? FileSlot.AddonKind : null;
+            if (note != null) s.Versions.First(v => v.V == req.NoteV).Note = note;
+            if (req.Cover == false && s.Cover != null) { coverGone = Path.Combine(dir, s.Cover + ".bin"); s.Cover = null; s.CoverType = null; }
+            if (!SaveIndexLocked())
+            {
+                (s.Name, s.Desc, s.See, s.Edit, s.Kind, s.Cover, s.CoverType) = (before.Name, before.Desc, before.See, before.Edit, before.Kind, before.Cover, before.CoverType);
+                for (int i = 0; i < s.Versions.Count; i++) s.Versions[i].Note = before.Notes[i];
+                return (false, "save", null);
+            }
+            if (coverGone != null) TryDelete(coverGone);
+            return (true, null, s.Name);
+        }
+    }
+
+    // PUT /slots/{id}/cover: a picture (png, jpg, gif, webp by its own bytes; at most MaxCoverBytes) - anyone who may update the slot
+    public async Task<JsonObject> PutCover(string by, string role, string slotId, string sha256, long? length, Stream body, CancellationToken ct)
+    {
+        if (!Enabled) throw new FilesException(403, "disabled", "File sharing is switched off on this lodge");
+        sha256 = (sha256 ?? "").Trim().ToLowerInvariant();
+        if (sha256.Length != 64 || !sha256.All(Uri.IsHexDigit)) throw new FilesException(400, "bad-sha", "The upload needs its SHA-256");
+        if (length == null) throw new FilesException(411, "length", "The upload needs a Content-Length");
+        if (length <= 0) throw new FilesException(400, "empty", "That file is empty");
+        if (length > MaxCoverBytes) throw new FilesException(413, "too-big", "A picture can be 2 MB at most");
+        lock (gate)
+        {
+            var s = Find(slotId);
+            if (s == null || !CanSee(role, s)) throw new FilesException(404, "missing", "That slot doesn't exist any more");
+            if (!CanUpdate(role, s)) throw new FilesException(403, "forbidden", "You can't update this file");
+        }
+        using var ms = new MemoryStream();
+        var buf = new byte[81920]; int n; long size = 0;
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2)))
+        using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token))
+            while ((n = await body.ReadAsync(buf, linked.Token)) > 0)
+            {
+                size += n;
+                if (size > length || size > MaxCoverBytes) throw new FilesException(400, "length", "The upload is longer than it announced");
+                ms.Write(buf, 0, n);
+            }
+        var data = ms.ToArray();
+        if (data.Length != length) throw new FilesException(400, "length", "The upload is shorter than it announced");
+        if (Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant() != sha256) throw new FilesException(400, "sha-mismatch", "The file arrived damaged (checksum differs) - try again");
+        var type = ImageType(data) ?? throw new FilesException(415, "not-image", "That isn't a picture (png, jpg, gif or webp)");
+        Directory.CreateDirectory(dir);
+        var blob = NewId();
+        var path = Path.Combine(dir, blob + ".bin");
+        await File.WriteAllBytesAsync(path, data, ct);
+        string old = null, name;
+        lock (gate)
+        {
+            var s = Find(slotId);
+            if (s == null) { TryDelete(path); throw new FilesException(404, "missing", "That slot doesn't exist any more"); }
+            var before = (s.Cover, s.CoverType, s.CoverV);
+            old = s.Cover; s.Cover = blob; s.CoverType = type; s.CoverV++;
+            if (!SaveIndexLocked()) { (s.Cover, s.CoverType, s.CoverV) = before; TryDelete(path); throw new FilesException(500, "save", "The server couldn't store the picture"); }
+            name = s.Name;
+        }
+        if (old != null) TryDelete(Path.Combine(dir, old + ".bin"));
+        hub.Log.LogInformation("{Name} set a shared file's picture ({Size} bytes)", by, data.Length);
+        _ = Announce("edit", slotId, name, null, by);
+        return SlotJsonFor(slotId, role);
+    }
+
+    // GET /slots/{id}/cover: the bytes and their type, or null when there is none / the caller doesn't see the slot
+    public (byte[] data, string type)? GetCover(string slotId, string role)
+    {
+        string path, type;
+        lock (gate)
+        {
+            var s = Find(slotId);
+            if (s == null || s.Cover == null || !CanSee(role, s)) return null;
+            path = Path.Combine(dir, s.Cover + ".bin"); type = s.CoverType;
+        }
+        try { return (File.ReadAllBytes(path), type); } catch (IOException) { return null; }
+    }
+
     // ---------------------------------------------------------------- messages
 
-    Task Announce(string action, string id, string name, int? v, string by) => hub.Broadcast(LodgeJson.Build(new FilesChangedMsg
+    // to everybody who sees the slot (see = its rank before a change that hid it; a deleted slot: everybody who saw it)
+    Task Announce(string action, string id, string name, int? v, string by, string see = null)
     {
-        Action = action, Slot = id, Name = name, By = by, At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(), V = v,
-    }.Write));
+        if (see == null) lock (gate) see = Find(id)?.See;
+        var min = see ?? "guest";
+        return hub.Broadcast(LodgeJson.Build(new FilesChangedMsg
+        {
+            Action = action, Slot = id, Name = name, By = by, At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(), V = v,
+        }.Write), m => Roles.Can(m.Role, Perm.FilesManage) || Roles.AtLeast(m.Role, min));
+    }
 
     Task Result(Member me, string op, bool ok, string why, string slot) =>
         hub.Send(me, LodgeJson.Build(new FilesResultMsg { Op = op, Ok = ok, Why = why, Slot = slot }.Write));
@@ -501,9 +684,27 @@ public sealed class FilesModule : IModule
             case FilesDeleteMsg.Type:
             {
                 var id = FilesDeleteMsg.Read(new LodgeJsonFields(m)).Slot ?? "";
+                string seeBefore; lock (gate) seeBefore = Find(id)?.See;
                 var (ok, why) = Delete(me, id, out var name);
                 await Result(me, "delete", ok, why, id);
-                if (ok) { hub.Log.LogInformation("{Name} deleted a shared file slot", me.Name); await Announce("delete", id, name, null, me.Name); }
+                if (ok) { hub.Log.LogInformation("{Name} deleted a shared file slot", me.Name); await Announce("delete", id, name, null, me.Name, seeBefore ?? "guest"); }
+                return true;
+            }
+            case FilesEditMsg.Type:
+            {
+                var req = FilesEditMsg.Read(new LodgeJsonFields(m));
+                var id = req.Slot ?? "";
+                string seeBefore; lock (gate) seeBefore = Find(id)?.See;
+                var (ok, why, name) = await EditAsync(me, req);
+                await Result(me, "edit", ok, why, id);
+                if (ok)
+                {
+                    hub.Log.LogInformation("{Name} edited a shared file slot", me.Name);
+                    string seeNow; lock (gate) seeNow = Find(id)?.See;
+                    // who saw it before and who sees it now both hear of it (a slot that was hidden from someone vanishes from their list)
+                    var widest = Array.IndexOf(FileSlot.SeeRanks, seeBefore ?? "guest") <= Array.IndexOf(FileSlot.SeeRanks, seeNow ?? "guest") ? seeBefore ?? "guest" : seeNow ?? "guest";
+                    await Announce("edit", id, name, null, me.Name, widest);
+                }
                 return true;
             }
             case FilesRollbackMsg.Type:

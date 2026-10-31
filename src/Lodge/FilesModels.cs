@@ -56,11 +56,37 @@ namespace ElansAddonHub.Lodge
             Id = d.Id; Name = d.Name ?? ""; CreatedBy = d.CreatedBy ?? "";
             Versions = d.Versions.Select(SlotVersionInfo.From).Where(v => v != null).OrderBy(v => v.V).ToList();
             CanManage = canManage;
+            CanUpdate = canManage || d.CanUpdate;
+            Desc = d.Desc ?? ""; See = d.See; EditRank = d.Edit;
+            if (CoverV != d.Cover) { CoverV = d.Cover; if (d.Cover <= 0) CoverImage = null; }
             IsAddon = addonsOn && d.IsAddon;
             Badge = LodgeFiles.Badge(Newest, saved);
             SetInstalled(IsAddon ? installed : null, Newest);
             RaiseAll();
         }
+
+        // ---- 2.33: description, who sees / updates it, the cover picture
+        public bool CanUpdate { get; private set; }
+        public string Desc { get; private set; } = "";
+        public string See { get; private set; }
+        public string EditRank { get; private set; }
+        public int CoverV { get; private set; }
+        System.Windows.Media.ImageSource cover;
+        public System.Windows.Media.ImageSource CoverImage { get => cover; set { cover = value; Raise(nameof(CoverImage)); Raise(nameof(CoverVisibility)); Raise(nameof(PlaceholderVisibility)); Raise(nameof(CoverHeight)); } }
+        public double CoverHeight => cover != null ? 132 : 56;            // a slim strip with the kind's icon when there is no picture
+        public Visibility CoverVisibility => cover != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility PlaceholderVisibility => cover == null ? Visibility.Visible : Visibility.Collapsed;
+        public string KindGlyph => IsAddon ? "\uE74C" : "\uE8A5";        // a puzzle piece for addons, a page for files
+        public string DescShort => Desc.Split('\n')[0];
+        public Visibility DescVisibility => Desc.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public static string SeeText(string r) => r == "member" ? "Members and up" : r == "veteran" ? "Veterans and up" : r == "officer" ? "Officers only" : "Everyone, guests too";
+        public static string EditText(string r) => r == "member" ? "Members and up" : r == "veteran" ? "Veterans and up" : "Officers";
+        public string SeeLine => SeeText(See);
+        public string EditLine => EditText(EditRank);
+        public string SeeChip => See == "member" ? "Members" : See == "veteran" ? "Veterans" : See == "officer" ? "Officers" : "";
+        public Visibility SeeChipVisibility => SeeChip.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UpdateVisibility => CanUpdate ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SaveCardVisibility => IsAddon ? Visibility.Collapsed : Visibility.Visible;
 
         // ---- addons (Lodge 2.32): installed in WoW from this slot, and whether it keeps itself updated
         public bool IsAddon { get; private set; }
@@ -85,7 +111,9 @@ namespace ElansAddonHub.Lodge
         public void RaiseAll()
         {
             foreach (var n in new[] { nameof(Name), nameof(VersionLine), nameof(MetaLine), nameof(Note), nameof(NoteVisibility), nameof(ManageVisibility), nameof(HasOlderVisibility),
-                nameof(VersionsLabel), nameof(ProgressVisibility), nameof(Progress), nameof(BusyText), nameof(IdleEnabled) }) Raise(n);
+                nameof(VersionsLabel), nameof(ProgressVisibility), nameof(Progress), nameof(BusyText), nameof(IdleEnabled),
+                nameof(CanUpdate), nameof(Desc), nameof(DescShort), nameof(DescVisibility), nameof(SeeLine), nameof(EditLine), nameof(SeeChip), nameof(SeeChipVisibility),
+                nameof(UpdateVisibility), nameof(SaveCardVisibility), nameof(KindGlyph), nameof(CoverVisibility), nameof(PlaceholderVisibility) }) Raise(n);
         }
 
         public string Badge { get => badge; set { if (Set(ref badge, value ?? "")) { Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeTip)); } } }
@@ -111,6 +139,6 @@ namespace ElansAddonHub.Lodge
         public Visibility ErrorVisibility => error.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         public List<VersionVM> VersionRows() =>
-            Versions.OrderByDescending(v => v.V).Select(v => new VersionVM { Slot = this, Info = v, IsNewest = v.V == Newest?.V, CanRollBack = CanManage && v.V != Newest?.V }).ToList();
+            Versions.OrderByDescending(v => v.V).Select(v => new VersionVM { Slot = this, Info = v, IsNewest = v.V == Newest?.V, CanRollBack = CanUpdate && v.V != Newest?.V }).ToList();
     }
 }

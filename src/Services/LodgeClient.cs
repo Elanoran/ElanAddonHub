@@ -375,6 +375,41 @@ namespace ElansAddonHub.Services
         }
 
         // streams to toFile and returns the SHA-256 of what arrived (the caller compares it with the announced one)
+        // 2.33: a slot's cover picture - PUT /slots/{id}/cover (the server checks it is a picture by its bytes), GET /slots/{id}/cover (at most 2 MB)
+        public const long MaxCoverBytes = 2 * 1024 * 1024;
+        public async Task<JsonObject> PutCover(string slotId, string file)
+        {
+            if (SafeFile.Id(slotId) == null) throw new InvalidOperationException("That file can't be changed");
+            var data = File.ReadAllBytes(file);
+            if (data.Length > MaxCoverBytes) throw new InvalidOperationException("A picture can be 2 MB at most");
+            using (var req = Request(HttpMethod.Put, "/slots/" + slotId + "/cover"))
+            {
+                req.Headers.Add("X-Sha256", LodgeFiles.Hex(System.Security.Cryptography.SHA256.HashData(data)));
+                req.Content = new ByteArrayContent(data);
+                req.Content.Headers.ContentLength = data.Length;
+                using (var resp = await Net.Http.SendAsync(req))
+                {
+                    var body = await AnswerOf(resp);
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
+                }
+            }
+        }
+
+        public async Task GetCover(string slotId, string toFile)
+        {
+            if (SafeFile.Id(slotId) == null) throw new InvalidOperationException("That picture can't be fetched");
+            using (var req = Request(HttpMethod.Get, "/slots/" + slotId + "/cover"))
+            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead))
+            {
+                if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, null));
+                CheckLength(resp, MaxCoverBytes);
+                using (var src = await resp.Content.ReadAsStreamAsync())
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                    await ToFileCapped(src, toFile, MaxCoverBytes, sha, null, CancellationToken.None);
+            }
+        }
+
         public async Task<string> DownloadSlot(string slotId, int version, string toFile, long expectedSize, Action<double> progress = null)
         {
             if (SafeFile.Id(slotId) == null) throw new InvalidOperationException("That file can't be downloaded");

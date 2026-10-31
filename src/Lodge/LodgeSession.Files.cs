@@ -34,6 +34,7 @@ namespace ElansAddonHub.Lodge
         InstalledAddons installedAddons;
         InstalledAddons Installed() => installedAddons ?? (installedAddons = new InstalledAddons(Settings?.LodgeUrl));
         public bool SupportsAddonFiles { get; private set; }     // 2.32 "filesaddons": slots can be marked as WoW addons and installed
+        public bool SupportsFiles2 { get; private set; }         // 2.33 "files2": who sees / updates a slot, description, cover picture, files.edit
 
         void ReadFilesFeatures(WelcomeMsg w, List<string> features)
         {
@@ -41,6 +42,7 @@ namespace ElansAddonHub.Lodge
             SupportsFiles = features.Contains("files") && (v == null || v >= LodgeFiles.Server);
             CanManageFiles = SupportsFiles && w.CanManageFiles;
             SupportsAddonFiles = SupportsFiles && features.Contains("filesaddons");
+            SupportsFiles2 = SupportsFiles && features.Contains("files2");
             if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
             savedFiles = null; installedAddons = null;
             if (!SupportsFiles) { Slots.Clear(); FilesLoaded = false; }
@@ -48,7 +50,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetFiles()
         {
-            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; FilesLoaded = false; savedFiles = null; installedAddons = null;
+            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; FilesLoaded = false; savedFiles = null; installedAddons = null;
             Slots.Clear(); FilesNoticeText = ""; FilesNoticeFor = null; FilesUsedBytes = 0;
             filesLastRequest = DateTime.MinValue;
         }
@@ -87,6 +89,7 @@ namespace ElansAddonHub.Lodge
                 var have = Slots.FirstOrDefault(s => s.Id == d.Id);
                 if (have == null) { have = new SlotVM(); Slots.Insert(Math.Min(i, Slots.Count), have); }
                 have.Update(d, CanManageFiles, Saved().Get(d.Id), SupportsAddonFiles ? Installed().Get(d.Id) : null, SupportsAddonFiles);
+                if (SupportsFiles2) _ = LoadCoverAsync(have);
             }
             FilesLoaded = true;
             FilesChanged?.Invoke();
@@ -145,7 +148,8 @@ namespace ElansAddonHub.Lodge
         public async Task<string> UploadSlotAsync(string slotId, string name, string path, string note, Action<double> progress = null, bool? addon = null)
         {
             if (!SupportsFiles) return "This lodge doesn't share files";
-            if (!CanManageFiles) return FilesWhy("forbidden");
+            var target = slotId == null ? null : Slots.FirstOrDefault(s => s.Id == slotId);
+            if (slotId == null ? !CanManageFiles : (target != null && !target.CanUpdate)) return FilesWhy("forbidden");
             var http = FilesHttp;
             if (http == null || (!Online && filesClientOverride == null)) return "You are offline - try again when you are back";
             name = (name ?? "").Trim();
@@ -228,7 +232,7 @@ namespace ElansAddonHub.Lodge
         public string RollBackSlot(SlotVM slot, int version)
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
-            if (!CanManageFiles) return FilesWhy("forbidden");
+            if (!slot.CanUpdate) return FilesWhy("forbidden");
             _ = Send(LodgeJson.Build(new FilesRollbackMsg { Slot = slot.Id, V = version }.Write));
             return null;
         }
@@ -294,6 +298,60 @@ namespace ElansAddonHub.Lodge
 
         public InstalledRecord InstalledOfForTest(string slotId) => Installed().Get(slotId);
         public void NoteFiles(string text, string slotId) { FilesNoticeText = text ?? ""; FilesNoticeFor = slotId; FilesChanged?.Invoke(); }
+
+        // ---- 2.33: change a slot without uploading (the answer comes as files.result: an error lands on the slot), its cover picture
+        public string EditSlot(SlotVM slot, FilesEditMsg edit)
+        {
+            if (!SupportsFiles2 || slot == null || edit == null) return "This lodge can't change files that way - update the Lodge server";
+            if (!slot.CanUpdate) return FilesWhy("forbidden");
+            if ((edit.Name != null || edit.See != null || edit.Edit != null) && !CanManageFiles) return FilesWhy("forbidden");
+            edit.Slot = slot.Id;
+            slot.Error = "";
+            _ = Send(LodgeJson.Build(edit.Write));
+            return null;
+        }
+
+        public async Task<string> SetCoverAsync(SlotVM slot, string path)
+        {
+            if (!SupportsFiles2 || slot == null) return "This lodge can't show pictures for files - update the Lodge server";
+            if (!slot.CanUpdate) return FilesWhy("forbidden");
+            var http = FilesHttp;
+            if (http == null || (!Online && filesClientOverride == null)) return "You are offline - try again when you are back";
+            try
+            {
+                if (new FileInfo(path).Length > LodgeClient.MaxCoverBytes) return "A picture can be 2 MB at most - pick a smaller one";
+                if (LodgeFiles.PictureType(path) == null) return "That isn't a picture (png, jpg, gif or webp)";
+                await http.PutCover(slot.Id, path);
+                RequestFiles();
+                return null;
+            }
+            catch (Exception ex) { Util.Log("files cover: " + ex.GetType().Name); return ex is InvalidOperationException ? ex.Message : "Couldn't set the picture: " + ex.Message; }
+        }
+
+        // the picture of a slot, cached by slot and picture number in the Outpost's data folder (files-covers); decoded small, never run or shown by a browser
+        public static string CoverDir => Path.Combine(Util.DataDir, "files-covers");
+        async Task LoadCoverAsync(SlotVM slot)
+        {
+            if (slot.CoverV <= 0) { slot.CoverImage = null; return; }
+            var file = Path.Combine(CoverDir, slot.Id + "-" + slot.CoverV + ".img");
+            try
+            {
+                if (!File.Exists(file))
+                {
+                    var http = FilesHttp;
+                    if (http == null) return;
+                    Directory.CreateDirectory(CoverDir);
+                    var part = file + ".part";
+                    await http.GetCover(slot.Id, part);
+                    if (LodgeFiles.PictureType(part) == null) { try { File.Delete(part); } catch { } return; }
+                    if (File.Exists(file)) File.Delete(file);
+                    File.Move(part, file);
+                    foreach (var old in Directory.GetFiles(CoverDir, slot.Id + "-*.img")) if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch { }
+                }
+                slot.CoverImage = LodgeFiles.LoadPicture(file, 640);
+            }
+            catch (Exception ex) { Util.Log("files cover load: " + ex.GetType().Name); }
+        }
 
         public void ClearFilesNotice() { FilesNoticeText = ""; FilesNoticeFor = null; FilesChanged?.Invoke(); }
         public SavedRecord SavedOfForTest(string slotId) => Saved().Get(slotId);

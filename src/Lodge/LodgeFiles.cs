@@ -16,6 +16,40 @@ namespace ElansAddonHub.Lodge
     public static class LodgeFiles
     {
         public static bool IsZipName(string path) => Elans.Shared.DangerousFiles.Extension(Path.GetFileName(path ?? "")) == "zip";
+
+        // 2.33 cover pictures: the type by the file's own first bytes (png, jpg, gif, webp), null = not one of them
+        public static string PictureType(string file)
+        {
+            try
+            {
+                var h = new byte[12];
+                using (var fs = File.OpenRead(file)) if (fs.Read(h, 0, 12) < 12) return null;
+                if (h[0] == 0x89 && h[1] == 0x50 && h[2] == 0x4E && h[3] == 0x47) return "png";
+                if (h[0] == 0xFF && h[1] == 0xD8 && h[2] == 0xFF) return "jpg";
+                if (h[0] == 0x47 && h[1] == 0x49 && h[2] == 0x46 && h[3] == 0x38) return "gif";
+                if (h[0] == 0x52 && h[1] == 0x49 && h[2] == 0x46 && h[3] == 0x46 && h[8] == 0x57 && h[9] == 0x45 && h[10] == 0x42 && h[11] == 0x50) return "webp";
+            }
+            catch { }
+            return null;
+        }
+
+        // decoded once, small (decodeWidth px wide), frozen; null when it can't be read
+        public static System.Windows.Media.ImageSource LoadPicture(string file, int decodeWidth)
+        {
+            try
+            {
+                var bi = new System.Windows.Media.Imaging.BitmapImage();
+                bi.BeginInit();
+                bi.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bi.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile;
+                bi.DecodePixelWidth = decodeWidth;
+                bi.UriSource = new Uri(file);
+                bi.EndInit();
+                bi.Freeze();
+                return bi;
+            }
+            catch { return null; }
+        }
         public static readonly Version Server = new Version(2, 14, 0);
 
         // 3.1.1: the one list (Elans.Shared.DangerousFiles) - the same types are refused for an upload and warned about before a download / save

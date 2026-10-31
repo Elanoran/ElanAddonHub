@@ -869,6 +869,12 @@
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
             </Trigger>
+            <!-- a box of several lines starts at the top (centred text in a tall box reads as a bug) -->
+            <Trigger Property="AcceptsReturn" Value="True">
+              <Setter TargetName="PART_ContentHost" Property="VerticalAlignment" Value="Top" />
+              <Setter TargetName="ph" Property="VerticalAlignment" Value="Top" />
+              <Setter TargetName="ph" Property="Margin" Value="11,8,0,0" />
+            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>

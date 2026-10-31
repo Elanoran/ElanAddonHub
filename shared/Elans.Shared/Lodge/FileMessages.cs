@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Elans.Shared
@@ -58,12 +59,47 @@ namespace Elans.Shared
         }
     }
 
+    // 2.33: change a slot without uploading { t, slot, name?, desc?, see?, edit?, kind? ("addon" | "file"), noteV? + note?, cover? (false = remove the picture) }.
+    // name, see and edit are the officers' (FilesManage); desc, kind, a version's note and removing the picture also anyone who may update the slot.
+    // The answer is files.result {op "edit"}; everybody who sees the slot gets files.changed {action "edit"}.
+    public sealed class FilesEditMsg
+    {
+        public const string Type = "files.edit";
+        public string Slot, Name, Desc, See, Edit, Kind, Note;
+        public int NoteV;
+        public bool? Cover;
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("t", Type); w.Set("slot", Slot);
+            if (Name != null) w.Set("name", Name);
+            if (Desc != null) w.Set("desc", Desc);
+            if (See != null) w.Set("see", See);
+            if (Edit != null) w.Set("edit", Edit);
+            if (Kind != null) w.Set("kind", Kind);
+            if (NoteV > 0) { w.Set("noteV", NoteV); w.Set("note", Note ?? ""); }
+            if (Cover != null) w.Set("cover", Cover.Value);
+        }
+
+        public static FilesEditMsg Read(ILodgeFields f) => new FilesEditMsg
+        {
+            Slot = f.Str("slot"), Name = f.Str("name"), Desc = f.Str("desc"), See = f.Str("see"), Edit = f.Str("edit"), Kind = f.Str("kind"),
+            NoteV = f.Int("noteV"), Note = f.Str("note"), Cover = f.Has("cover") ? f.Bool("cover") : (bool?)null,
+        };
+    }
+
     // a slot { id (32 hex, server-made), name, createdBy, kind?, versions: [FileVersion] (oldest first) }; kind "addon" (server 2.32,
     // feature "filesaddons") = a zip of WoW addon folders the Outpost can install (Elans.Shared.AddonZip); absent = a plain file
+    // 2.33 (feature "files2"): desc (a longer description), see (the lowest rank that sees the slot: guest | member | veteran | officer; absent =
+    // everyone), edit (the lowest rank that may upload a new version / roll back / change the description: member | veteran | officer; absent =
+    // officers), cover (> 0 = a cover picture, GET /slots/{id}/cover, the number changes with every new picture), canUpdate (this viewer may update it)
     public sealed class FileSlot
     {
         public const string AddonKind = "addon";
-        public string Id, Name, CreatedBy, Kind;
+        public static readonly string[] SeeRanks = { "guest", "member", "veteran", "officer" }, EditRanks = { "member", "veteran", "officer" };
+        public string Id, Name, CreatedBy, Kind, Desc, See, Edit;
+        public int Cover;
+        public bool CanUpdate;
         public bool IsAddon => Kind == AddonKind;
         public List<FileVersion> Versions = new List<FileVersion>();
 
@@ -71,12 +107,22 @@ namespace Elans.Shared
         {
             w.Set("id", Id); w.Set("name", Name); w.Set("createdBy", CreatedBy);
             if (Kind == AddonKind) w.Set("kind", Kind);
+            if (!string.IsNullOrEmpty(Desc)) w.Set("desc", Desc);
+            if (!string.IsNullOrEmpty(See)) w.Set("see", See);
+            if (!string.IsNullOrEmpty(Edit)) w.Set("edit", Edit);
+            if (Cover > 0) w.Set("cover", Cover);
+            if (CanUpdate) w.Set("canUpdate", true);
             var l = w.List("versions"); foreach (var v in Versions) v.Write(l.Add());
         }
 
         public static FileSlot Read(ILodgeFields f)
         {
-            var s = new FileSlot { Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : null };
+            var s = new FileSlot
+            {
+                Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : null,
+                Desc = f.Str("desc"), See = Array.IndexOf(SeeRanks, f.Str("see")) >= 0 ? f.Str("see") : null, Edit = Array.IndexOf(EditRanks, f.Str("edit")) >= 0 ? f.Str("edit") : null,
+                Cover = Math.Max(0, f.Int("cover")), CanUpdate = f.Bool("canUpdate"),
+            };
             foreach (var v in f.List("versions")) s.Versions.Add(FileVersion.Read(v));
             return s;
         }

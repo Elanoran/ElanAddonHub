@@ -23,7 +23,7 @@ namespace ElansAddonHub
         sealed class FakeFilesServer
         {
             public sealed class Ver { public int V; public string FileName, Sha, By, Note; public byte[] Bytes; public long At; }
-            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
+            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind, Desc, See, Edit; public int Cover; public byte[] CoverBytes; public bool CanUpdate; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
 
             readonly HttpListener listener = new HttpListener();
             public readonly string Url;
@@ -72,7 +72,8 @@ namespace ElansAddonHub
                 "{\"v\":" + v.V + ",\"fileName\":" + Q(v.FileName) + ",\"size\":" + v.Bytes.Length + ",\"sha256\":" + Q(v.Sha) + ",\"uploadedBy\":" + Q(v.By) + ",\"at\":" + v.At + ",\"note\":" + Q(v.Note) + "}";
 
             public string SlotJson(SlotRec s) =>
-                "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + (s.Kind != null ? ",\"kind\":" + Q(s.Kind) : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
+                "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + (s.Kind != null ? ",\"kind\":" + Q(s.Kind) : "") + (s.Desc != null ? ",\"desc\":" + Q(s.Desc) : "") + (s.See != null ? ",\"see\":" + Q(s.See) : "")
+                + (s.Edit != null ? ",\"edit\":" + Q(s.Edit) : "") + (s.Cover > 0 ? ",\"cover\":" + s.Cover : "") + (s.CanUpdate ? ",\"canUpdate\":true" : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
 
             // what files.list answers
             public string DataJson() =>
@@ -114,6 +115,21 @@ namespace ElansAddonHub
                 var parts = req.Url.AbsolutePath.Trim('/').Split('/');
                 if (req.HttpMethod == "GET" && parts.Length == 2 && (parts[0] == "files" || parts[0] == "datasets") && Hostile != null) { ServeHostile(c, 1000); return; }
                 if (parts.Length < 2 || parts[0] != "slots") { Refuse(c, 404, "missing", "Not found"); return; }
+                if (parts.Length == 3 && parts[2] == "cover")
+                {
+                    var cs = Slots.FirstOrDefault(x => x.Id == parts[1]);
+                    if (cs == null) { Refuse(c, 404, "missing", "Not found"); return; }
+                    if (req.HttpMethod == "PUT")
+                    {
+                        var cm = new MemoryStream(); req.InputStream.CopyTo(cm);
+                        cs.CoverBytes = cm.ToArray(); cs.Cover++;
+                        Reply(c, 200, SlotJson(cs)); return;
+                    }
+                    if (cs.CoverBytes == null) { Refuse(c, 404, "missing", "No picture"); return; }
+                    c.Response.ContentType = "application/octet-stream"; c.Response.ContentLength64 = cs.CoverBytes.Length;
+                    c.Response.OutputStream.Write(cs.CoverBytes, 0, cs.CoverBytes.Length); c.Response.Close();
+                    return;
+                }
                 if (req.HttpMethod == "GET" && parts.Length == 3)
                 {
                     var s = Slots.FirstOrDefault(x => x.Id == parts[1]);
@@ -302,10 +318,10 @@ namespace ElansAddonHub
             finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
         }
 
-        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false)
+        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false)
 
         {
-            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "");
+            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
             bool manage = role == "owner" || role == "officer";
             return w.Substring(0, w.Length - 1) + ",\"canManageFiles\":" + (manage ? "true" : "false") + ",\"filesMaxMb\":" + maxMb + "}";
@@ -687,6 +703,105 @@ namespace ElansAddonHub
                     Session.Disconnect();
                 }
 
+                // ---- 2.33 "files2": who sees / updates a file, its description and picture, the Edit dialog, the details, search
+                {
+                    fake.Slots.Clear();
+                    FakeFilesServer.SlotRec Rec(string name, string desc = null, string see = null, string ed = null, bool canUpdate = false)
+                    {
+                        var data = System.Text.Encoding.UTF8.GetBytes(name);
+                        var r = new FakeFilesServer.SlotRec { Id = (fake.Slots.Count + 500).ToString("x32"), Name = name, CreatedBy = "Wing", Desc = desc, See = see, Edit = ed, CanUpdate = canUpdate };
+                        r.Versions.Add(new FakeFilesServer.Ver { V = 1, FileName = name + ".txt", Sha = LodgeFiles.Hex(System.Security.Cryptography.SHA256.Create().ComputeHash(data)), By = "Wing", Note = "first", Bytes = data, At = 1_790_000_000_000L });
+                        fake.Slots.Add(r);
+                        return r;
+                    }
+                    var loot = Rec("Loot rules", "How we hand out loot.\nRead before raid night.", "officer");
+                    var wa = Rec("Raid WeakAuras", "Import the newest one.", null, "veteran", canUpdate: true);
+                    for (int i = 0; i < 5; i++) Rec("Guide " + i);
+
+                    // a member on a 2.33 Lodge: sees what the Lodge sent (the Lodge filters), may update the one set for them, no ranks in Edit
+                    Session.Disconnect(); sent.Clear();
+                    fake.Role = "member";
+                    Session.FeedForTest(FilesWelcome("member", true, "2.33.0", 1, addons: true, files2: true));
+                    Session.FilesClientForTest(new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan"));
+                    Session.FeedForTest(fake.DataJson());
+                    LodgePage.ShowFilesForTest();
+                    var fv2 = LodgePage.FilesForTest;
+                    var sLoot = Session.Slots.First(s => s.Name == "Loot rules"); var sWa = Session.Slots.First(s => s.Name == "Raid WeakAuras");
+                    check("files2: the card says who sees it (lock chip 'Officers') and the description's first line; the details say who sees and updates it",
+                        Session.SupportsFiles2 && sLoot.SeeChip == "Officers" && sLoot.DescShort == "How we hand out loot." && sLoot.SeeLine == "Officers only" && sLoot.EditLine == "Officers" && sWa.EditLine == "Veterans and up");
+                    check("files2: a member may update the file set for veterans when the Lodge says so - and only that one",
+                        sWa.CanUpdate && sWa.UpdateVisibility == System.Windows.Visibility.Visible && !sLoot.CanUpdate && sLoot.UpdateVisibility == System.Windows.Visibility.Collapsed);
+                    fv2.OpenVersions(sWa);
+                    check("files2 details: the panel opens on the file and shows who can see and update it", fv2.VersionsOpenForTest && fv2.DetailsShowsRanksForTest);
+                    fv2.CloseVersionsForTest();
+                    fv2.OpenEdit(sLoot);
+                    check("files2 edit: no Edit for a file you may not update", !fv2.EditOpenForTest);
+                    fv2.OpenEdit(sWa);
+                    check("files2 edit: a member's Edit has no name and no ranks (officers' part)", fv2.EditOpenForTest && !fv2.EditRanksShownForTest);
+                    sent.Clear();
+                    fv2.EditSetForTest(desc: "Import the newest one.\nUpdated for MC.", note: "MC pack");
+                    var eerr = await fv2.SaveEditAsync();
+                    var em = sent.FirstOrDefault(o => o.Str("t") == "files.edit");
+                    check("files2 edit: only what changed is sent - the description and the newest version's note (" + (eerr ?? "ok") + ")",
+                        eerr == null && em != null && em.Str("slot") == sWa.Id && em.Str("desc") == "Import the newest one.\nUpdated for MC." && em.Str("note") == "MC pack" && em.Int("noteV") == 1 && em.Str("see") == null && em.Str("name") == null && !fv2.EditOpenForTest);
+
+                    // the picture: chosen in Edit, checked here, uploaded, then fetched and shown on the card
+                    var pic = Path.Combine(work, "cover.png");
+                    var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(64, 36, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                    using (var fs = File.Create(pic)) enc.Save(fs);
+                    File.WriteAllText(Path.Combine(work, "fake.png"), "not a picture at all");
+                    fv2.OpenEdit(sWa);
+                    fv2.SetEditPicture(Path.Combine(work, "fake.png"));
+                    check("files2 picture: a file that isn't a picture is refused in the dialog (" + fv2.EditErrorForTest + ")", fv2.EditErrorForTest.Contains("isn't a picture"));
+                    fv2.SetEditPicture(pic);
+                    eerr = await fv2.SaveEditAsync();
+                    Session.FeedForTest(fake.DataJson());
+                    for (int i = 0; i < 60 && sWa.CoverImage == null; i++) await Task.Delay(50);
+                    check("files2 picture: uploaded to the Lodge, fetched back and shown on the card (" + (eerr ?? "ok") + ")",
+                        eerr == null && wa.CoverBytes != null && sWa.CoverV == 1 && sWa.CoverImage != null && sWa.CoverVisibility == System.Windows.Visibility.Visible && File.Exists(Path.Combine(LodgeSession.CoverDir, sWa.Id + "-1.img")));
+
+                    // search: over 6 files the box shows; it matches name and description
+                    fv2.SearchForTest("raid");
+                    check("files2 search: 'raid' finds the WeakAuras (name) and the loot rules (description)", fv2.CardsShownForTest == 2);
+                    fv2.SearchForTest("nothing like this");
+                    check("files2 search: no match = 'Nothing matches'", fv2.CardsShownForTest == 0 && fv2.EmptyVisibleForTest);
+                    fv2.SearchForTest("");
+                    // pictures (ELANSHUB_SHOTS=1): the card grid, the details, the Edit dialog
+                    ShowTab("lodge"); LodgePage.ShowFilesForTest(); await Task.Delay(500);
+                    Snapshot(Path.Combine(dir, "files-grid.png"));
+                    fv2.OpenVersions(sWa); await Task.Delay(400);
+                    Snapshot(Path.Combine(dir, "files-details.png"));
+                    fv2.CloseVersionsForTest();
+                    fv2.OpenEdit(sWa); await Task.Delay(400);
+                    Snapshot(Path.Combine(dir, "files-edit-member.png"));
+                    fv2.CloseEditForTest();
+
+                    // an officer: the whole Edit, ranks included
+                    Session.Disconnect(); sent.Clear();
+                    fake.Role = "officer";
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.33.0", 1, addons: true, files2: true));
+                    Session.FeedForTest(fake.DataJson());
+                    var oLoot = Session.Slots.First(s => s.Name == "Loot rules");
+                    fv2.OpenEdit(oLoot);
+                    check("files2 edit: an officer's Edit has the name and the ranks", fv2.EditOpenForTest && fv2.EditRanksShownForTest);
+                    fv2.EditSetForTest(name: "Loot rules 2026", see: "member", editRank: "veteran");
+                    eerr = await fv2.SaveEditAsync();
+                    em = sent.FirstOrDefault(o => o.Str("t") == "files.edit");
+                    check("files2 edit: the officer's rename and ranks are sent (" + (eerr ?? "ok") + ")",
+                        eerr == null && em != null && em.Str("name") == "Loot rules 2026" && em.Str("see") == "member" && em.Str("edit") == "veteran" && em.Str("desc") == null);
+                    LodgePage.HideFilesForTest();
+
+                    // an older Lodge (no files2): no Edit, no ranks in the details
+                    Session.Disconnect();
+                    Session.FeedForTest(FilesWelcome("officer", true, "2.32.0", 1, addons: true, files2: false));
+                    Session.FeedForTest(fake.DataJson());
+                    fv2.OpenEdit(Session.Slots.First());
+                    check("files2 on an older Lodge: no Edit dialog", !Session.SupportsFiles2 && !fv2.EditOpenForTest);
+                    Session.Disconnect();
+                    fake.Slots.Clear();
+                }
+
                 // ---- the badge rules on their own
                 var s1 = new SlotVersionInfo { V = 2, Sha256 = "aa" };
                 check("badge rules: never saved = New; same content = none; other content = Updated; no version = none",
@@ -709,6 +824,7 @@ namespace ElansAddonHub
                 try { File.Delete(savedFile); } catch { }
                 try { File.Delete(Path.Combine(Util.DataDir, "files-installed.txt")); } catch { }
                 LodgeAddons.AddOnsDir = hadAddOnsDir; LodgeAddons.SwapHook = null;
+                try { if (Directory.Exists(LodgeSession.CoverDir)) Directory.Delete(LodgeSession.CoverDir, true); } catch { }
             }
             return "lodgefiles selftest: " + (ok ? "PASSED" : "FAILED") + "\r\n  " + string.Join("\r\n  ", notes);
         }

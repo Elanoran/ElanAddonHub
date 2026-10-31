@@ -26,10 +26,13 @@ namespace ElansAddonHub.Lodge
         public FilesView()
         {
             InitializeComponent();
+            foreach (var r in Elans.Shared.FileSlot.SeeRanks) ESee.Items.Add(new ComboBoxItem { Content = SlotVM.SeeText(r), Tag = r });
+            foreach (var r in Elans.Shared.FileSlot.EditRanks.Reverse()) EEdit.Items.Add(new ComboBoxItem { Content = SlotVM.EditText(r), Tag = r });
             PreviewKeyDown += (s, e) =>
             {
                 if (e.Key != Key.Escape) return;
                 if (FormOverlay.Visibility == Visibility.Visible) { CloseForm(); e.Handled = true; }
+                else if (EditOverlay.Visibility == Visibility.Visible) { CloseEdit(); e.Handled = true; }
                 else if (VersionsOverlay.Visibility == Visibility.Visible) { CloseVersions(); e.Handled = true; }
             };
         }
@@ -38,6 +41,8 @@ namespace ElansAddonHub.Lodge
         {
             S = session;
             SlotList.ItemsSource = S.Slots;
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots);
+            view.Filter = o => Matches(o as SlotVM);
             S.FilesChanged += Refresh;
             Refresh();
         }
@@ -52,8 +57,12 @@ namespace ElansAddonHub.Lodge
         {
             if (S == null) return;
             NewButton.Visibility = S.CanManageFiles ? Visibility.Visible : Visibility.Collapsed;
-            EmptyState.Visibility = S.Slots.Count == 0 && S.FilesLoaded ? Visibility.Visible : Visibility.Collapsed;
-            EmptyHint.Text = S.CanManageFiles ? "Press Upload new to share a pack, a guide or a build with everyone." : "Officers and the lodge owner share files here; you can save them.";
+            SearchBox.Visibility = S.Slots.Count > 6 || SearchBox.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Refresh();
+            int shown = S.Slots.Count(Matches);
+            EmptyState.Visibility = shown == 0 && S.FilesLoaded ? Visibility.Visible : Visibility.Collapsed;
+            EmptyTitle.Text = S.Slots.Count == 0 ? "No files shared yet" : "Nothing matches \"" + SearchBox.Text.Trim() + "\"";
+            EmptyHint.Text = S.Slots.Count > 0 ? "Try another word, or clear the search." : S.CanManageFiles ? "Press Share a file to share an addon, a UI pack, a guide or a build with everyone." : "Officers and the Guild Master share files here; you can save and install them.";
             UsageText.Text = S.FilesLoaded && S.Slots.Count > 0
                 ? LodgeFiles.Size(S.FilesUsedBytes) + " of " + S.FilesTotalMb + " MB used - the newest " + LodgeFiles.KeptVersions + " versions of each file are kept"
                 : "";
@@ -61,7 +70,20 @@ namespace ElansAddonHub.Lodge
             {
                 if (!S.Slots.Contains(versionsSlot)) CloseVersions(); else FillVersions();
             }
+            if (editSlot != null && EditOverlay.Visibility == Visibility.Visible && !S.Slots.Contains(editSlot)) CloseEdit();
         }
+
+        // ---- search: name and description, any word order
+        bool Matches(SlotVM s)
+        {
+            if (s == null) return false;
+            var q = (SearchBox?.Text ?? "").Trim();
+            if (q.Length == 0) return true;
+            var hay = (s.Name + " " + s.Desc + " " + (s.IsAddon ? "addon" : "")).ToLowerInvariant();
+            return q.ToLowerInvariant().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).All(hay.Contains);
+        }
+
+        void Search_Changed(object sender, TextChangedEventArgs e) => Refresh();
 
         // ---- Save...
         void Save_Click(object sender, RoutedEventArgs e)
@@ -161,8 +183,9 @@ namespace ElansAddonHub.Lodge
         void FillVersions()
         {
             var s = versionsSlot;
-            VersionsHeading.Text = s.Name;
-            VersionsSub.Text = "The newest " + LodgeFiles.KeptVersions + " versions are kept. Save any of them" + (S.CanManageFiles ? ", or roll back to an older one." : ".");
+            DetailsCard.DataContext = s;
+            DSee.Visibility = DEdit.Visibility = S.SupportsFiles2 ? Visibility.Visible : Visibility.Collapsed;
+            VersionsSub.Text = "The newest " + LodgeFiles.KeptVersions + " versions are kept. Save any of them" + (s.CanUpdate ? ", or roll back to an older one." : ".");
             VersionList.ItemsSource = s.VersionRows();
         }
 
@@ -189,6 +212,111 @@ namespace ElansAddonHub.Lodge
             versionsSlot = null;
         }
 
+        // ---- Edit (2.33): what changed is sent; the rest is left as it is
+        SlotVM editSlot;
+        string editPicture;               // a picture chosen in the dialog (uploaded on Save), "" = remove it, null = unchanged
+        public Func<string> PicturePicker;                  // test seam: the Windows file dialog
+
+        void Edit_Click(object sender, RoutedEventArgs e) { if ((sender as FrameworkElement)?.Tag is SlotVM slot) OpenEdit(slot); }
+
+        public void OpenEdit(SlotVM slot)
+        {
+            if (slot == null || !S.SupportsFiles2 || !slot.CanUpdate) return;
+            editSlot = slot; editPicture = null;
+            EHeading.Text = "Edit " + slot.Name;
+            ENamePanel.Visibility = ERanksPanel.Visibility = S.CanManageFiles ? Visibility.Visible : Visibility.Collapsed;
+            EName.Text = slot.Name;
+            EDesc.Text = slot.Desc;
+            ENote.Text = slot.Newest?.Note ?? "";
+            EAddon.Visibility = S.SupportsAddonFiles ? Visibility.Visible : Visibility.Collapsed;
+            EAddon.IsChecked = slot.IsAddon;
+            ESee.SelectedItem = ESee.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.See ?? "guest"));
+            EEdit.SelectedItem = EEdit.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.EditRank ?? "officer"));
+            ShowEditPicture(slot.CoverImage);
+            EError.Text = ""; ESave.IsEnabled = true;
+            EditOverlay.Visibility = Visibility.Visible;
+            if (IsLoaded && IsVisible) Motion.PageIn(EditOverlay);
+        }
+
+        void ShowEditPicture(System.Windows.Media.ImageSource img)
+        {
+            EPicture.Source = img;
+            ENoPicture.Visibility = img == null ? Visibility.Visible : Visibility.Collapsed;
+            EPicRemove.Visibility = img == null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        void EPicPick_Click(object sender, RoutedEventArgs e)
+        {
+            string path;
+            if (PicturePicker != null) path = PicturePicker();
+            else
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Choose a picture", Filter = "Pictures|*.png;*.jpg;*.jpeg;*.gif;*.webp|All files|*.*" };
+                path = dlg.ShowDialog(Window.GetWindow(this)) == true ? dlg.FileName : null;
+            }
+            if (path == null) return;
+            SetEditPicture(path);
+        }
+
+        public void SetEditPicture(string path)
+        {
+            EError.Text = "";
+            try
+            {
+                if (new FileInfo(path).Length > LodgeClient.MaxCoverBytes) { EError.Text = "A picture can be 2 MB at most - pick a smaller one."; return; }
+                if (LodgeFiles.PictureType(path) == null) { EError.Text = "That isn't a picture (png, jpg, gif or webp)."; return; }
+            }
+            catch (IOException) { EError.Text = "That file can't be read."; return; }
+            editPicture = path;
+            ShowEditPicture(LodgeFiles.LoadPicture(path, 256));
+        }
+
+        void EPicRemove_Click(object sender, RoutedEventArgs e) { editPicture = ""; ShowEditPicture(null); }
+        void ECancel_Click(object sender, RoutedEventArgs e) => CloseEdit();
+        void CloseEdit() { EditOverlay.Visibility = Visibility.Collapsed; editSlot = null; }
+
+        void ESave_Click(object sender, RoutedEventArgs e) => _ = SaveEditAsync();
+
+        public async Task<string> SaveEditAsync()
+        {
+            var s = editSlot;
+            if (s == null) return null;
+            var m = new Elans.Shared.FilesEditMsg();
+            bool any = false;
+            if (S.CanManageFiles)
+            {
+                var name = EName.Text.Trim();
+                if (name.Length == 0) { EError.Text = "Give it a name."; return EError.Text; }
+                if (name != s.Name) { m.Name = name; any = true; }
+                var see = (ESee.SelectedItem as ComboBoxItem)?.Tag as string ?? "guest";
+                if (see != (s.See ?? "guest")) { m.See = see; any = true; }
+                var ed = (EEdit.SelectedItem as ComboBoxItem)?.Tag as string ?? "officer";
+                if (ed != (s.EditRank ?? "officer")) { m.Edit = ed; any = true; }
+            }
+            var desc = EDesc.Text.Trim();
+            if (desc != s.Desc) { m.Desc = desc; any = true; }
+            if (s.Newest != null && ENote.Text.Trim() != (s.Newest.Note ?? "")) { m.NoteV = s.Newest.V; m.Note = ENote.Text.Trim(); any = true; }
+            if (S.SupportsAddonFiles && (EAddon.IsChecked == true) != s.IsAddon) { m.Kind = EAddon.IsChecked == true ? "addon" : "file"; any = true; }
+            if (editPicture == "" && s.CoverV > 0) { m.Cover = false; any = true; }
+            ESave.IsEnabled = false;
+            try
+            {
+                if (any)
+                {
+                    var err = S.EditSlot(s, m);
+                    if (err != null) { EError.Text = err; return err; }
+                }
+                if (!string.IsNullOrEmpty(editPicture))
+                {
+                    var err = await S.SetCoverAsync(s, editPicture);
+                    if (err != null) { EError.Text = err; return err; }
+                }
+                CloseEdit();
+                return null;
+            }
+            finally { ESave.IsEnabled = true; }
+        }
+
         // ---- Delete
         void Delete_Click(object sender, RoutedEventArgs e)
         {
@@ -211,7 +339,7 @@ namespace ElansAddonHub.Lodge
         {
             formSlot = slot; formPath = null; uploading = false;
             FormHeading.Text = slot == null ? "Upload a file" : "New version of " + slot.Name;
-            FormSub.Text = slot == null ? "Everyone in the lodge can see it and save it. Programs and scripts are not allowed; up to " + S.FilesMaxMb + " MB."
+            FormSub.Text = slot == null ? (S.SupportsFiles2 ? "Everyone in the lodge can see it until you choose who under Edit. " : "Everyone in the lodge can see it and save it. ") + "Programs and scripts are not allowed; up to " + S.FilesMaxMb + " MB."
                                         : "Replaces what everyone gets; the older version stays available under Versions.";
             FName.Text = slot?.Name ?? ""; FName.IsEnabled = slot == null;
             FNote.Text = ""; FFile.Text = "No file chosen"; FError.Text = "";
@@ -296,7 +424,9 @@ namespace ElansAddonHub.Lodge
         // ---- overlay plumbing
         void Scrim_Down(object sender, MouseButtonEventArgs e)
         {
-            if (FormOverlay.Visibility == Visibility.Visible) CloseForm(); else CloseVersions();
+            if (FormOverlay.Visibility == Visibility.Visible) CloseForm();
+            else if (EditOverlay.Visibility == Visibility.Visible) CloseEdit();
+            else CloseVersions();
         }
         void Box_Down(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
@@ -312,6 +442,22 @@ namespace ElansAddonHub.Lodge
         public bool FormNameEditableForTest => FName.IsEnabled;
         public string FormHeadingForTest => FormHeading.Text;
         public void PickForTest(string path) => SetFormFile(path);
+        public bool EditOpenForTest => EditOverlay.Visibility == Visibility.Visible;
+        public void CloseEditForTest() => CloseEdit();
+        public bool EditRanksShownForTest => ERanksPanel.Visibility == Visibility.Visible;
+        public string EditErrorForTest => EError.Text;
+        public void EditSetForTest(string name = null, string desc = null, string see = null, string editRank = null, string note = null, bool? addon = null)
+        {
+            if (name != null) EName.Text = name;
+            if (desc != null) EDesc.Text = desc;
+            if (note != null) ENote.Text = note;
+            if (addon != null) EAddon.IsChecked = addon;
+            if (see != null) ESee.SelectedItem = ESee.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == see);
+            if (editRank != null) EEdit.SelectedItem = EEdit.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == editRank);
+        }
+        public void SearchForTest(string q) => SearchBox.Text = q;
+        public int CardsShownForTest => S.Slots.Count(Matches);
+        public bool DetailsShowsRanksForTest => DSee.Visibility == Visibility.Visible;
         public bool? FormAddonForTest { get => FAddon.Visibility == Visibility.Visible ? FAddon.IsChecked : null; set { FAddon.IsChecked = value; addonTouched = true; CheckAddonChoice(); } }
         public string FormAddonWhyForTest => FAddonWhy.Text;
         public void CloseFormForTest() => CloseForm();

@@ -317,7 +317,7 @@ public class FilesTests
         Assert.Contains("files", r.Hub.FeatureList());
         Assert.True((bool)r.Hub.Welcome(o)["canManageFiles"]!);
         Assert.False((bool)r.Hub.Welcome(m)["canManageFiles"]!);
-        Assert.Equal("2.32.0", LodgeHub.Version);
+        Assert.Equal("2.33.0", LodgeHub.Version);
     }
 
     // ---------------------------------------------------------------- broadcast, download, restart
@@ -389,7 +389,7 @@ public class FilesTests
         var o = r.Join("Wing", "officer"); var mem = r.Join("Mia", "member");
         var s = await Up(r, o, null, "Raid UI pack", "p.txt", Bytes(10), "first");
         var id = (string)s["id"]!;
-        Assert.Equal(new[] { "id", "name", "createdBy", "versions" }, KeysInOrder(s));
+        Assert.Equal(new[] { "id", "name", "createdBy", "canUpdate", "versions" }, KeysInOrder(s));
         Assert.Equal(new[] { "v", "fileName", "size", "sha256", "uploadedBy", "at", "note" }, KeysInOrder(s["versions"]![0]!.AsObject()));
         await Up(r, o, id, null, "p.txt", Bytes(11));
 
@@ -400,7 +400,7 @@ public class FilesTests
         var slot = d["slots"]!.AsArray().Single()!.AsObject();
         Assert.Equal(new[] { 1, 2 }, slot["versions"]!.AsArray().Select(v => (int)v!["v"]!));
         Assert.Equal(("first", ""), ((string?)slot["versions"]![0]!["note"], (string?)slot["versions"]![1]!["note"]));
-        Assert.Equal(r.Hub.SharedFiles.SlotView(id)!.ToJsonString(), slot.ToJsonString());
+        Assert.Equal(r.Hub.SharedFiles.SlotView(id, "officer")!.ToJsonString(), slot.ToJsonString());
 
         var changed = await Eventually(r.Sock("Mia"), "files.changed", 2);
         Assert.Equal(new[] { "t", "action", "slot", "name", "by", "at", "v" }, KeysInOrder(changed));

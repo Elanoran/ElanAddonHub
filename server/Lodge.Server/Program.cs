@@ -261,6 +261,27 @@ async Task<IResult> PutSlot(HttpContext ctx, string slotId)
     }
 }
 
+// 2.33: a slot's cover picture (anyone who may update the slot sets it; whoever sees the slot gets it)
+app.MapPut("/slots/{id}/cover", async (HttpContext ctx, string id) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    try { return Results.Json(await lodge.SharedFiles.PutCover(who.By, who.Rank, id, ctx.Request.Headers["X-Sha256"].ToString(), ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted)); }
+    catch (FilesException e) { return FilesFail(e); }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+});
+app.MapGet("/slots/{id}/cover", (HttpContext ctx, string id) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    var c = lodge.SharedFiles.GetCover(id, who.Rank);
+    if (c == null) return Results.Json(new { error = "No picture", reason = "missing" }, statusCode: 404);
+    ctx.Response.Headers["Cache-Control"] = "private, no-store";
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Image-Type"] = c.Value.type;
+    return Results.File(c.Value.data, "application/octet-stream");     // the Outpost decodes it itself; never rendered by a browser
+});
+
 app.MapPut("/slots/new", async (HttpContext ctx) => await PutSlot(ctx, null));
 app.MapPut("/slots/{id}", async (HttpContext ctx, string id) => await PutSlot(ctx, id));
 
@@ -271,7 +292,7 @@ app.MapGet("/slots/{id}/{v:int}", (HttpContext ctx, string id, int v) =>
     if (!Roles.Can(who.Rank, Perm.FilesRead)) return Results.Json(new { error = "Not allowed", reason = "forbidden" }, statusCode: 403);
     try
     {
-        var fs = lodge.SharedFiles.OpenVersion(id, v, out var ver);
+        var fs = lodge.SharedFiles.OpenVersion(id, v, out var ver, who.Rank);
         if (!downloads.TryTake(who.RateKey(IpOf(ctx)), ver.Size)) { fs.Dispose(); return TooManyDownloads(); }
         ctx.Response.Headers["Cache-Control"] = "private, no-store";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";

@@ -4,47 +4,59 @@
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              xmlns:app="clr-namespace:ElansAddonHub">
   <UserControl.Resources>
-    <!-- one slot: name, newest version, who and when, the note; a progress line while it uploads or saves; the buttons -->
+    <!-- one slot as a card in the grid (3.5): the cover picture (or the kind's icon), the badges over it, name, version, the first line of the
+         description, what is installed in WoW, progress and errors, the main button and Details -->
     <DataTemplate x:Key="SlotCard">
-      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12" AutomationProperties.Name="{Binding Name}">
+      <Border Width="296" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Margin="0,0,12,12" ClipToBounds="True"
+              AutomationProperties.Name="{Binding Name}" Tag="slot-card">
         <StackPanel>
-          <DockPanel>
-            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{StaticResource Brush.Info.Tint}" Visibility="{Binding BadgeVisibility}" VerticalAlignment="Center"
-                    Margin="12,0,0,0" ToolTip="{Binding BadgeTip}">
+          <Grid Height="{Binding CoverHeight}">
+            <Border Background="{StaticResource Brush.Surface3}" CornerRadius="12,12,0,0" />
+            <TextBlock Text="{Binding KindGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="24" Foreground="{StaticResource Brush.Text.Tertiary}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PlaceholderVisibility}" />
+            <Border CornerRadius="12,12,0,0" ClipToBounds="True" Visibility="{Binding CoverVisibility}">
+              <Border.Background><ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill" /></Border.Background>
+            </Border>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10">
+              <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Scrim}" Visibility="{Binding SeeChipVisibility}" Margin="0,0,6,0" ToolTip="{Binding SeeLine}">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Font.Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                  <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Border>
+              <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Scrim}" Visibility="{Binding AddonChipVisibility}" ToolTip="A WoW addon: it can be installed in WoW Forever from here">
+                <TextBlock Text="Addon" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
+              </Border>
+            </StackPanel>
+            <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Info.Tint}" Visibility="{Binding BadgeVisibility}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="10" ToolTip="{Binding BadgeTip}">
               <TextBlock Text="{Binding Badge}" Foreground="{StaticResource Brush.Info}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
             </Border>
-            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Visibility="{Binding AddonChipVisibility}" VerticalAlignment="Center" Margin="12,0,0,0"
-                    ToolTip="A WoW addon: it can be installed in WoW Forever from here">
-              <TextBlock Text="Addon" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
-            </Border>
+          </Grid>
+          <StackPanel Margin="14,12,14,14">
             <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
-          </DockPanel>
-          <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
-          <TextBlock Text="{Binding MetaLine}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0" />
-          <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
-          <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Accent}" TextWrapping="Wrap" Margin="0,8,0,0" />
-          <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,12,0,0">
-            <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
-            <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+            <TextBlock Text="{Binding DescShort}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
+            <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Accent}"
+                       TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
+            <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,10,0,0">
+              <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
+              <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <WrapPanel Margin="0,12,0,0" IsEnabled="{Binding IdleEnabled}">
+              <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,0"
+                      ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
+              <Button Content="Save..." Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Save_Click" Visibility="{Binding SaveCardVisibility}" Margin="0,0,8,0"
+                      ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+              <Button Content="Details" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" ToolTip="Description, versions and settings" AutomationProperties.Name="Details" />
+            </WrapPanel>
           </StackPanel>
-          <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
-          <WrapPanel Margin="0,12,0,0" IsEnabled="{Binding IdleEnabled}">
-            <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,0"
-                    ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
-            <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,0" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
-            <Button Content="{Binding VersionsLabel}" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" Margin="0,0,8,0" ToolTip="Earlier versions" AutomationProperties.Name="Versions" />
-            <Button Content="Replace" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,0"
-                    ToolTip="Upload a new version of this file" AutomationProperties.Name="Replace" />
-            <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding ManageVisibility}"
-                    ToolTip="Remove this file and all its versions" AutomationProperties.Name="Delete" />
-            <CheckBox Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="8,0,0,0"
-                      ToolTip="Install new versions in WoW by themselves when someone uploads one (you'll be asked if a version changes the addon's folders)" AutomationProperties.Name="Keep it updated" />
-          </WrapPanel>
         </StackPanel>
       </Border>
     </DataTemplate>
 
-    <!-- one kept version in the Versions card -->
+    <!-- one kept version in the details -->
     <DataTemplate x:Key="VersionRow">
       <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12" Margin="0,0,0,8">
         <DockPanel>
@@ -69,22 +81,26 @@
       <Grid x:Name="Main">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
-        <!-- header: title, Upload new (officers and the owner) -->
+        <!-- header: title, search, Share a file (officers and the owner) -->
         <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
           <DockPanel MinHeight="32">
-            <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Upload new" Click="New_Click" Margin="8,0,0,0"
-                    ToolTip="Share a file with the lodge" Visibility="Collapsed" />
+            <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Share a file" Click="New_Click" Margin="8,0,0,0"
+                    ToolTip="Share a file or an addon with the lodge" Visibility="Collapsed" />
+            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="200" Tag="Search files" TextChanged="Search_Changed"
+                     AutomationProperties.Name="Search files" Visibility="Collapsed" />
             <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
             <TextBlock Text="Files" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
           </DockPanel>
         </Border>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
-          <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
-            <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}" />
+          <StackPanel Margin="24,16,12,24">
+            <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            </ItemsControl>
             <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
               <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
-              <TextBlock Text="No files shared yet" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
+              <TextBlock x:Name="EmptyTitle" Text="No files shared yet" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
               <TextBlock x:Name="EmptyHint" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
             </StackPanel>
             <TextBlock x:Name="UsageText" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
@@ -92,22 +108,127 @@
         </ScrollViewer>
       </Grid>
 
-      <!-- ===== versions: an overlay card over a scrim ===== -->
+      <!-- ===== details: the picture, the description, who sees / updates it, the actions and the versions ===== -->
       <Border x:Name="VersionsOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="Scrim_Down">
-        <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
-                Width="520" MaxHeight="620" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+        <Border x:Name="DetailsCard" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                MaxWidth="620" MaxHeight="700" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down" ClipToBounds="True">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
               <StackPanel>
-                <TextBlock x:Name="VersionsHeading" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
-                <TextBlock x:Name="VersionsSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
-                <ItemsControl x:Name="VersionList" ItemTemplate="{StaticResource VersionRow}" />
-                <TextBlock x:Name="VersionsError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                <Border Height="220" Visibility="{Binding CoverVisibility}">
+                  <Border.Background><ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill" /></Border.Background>
+                </Border>
+                <StackPanel Margin="24,20,24,0">
+                  <DockPanel>
+                    <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
+                      <Border Style="{StaticResource Chip}" Visibility="{Binding SeeChipVisibility}" Margin="8,0,0,0" ToolTip="{Binding SeeLine}">
+                        <StackPanel Orientation="Horizontal">
+                          <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Font.Icons}" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
+                          <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Border>
+                      <Border Style="{StaticResource Chip}" Visibility="{Binding AddonChipVisibility}" Margin="8,0,0,0">
+                        <TextBlock Text="Addon" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                      </Border>
+                    </WrapPanel>
+                    <TextBlock x:Name="VersionsHeading" Text="{Binding Name}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
+                  <TextBlock Text="{Binding Desc}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                  <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
+                    <TextBlock Text="Newest" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
+                    <TextBlock Grid.Column="1" Text="{Binding VersionLine}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                    <TextBlock Grid.Row="1" Text="Shared by" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MetaLine}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,2" />
+                    <TextBlock Grid.Row="2" Text="Who can see it" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="DSee" Text="{Binding SeeLine}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,2" />
+                    <TextBlock Grid.Row="3" Text="Who can update it" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" x:Name="DEdit" Text="{Binding EditLine}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,2" />
+                  </Grid>
+                  <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Accent}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                  <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,12,0,0">
+                    <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
+                    <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                  <WrapPanel Margin="0,16,0,0" IsEnabled="{Binding IdleEnabled}">
+                    <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,8"
+                            ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
+                    <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,8" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+                    <Button Content="Upload a new version" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding UpdateVisibility}" Margin="0,0,8,8"
+                            ToolTip="Upload a new version of this file" AutomationProperties.Name="Replace" />
+                    <Button x:Name="EditButton" Content="Edit" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Edit_Click" Visibility="{Binding UpdateVisibility}" Margin="0,0,8,8"
+                            ToolTip="Name, description, picture and who can see or update it" AutomationProperties.Name="Edit" />
+                    <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8"
+                            ToolTip="Remove this file and all its versions" AutomationProperties.Name="Delete" />
+                    <CheckBox Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
+                              ToolTip="Install new versions in WoW by themselves when someone uploads one (you'll be asked if a version changes the addon's folders)" AutomationProperties.Name="Keep it updated" />
+                  </WrapPanel>
+                  <TextBlock Text="Versions" Style="{StaticResource Text.RowTitle}" Margin="0,16,0,4" />
+                  <TextBlock x:Name="VersionsSub" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                  <ItemsControl x:Name="VersionList" ItemTemplate="{StaticResource VersionRow}" />
+                  <TextBlock x:Name="VersionsError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                </StackPanel>
               </StackPanel>
             </ScrollViewer>
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
               <Button Content="Done" Style="{StaticResource Button.M}" Click="VersionsClose_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Border>
+
+      <!-- ===== edit: name, description, picture, the addon mark, the note on the newest version, who can see / update it ===== -->
+      <Border x:Name="EditOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="Scrim_Down">
+        <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                MaxWidth="520" MaxHeight="700" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+              <StackPanel>
+                <TextBlock x:Name="EHeading" Text="Edit" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+                <StackPanel x:Name="ENamePanel">
+                  <TextBlock Text="Name" Style="{StaticResource Text.Caption}" Margin="0,16,0,0" />
+                  <TextBox x:Name="EName" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" AutomationProperties.Name="Name" />
+                </StackPanel>
+                <TextBlock Text="Description" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBox x:Name="EDesc" Style="{StaticResource Input}" MaxLength="1000" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" MaxHeight="200"
+                         VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" Margin="0,4,0,0" Tag="What it is, how to use it" AutomationProperties.Name="Description" />
+                <TextBlock Text="Picture" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <DockPanel Margin="0,4,0,0">
+                  <Border Width="128" Height="72" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.Surface2}" ClipToBounds="True" DockPanel.Dock="Left">
+                    <Grid>
+                      <TextBlock x:Name="ENoPicture" Text="No picture" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Image x:Name="EPicture" Stretch="UniformToFill" />
+                    </Grid>
+                  </Border>
+                  <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <WrapPanel>
+                      <Button x:Name="EPicPick" Content="Choose picture..." Style="{StaticResource Button.S}" Click="EPicPick_Click" Margin="0,0,8,0" />
+                      <Button x:Name="EPicRemove" Content="Remove" Style="{StaticResource GhostButton}" Height="28" Click="EPicRemove_Click" />
+                    </WrapPanel>
+                    <TextBlock Text="A screenshot or cover: png, jpg, gif or webp, up to 2 MB." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                  </StackPanel>
+                </DockPanel>
+                <CheckBox x:Name="EAddon" Content="This is a WoW addon" Margin="0,12,0,0" ToolTip="Members can install it in WoW Forever from the Files page (the newest version must be a zip of addon folders)" />
+                <TextBlock Text="Note on the newest version" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBox x:Name="ENote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed" AutomationProperties.Name="Note on the newest version" />
+                <StackPanel x:Name="ERanksPanel">
+                  <TextBlock Text="Who can see it" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <ComboBox x:Name="ESee" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="Who can see it" />
+                  <TextBlock Text="Who can update it" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <ComboBox x:Name="EEdit" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="Who can update it" />
+                  <TextBlock Text="Updating: uploading new versions, rolling back, and changing the description, picture and notes. Officers and the Guild Master can always do everything."
+                             Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+                <TextBlock x:Name="EError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />
+              </StackPanel>
+            </ScrollViewer>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
+              <Button Content="Cancel" Style="{StaticResource Button.M}" Click="ECancel_Click" />
+              <Button x:Name="ESave" Content="Save changes" Style="{StaticResource Button.Primary.M}" Margin="8,0,0,0" Click="ESave_Click" />
             </StackPanel>
           </Grid>
         </Border>
