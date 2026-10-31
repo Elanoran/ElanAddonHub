@@ -183,11 +183,11 @@ Builds = {
       stats = "Intellect > Spell Power > Stamina > Spirit",
       tip = "Frostbolt, Frost Nova, then Ice Lance on frozen targets; Ice Barrier and Ice Block keep you safe.",
       order = {
-        { "Improved Frostbolt", 5 }, { "Permafrost", 3 }, { "Frostbite", 2 }, { "Ice Lance", 1 }, { "Piercing Ice", 3 }, { "Frost Channeling", 1 },
+        { "Improved Frostbolt", 5 }, { "Permafrost", 3 }, { "Frostbite", 2 }, { "Ice Lance", 1 }, { "Elemental Precision", 3 }, { "Frost Channeling", 1 },
         { "Shatter", 3 }, { "Ice Block", 1 }, { "Improved Frost Nova", 1 }, { "Fingers of Frost", 2 }, { "Cold Snap", 1 },
         { "Improved Cone of Cold", 2 }, { "Winter's Chill", 5 }, { "Ice Barrier", 1 }, { "Ice Shards", 5 }, { "Frostbite", 1 },
-        { "Elemental Precision", 3 }, { "Arctic Reach", 2 }, { "Frost Channeling", 2 }, { "Wand Specialization", 2 }, { "Missile Barrage", 2 },
-        { "Arcane Focus", 1 }, { "Arcane Concentration", 2 },
+        { "Arctic Reach", 2 }, { "Frost Channeling", 2 }, { "Wand Specialization", 2 }, { "Missile Barrage", 2 },
+        { "Arcane Focus", 1 }, { "Arcane Concentration", 2 }, { "Improved Frost Nova", 1 }, { "Arcane Concentration", 2 },
       },
     },
     {
@@ -199,8 +199,8 @@ Builds = {
       order = {
         { "Improved Fireball", 5 }, { "Ignite", 5 }, { "Incineration", 3 }, { "Improved Fire Blast", 2 }, { "Pyroblast", 1 },
         { "Master of Elements", 3 }, { "Improved Scorch", 1 }, { "Critical Mass", 5 }, { "Blast Wave", 1 }, { "Heating Up", 1 }, { "Fire Power", 3 },
-        { "Combustion", 1 }, { "Flame Throwing", 2 }, { "Elemental Precision", 5 }, { "Frost Warding", 2 }, { "Improved Frost Nova", 2 },
-        { "Ice Shards", 1 }, { "Piercing Ice", 3 }, { "Ice Lance", 1 }, { "Frost Channeling", 1 }, { "Ice Block", 1 }, { "Arctic Reach", 2 },
+        { "Combustion", 1 }, { "Flame Throwing", 2 }, { "Elemental Precision", 3 }, { "Frost Warding", 2 }, { "Improved Frost Nova", 2 },
+        { "Ice Shards", 3 }, { "Ice Lance", 1 }, { "Frost Channeling", 3 }, { "Permafrost", 1 }, { "Ice Block", 1 }, { "Arctic Reach", 2 },
       },
     },
     {
