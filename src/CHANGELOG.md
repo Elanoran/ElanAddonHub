@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.3.2
+- **Ready for WoW Forever's launch.** The Outpost reads the released game from its own folder (_forever_) as soon as it is installed, and the add-ons go there too.
+- **Mage talent builds fit the launch tree.** Launch removes Piercing Ice and gives Elemental Precision 3 ranks; the Frostbite and Pyre builds are adjusted and checked against the launch client.
+- **End-of-beta loot: the last of it.** The Molten Core sets, weapons and "Endless" elixirs the beta's last days dropped are left out of the Atlas everywhere, also where a member's add-on shared them without the game build.
+
 ## 3.3.1
 - **Fixed: some end-of-beta drops still showed in the Atlas.** When a member's collected loot is big, the Toolkit shares an item's drops without saying which game build they came from, so an event-only drop could stay listed against the normal kills ("3 of 1 kill" for the Arcanist Belt from boars). Such an item now loses the event kills' share of its drops too, which removes drops seen only in the event.
 
