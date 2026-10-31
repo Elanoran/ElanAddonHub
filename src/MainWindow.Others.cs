@@ -73,6 +73,7 @@ namespace ElansAddonHub
                 });
                 clientInterface = iface;
                 cfInst = cf;
+                cfMissing = cf == null ? await Task.Run(() => CurseForgeLocal.NoInstanceNote(dir)) : null;
                 WatchCfFile();
                 var keys = entries.Select(e => e.Key).ToList();
                 foreach (var gone in others.Where(c => !keys.Contains(c.Entry.Key)).ToList()) others.Remove(gone);
@@ -194,6 +195,18 @@ namespace ElansAddonHub
             var cfOn = cfInst != null;
             var vis = cfOn ? Visibility.Visible : Visibility.Collapsed;
             CfChip.Visibility = vis; CfCheckButton.Visibility = vis; CfOpenButton.Visibility = vis;
+            if (!cfOn && cfMissing != null)
+            {
+                // CurseForge is there but doesn't list this folder: say so instead of quietly dropping its part of the list
+                CfChip.Visibility = Visibility.Visible; CfOpenButton.Visibility = Visibility.Visible;
+                CfChipText.Text = "Not set up for this folder";
+                CfChipText.Foreground = (Brush)Application.Current.Resources["Gold"];
+                CfChipGlyph.Foreground = CfChipText.Foreground;
+                try { CfChipIcon.Source = SourceIcons.CurseForge(); } catch { }
+                CfChipIcon.Visibility = CfChipIcon.Source != null ? Visibility.Visible : Visibility.Collapsed;
+                CfChip.ToolTip = Tip(cfMissing);
+                AutomationProperties.SetName(CfChip, "CurseForge status");
+            }
             if (cfOn)
             {
                 var n = others.Count(c => c.Entry.Cf != null);
@@ -211,6 +224,7 @@ namespace ElansAddonHub
             }
         }
 
+        public string CfChipTextForTest => CfChip.Visibility == Visibility.Visible ? CfChipText.Text : null;
         static ToolTip Tip(string text) => new ToolTip { Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 360 } };
 
         void Search_Changed(object sender, TextChangedEventArgs e) => othersView?.Refresh();
@@ -300,6 +314,7 @@ namespace ElansAddonHub
         // ---- CurseForge: read its local state, ask it (never the hub) to install, let it refresh its update info
         CfInstance cfInst;
         string cfStatus;
+        string cfMissing;                 // 3.4: CurseForge has WoW installs but none for this folder (CurseForgeLocal.NoInstanceNote), shown on the chip
         FileSystemWatcher cfWatcher;
         string cfWatched;
         readonly System.Windows.Threading.DispatcherTimer cfDebounce = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };

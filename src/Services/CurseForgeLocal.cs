@@ -69,6 +69,30 @@ namespace ElansAddonHub.Services
             return DateTimeOffset.TryParse(s ?? "", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d.UtcDateTime : DateTime.MinValue;
         }
 
+        // 3.4: CurseForge is installed and has WoW installs, but none for this client folder - in words (null = not that case). WoW Forever's
+        // launch: CurseForge removed its beta install (_classic_beta_) when the beta client was uninstalled (its log: "Game instance Forever was
+        // removed because it was detected as invalid") and lists _forever_ only once it knows the released game.
+        public static string NoInstanceNote(string addOnsDir) => NoInstanceNote(addOnsDir, DataFile, Installed);
+
+        public static string NoInstanceNote(string addOnsDir, string dataFile, bool appInstalled)
+        {
+            try
+            {
+                if (!appInstalled || string.IsNullOrEmpty(addOnsDir) || !File.Exists(dataFile)) return null;
+                string text;
+                using (var fs = new FileStream(dataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var sr = new StreamReader(fs, Encoding.UTF8)) text = sr.ReadToEnd();
+                var names = ((Json.Parse(text) as List<object>) ?? new List<object>()).OfType<Dictionary<string, object>>().Select(i => i.Str("name")).Where(n => !string.IsNullOrEmpty(n)).Take(6).ToList();
+                if (names.Count == 0) return null;
+                var folder = Path.GetFileName(Path.GetFullPath(Path.Combine(addOnsDir, "..", "..")).TrimEnd('\\', '/'));
+                var forever = folder == WowLocator.ForeverFolder;
+                return "CurseForge isn't set up for this game folder (" + folder + ") - it only lists " + string.Join(", ", names) + "."
+                    + (forever ? " It removed its WoW Forever beta install when the beta ended and shows the released game once it supports it (or add the folder in CurseForge's WoW settings)." : " Add the folder in CurseForge's WoW settings to have its addons updated here.")
+                    + " Until then these addons are listed without CurseForge's updates.";
+            }
+            catch { return null; }
+        }
+
         // The instance for this WoW client folder (matched by install path), or null. Any problem with the file = null (feature off).
         public static string LastLoadError;                 // why the last Load found nothing usable (null = fine / simply no instance)
 
@@ -642,6 +666,16 @@ namespace ElansAddonHub.Services
                 cf = Load(add);
                 Check("addon null = follows instance (on)", cf != null && cf.AutoInstallDefault && A(cf, "Follow")?.AutoInstall == true);
                 Check("addon false overrides an on instance", A(cf, "Off")?.AutoInstall == false && A(cf, "Off")?.AutoInstallPref == false);
+
+                // 1b) 3.4: CurseForge has WoW installs but not this folder (WoW Forever's launch: the beta install was removed, _forever_ not listed yet)
+                var fwow = Path.Combine(root, "World of Warcraft", "_forever_");
+                var fadd = Path.Combine(fwow, "Interface", "AddOns");
+                Directory.CreateDirectory(fadd);
+                var note = NoInstanceNote(fadd, file, true);
+                Check("no install for _forever_: Load finds none and the note names the folder and the installs CurseForge has (" + note + ")",
+                    Load(fadd) == null && note != null && note.Contains("(_forever_)") && note.Contains("only lists Forever") && note.Contains("WoW Forever beta install"));
+                Check("no note when CurseForge is not installed or has no instance file",
+                    NoInstanceNote(fadd, file, false) == null && NoInstanceNote(Path.Combine(root, "nowhere"), Path.Combine(root, "none.json"), true) == null);
 
                 // 2) the route table: direct setting x let-CurseForge setting x auto-update x author / locked
                 var R = CurseForgeDirect.Route.Direct; var Au = CurseForgeDirect.Route.CurseForgeAuto; var D = CurseForgeDirect.Route.DeepLink;
