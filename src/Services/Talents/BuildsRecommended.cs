@@ -33,6 +33,7 @@ namespace ElansAddonHub.Services.Talents
         public TalentState State = new TalentState();
         public List<BuildStep> Steps = new List<BuildStep>();
         public List<string> Unmatched = new List<string>();      // talent names of the build that are not in this tree
+        public List<string> Adjusted = new List<string>();       // Fit: what was changed so the build fits this game's tree, in words (empty = nothing)
         public int Blocked;                                      // points that the rules would not allow at that moment
         public int Points => State.Total;
     }
@@ -226,6 +227,100 @@ namespace ElansAddonHub.Services.Talents
                 }
             }
             return app;
+        }
+
+        // Lays a build on this game's tree and, where a patch broke it, repairs it the way a person would - so an Outpost meets a changed tree (WoW
+        // Forever's launch removed Piercing Ice and cut Elemental Precision to 3 ranks) with a working build instead of a broken one:
+        //   * a talent the tree no longer has, or ranks above its new maximum: those points are free;
+        //   * a point the tree refuses at that moment (its row is not open yet, its prerequisite is not full): the next point of the build's own order
+        //     that fits now comes first - from the same tree when there is one - and the refused one waits until it fits;
+        //   * a full build (the class's every point) that ends short: the free points go to talents the build already takes that are not full (its
+        //     main tree first, in the build's order), then to other open talents of its main tree, top row first.
+        // Adjusted says what changed, in words. An intact build comes out exactly as Apply lays it.
+        public static BuildApplication Fit(TalentTreeDef tree, RecBuild build, Func<TalentNode, string> nameOf, int legacyRanks)
+        {
+            var app = new BuildApplication();
+            var idx = NameIndex(tree, nameOf);
+            var levels = TalentRules.PointLevels(tree, legacyRanks);
+            var queue = new List<(TalentNode Node, string Name)>();
+            var wanted = new Dictionary<int, int>();
+            foreach (var step in build.Order)
+            {
+                if (!idx.TryGetValue(Key(step.Key), out var node))
+                {
+                    if (!app.Unmatched.Contains(step.Key)) { app.Unmatched.Add(step.Key); app.Adjusted.Add(step.Key + " is not in this game's tree any more"); }
+                    continue;
+                }
+                for (int i = 0; i < step.Value; i++) queue.Add((node, step.Key));
+                wanted[node.Id] = (wanted.TryGetValue(node.Id, out var w) ? w : 0) + step.Value;
+            }
+            foreach (var kv in wanted)
+            {
+                var n = tree.Node(kv.Key);
+                if (n != null && kv.Value > n.MaxRanks) app.Adjusted.Add(nameOf(n) + " has " + n.MaxRanks + " rank" + (n.MaxRanks == 1 ? "" : "s") + " now (the build took " + kv.Value + ")");
+            }
+            int full = tree.MaxPoints > 0 ? tree.MaxPoints : levels.Count;
+            bool fullBuild = build.Points >= full;
+            int target = Math.Min(levels.Count, fullBuild ? full : queue.Count);
+            int mainSpec = queue.GroupBy(q => q.Node.Spec).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+            var moved = new List<string>(); var added = new Dictionary<string, int>();
+            int number = 0;
+            void Place(TalentNode n, string name)
+            {
+                TalentRules.Add(tree, app.State, n.Id, int.MaxValue);
+                number++;
+                app.Steps.Add(new BuildStep { Number = number, Level = number - 1 < levels.Count ? levels[number - 1] : 0, Name = name, Rank = app.State.Rank(n.Id), Max = n.MaxRanks, NodeId = n.Id, Applied = true });
+            }
+            bool Fits(TalentNode n) => app.State.Rank(n.Id) < n.MaxRanks && TalentRules.CanAdd(tree, app.State, n.Id, int.MaxValue) == Why.Ok;
+            while (app.State.Total < target)
+            {
+                queue.RemoveAll(q => app.State.Rank(q.Node.Id) >= q.Node.MaxRanks);     // ranks the tree no longer has
+                if (queue.Count > 0)
+                {
+                    int pick = Fits(queue[0].Node) ? 0 : -1;
+                    if (pick < 0) { int spec = queue[0].Node.Spec; pick = queue.FindIndex(q => q.Node.Spec == spec && Fits(q.Node)); }
+                    if (pick < 0) pick = queue.FindIndex(q => Fits(q.Node));
+                    if (pick >= 0)
+                    {
+                        var q = queue[pick]; queue.RemoveAt(pick);
+                        if (pick > 0 && !moved.Contains(q.Name)) moved.Add(q.Name);
+                        Place(q.Node, q.Name);
+                        continue;
+                    }
+                }
+                // nothing of the order fits (or it is used up): a full build gets a talent it takes that is not full, then an open talent of its main tree
+                if (!fullBuild) break;
+                var fill = wanted.Keys.Select(tree.Node).Where(n => n != null && Fits(n)).OrderBy(n => n.Spec == mainSpec ? 0 : 1).FirstOrDefault()
+                    ?? tree.Nodes.Where(n => n.Spec == mainSpec && Fits(n)).OrderBy(n => n.Row).ThenBy(n => n.Col).FirstOrDefault()
+                    ?? tree.Nodes.Where(Fits).OrderBy(n => n.Row).ThenBy(n => n.Spec).ThenBy(n => n.Col).FirstOrDefault();
+                if (fill == null) break;
+                var fname = nameOf(fill) ?? ("talent " + fill.Id);
+                added[fname] = (added.TryGetValue(fname, out var a) ? a : 0) + 1;
+                Place(fill, fname);
+            }
+            app.Blocked = queue.Count;
+            if (moved.Count > 0) app.Adjusted.Add("taken earlier so the rows open in time: " + string.Join(", ", moved));
+            if (added.Count > 0) app.Adjusted.Add("the free points went to " + string.Join(", ", added.Select(kv => kv.Key + " +" + kv.Value)));
+            return app;
+        }
+
+        // every recommended build (the Outpost's, and Hunter Helper's when its file is given) that this game's trees made Fit adjust, in words:
+        // "Mage Frostbite: Piercing Ice is not in this game's tree any more; ..." (Settings > About > Game patches lists them under the talents)
+        public static List<string> AdjustedLines(TalentSet set, Func<TalentNode, string> nameOf, string hunterHelperFile)
+        {
+            var res = new List<string>();
+            if (set == null) return res;
+            foreach (var t in set.Trees)
+            {
+                var list = BuiltIn(t.ClassFile, out _);
+                if (string.Equals(t.ClassFile, "HUNTER", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(hunterHelperFile)) list = list.Concat(ReadHunterHelper(hunterHelperFile, out _)).ToList();
+                foreach (var b in list)
+                {
+                    var f = Fit(t, b, nameOf, 0);
+                    if (f.Adjusted.Count > 0) res.Add(t.ClassName + " " + b.Name + ": " + string.Join("; ", f.Adjusted));
+                }
+            }
+            return res;
         }
 
         // "Deadly Aspects 1-5, Focused Fire 1-2 ..." grouped for a short line: consecutive points of one talent are one item with a level range

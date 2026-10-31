@@ -297,6 +297,23 @@ EHH.DefaultBuild = ""pack""
                 var app2 = BuildsRecommended.Apply(t, hh[1], n => TalSpellName(n.SpellId), 0);
                 Check("apply: a build whose first point the tree would not allow yet (Delta) skips it and goes on (Alpha 2, Epsilon matched in lower case, Zeta 2 = the surviving node): 5 points, 1 blocked",
                     app2.Blocked == 1 && app2.Points == 5 && app2.State.Rank(10) == 2 && app2.State.Rank(14) == 1 && app2.State.Rank(17) == 2 && app2.Steps[0].Problem != null && !app2.Steps[0].Applied, app2.Blocked + " " + app2.Points);
+                // a patch breaks a build: a talent is gone (its 2 points opened Gamma's row) and Epsilon lost ranks - Fit repairs it like a person would
+                var patched = new RecBuild { Name = "Broken", Order = { new KeyValuePair<string, int>("Gone Talent", 2), new KeyValuePair<string, int>("Alpha", 3), new KeyValuePair<string, int>("Gamma", 3), new KeyValuePair<string, int>("Beta", 2), new KeyValuePair<string, int>("Epsilon", 3), new KeyValuePair<string, int>("Alpha", 2) } };
+                var applied = BuildsRecommended.Apply(t, patched, n => TalSpellName(n.SpellId), 0);
+                var fit = BuildsRecommended.Fit(t, patched, n => TalSpellName(n.SpellId), 0);
+                var fitOrder = string.Join(",", fit.Steps.Select(s => s.Name));
+                Check("fit: Apply refuses Gamma (its row needs 5 points, the gone talent gave 2 of them); Fit takes Beta earlier so Gamma fits, and puts Epsilon at its 1 rank",
+                    applied.Blocked > 0 && fit.Blocked == 0 && fit.State.Rank(12) == 3 && fit.State.Rank(11) == 2 && fit.State.Rank(14) == 1 && fit.State.Rank(10) == 5
+                    && fitOrder == "Alpha,Alpha,Alpha,Beta,Beta,Gamma,Gamma,Gamma,Epsilon,Alpha,Alpha", fitOrder + " blocked " + fit.Blocked);
+                Check("fit: it says what changed - the gone talent, Epsilon's ranks, what was taken earlier",
+                    fit.Adjusted.Contains("Gone Talent is not in this game's tree any more") && fit.Adjusted.Contains("Epsilon has 1 rank now (the build took 3)") && fit.Adjusted.Contains("taken earlier so the rows open in time: Beta"), string.Join(" | ", fit.Adjusted));
+                var intact = BuildsRecommended.Fit(t, hh[0], n => TalSpellName(n.SpellId), 0);
+                var plainApp = BuildsRecommended.Apply(t, hh[0], n => TalSpellName(n.SpellId), 0);
+                Check("fit: a build that fits comes out exactly as Apply lays it (only the missing talent is named)",
+                    intact.State.SameAs(plainApp.State) && string.Join(",", intact.Steps.Select(s => s.NodeId + ":" + s.Level)) == string.Join(",", plainApp.Steps.Where(s => s.Applied).Select(s => s.NodeId + ":" + s.Level)) && intact.Adjusted.Count == 1);
+                var adj = BuildsRecommended.AdjustedLines(set, n => TalSpellName(n.SpellId), hhPath);
+                Check("fit: Game patches names the recommended builds the trees made the calculator adjust (Hunter Helper's Pack Leader: its missing talent)",
+                    adj.Any(l => l == "Hunter Pack Leader: Missing Talent is not in this game's tree any more"), string.Join(" | ", adj));
                 var app3 = BuildsRecommended.Apply(t, hh[0], n => TalSpellName(n.SpellId), 2);
                 Check("apply: with 2 legacy ranks the first point comes at level 8", app3.Steps[0].Level == 8, app3.Steps[0].Level.ToString());
                 Check("hand-off to the game: the SharedData text for the build is escaped and capped (not written anywhere: the file has one writer)",
@@ -450,7 +467,7 @@ EHH.DefaultBuild = ""pack""
                 var rows = page.BuildRowsForTest();
                 Check("builds: the Hunter's list is Hunter Helper's two builds, in its order", rows.SequenceEqual(new[] { "Pack Leader", "Too Eager" }), string.Join("|", rows));
                 page.OpenBuild(page.RecBuildsForTest[0]);
-                Check("builds: clicking a build starts its guide at the first point (nothing spent yet, level 10); the status names what is not in this game and points at the guide", page.SessionForTest.State.Total == 0 && page.SessionForTest.Level == 10 && page.StatusForTest.Contains("Missing Talent") && page.StatusForTest.StartsWith("Pack Leader: 11 points") && page.StatusForTest.Contains("guide"), page.StatusForTest);
+                Check("builds: clicking a build starts its guide at the first point (nothing spent yet, level 10); the status names what is not in this game and points at the guide", page.SessionForTest.State.Total == 0 && page.SessionForTest.Level == 10 && page.StatusForTest.Contains("adjusted for this game version") && page.StatusForTest.StartsWith("Pack Leader: 11 points") && page.StatusForTest.Contains("guide"), page.StatusForTest);
 
                 // the build guide: what to take next, at which level, what comes after
                 var gp = page.GuideForTest;
@@ -489,8 +506,8 @@ EHH.DefaultBuild = ""pack""
                 Check("guide: StateAt / PointsBy / LevelFor walk the order (3 points = Alpha 3; level 16 holds 7 points; the 7th point comes at level 16, the first at 10)",
                     BuildGuide.StateAt(a0, 3).Rank(10) == 3 && BuildGuide.StateAt(a0, 3).Total == 3 && BuildGuide.PointsBy(a0, 16) == 7 && BuildGuide.LevelFor(a0, 7) == 16 && BuildGuide.LevelFor(a0, 0) == 10);
                 var detail = page.DetailTextsForTest();
-                Check("builds: the detail shows the description, stats, pets, tip, 'Not in this game's tree' and the leveling order as 'levels 10-14: Alpha 1-5/5'",
-                    detail.Any(x => x.StartsWith("A string with a brace")) && detail.Any(x => x == "Stats: Agility > Stamina") && detail.Any(x => x == "Pets: bear, boar") && detail.Any(x => x.StartsWith("Not in this game's tree: Missing Talent")) && detail.Contains("levels 10-14: Alpha 1-5/5") && detail.Contains("level 20: Delta 1/1"), string.Join(" | ", detail));
+                Check("builds: the detail shows the description, stats, pets, tip, what was adjusted for this game version and the leveling order as 'levels 10-14: Alpha 1-5/5'",
+                    detail.Any(x => x.StartsWith("A string with a brace")) && detail.Any(x => x == "Stats: Agility > Stamina") && detail.Any(x => x == "Pets: bear, boar") && detail.Any(x => x.StartsWith("Adjusted for this game version: Missing Talent is not in this game's tree any more")) && detail.Contains("levels 10-14: Alpha 1-5/5") && detail.Contains("level 20: Delta 1/1"), string.Join(" | ", detail));
                 await Task.Delay(300);
                 page.ScrollTopForTest(); ShowTabAndSnap("talents", P("24-talents-build.png"));
 
@@ -655,6 +672,32 @@ EHH.DefaultBuild = ""pack""
                     }
                     foreach (var x in bad.Take(8)) notes.Add("note real builds: " + x);
                     Check("real game files, builds: the Outpost's " + nb + " builds for the 8 classes without a helper addon each lay all 51 points on the game's current tree, in order, every point legal at its level (" + bad.Count + " broken)", bad.Count == 0 && classes == 8 && nb >= 24, string.Join(" | ", bad));
+                    var unfit = new List<string>();
+                    foreach (var cf in new[] { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" })
+                    {
+                        var t2 = set.ForClassFile(cf);
+                        var all = BuildsRecommended.BuiltIn(cf, out _).Concat(cf == "HUNTER" ? BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, "_classic_beta_"), out _) : new List<RecBuild>());
+                        foreach (var b in all)
+                        {
+                            var f = t2 == null ? null : BuildsRecommended.Fit(t2, b, x => TalentData.NodeName(x), 0);
+                            if (f == null || f.Points != 51 || f.Blocked > 0 || !TalentRules.Valid(t2, f.State, out _)) unfit.Add(cf + " " + b.Name + ": " + (f?.Points ?? 0) + " points");
+                            else if (f.Adjusted.Count > 0) notes.Add("note real builds adjusted by Fit: " + cf + " " + b.Name + ": " + string.Join("; ", f.Adjusted));
+                        }
+                    }
+                    Check("real game files, builds: every recommended build (the Outpost's and Hunter Helper's), laid on the game's tree by Fit, is a legal 51-point build - a patch never leaves a broken one (" + unfit.Count + " not)", unfit.Count == 0, string.Join(" | ", unfit));
+                    // the beta's Frostbite, as it was before launch removed Piercing Ice and cut Elemental Precision to 3 ranks: Fit repairs it on its own
+                    var mageT = set.ForClassFile("MAGE");
+                    var betaFrost = new RecBuild { Name = "Frostbite (beta)" };
+                    foreach (var (nm, rk) in new[] { ("Improved Frostbolt", 5), ("Permafrost", 3), ("Frostbite", 2), ("Ice Lance", 1), ("Piercing Ice", 3), ("Frost Channeling", 1), ("Shatter", 3), ("Ice Block", 1), ("Improved Frost Nova", 1), ("Fingers of Frost", 2), ("Cold Snap", 1), ("Improved Cone of Cold", 2), ("Winter's Chill", 5), ("Ice Barrier", 1), ("Ice Shards", 5), ("Frostbite", 1), ("Elemental Precision", 5), ("Arctic Reach", 2), ("Frost Channeling", 2), ("Wand Specialization", 2), ("Missile Barrage", 2), ("Arcane Focus", 1), ("Arcane Concentration", 2) })
+                        betaFrost.Order.Add(new KeyValuePair<string, int>(nm, rk));
+                    if (mageT != null && mageT.Nodes.All(n => TalentData.NodeName(n) != "Piercing Ice"))
+                    {
+                        var bf = BuildsRecommended.Fit(mageT, betaFrost, x => TalentData.NodeName(x), 0);
+                        Check("real game files, builds: the beta's Mage Frostbite (Piercing Ice, Elemental Precision 5) is repaired on the launch tree by itself - 51 legal points, Shatter and Ice Barrier kept, and it says why",
+                            bf.Points == 51 && bf.Blocked == 0 && TalentRules.Valid(mageT, bf.State, out _) && bf.Steps.Any(s => s.Name == "Shatter") && bf.Steps.Any(s => s.Name == "Ice Barrier")
+                            && bf.Adjusted.Any(a => a.StartsWith("Piercing Ice is not")) && bf.Adjusted.Any(a => a.StartsWith("Elemental Precision has 3 ranks")), bf.Points + " | " + string.Join("; ", bf.Adjusted));
+                    }
+                    else notes.Add("note real builds: this game's Mage tree still has Piercing Ice (the beta tree): the launch repair check did not run");
                     var hh = BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, "_classic_beta_"), out var hp);
                     var hBad = hh.Where(b => { var app = BuildsRecommended.Apply(h, b, x => TalentData.NodeName(x), 0); return app.Points != 51 || app.Blocked > 0 || app.Unmatched.Count > 0; }).Select(b => b.Name).ToList();
                     if (hh.Count == 0) notes.Add("note real builds: Hunter Helper is not installed here (" + hp + "): its builds were not checked");

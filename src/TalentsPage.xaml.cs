@@ -584,17 +584,17 @@ namespace ElansAddonHub
             if (tree == null) return;
             if (build is RecBuild rb)
             {
-                var app = BuildsRecommended.Apply(tree, rb, NameOf, session.LegacyRanks);
+                var app = BuildsRecommended.Fit(tree, rb, NameOf, session.LegacyRanks);
                 openBuild = rb; openApplication = app; guiding = true;
                 // the guide: from the first point on, or - with a character's talents loaded - from where that character stands
                 bool fromChar = charState != null && session.State.Total > 0 && session.State.SameAs(charState);
                 if (!fromChar) { session.Load(new TalentState()); SetLevel(BuildGuide.LevelFor(app, 0)); }
                 ShowDetail(rb, true);
                 RefreshStates();
-                var msg = rb.Name + ": " + app.Points + " points" + (app.Unmatched.Count > 0 ? ". Not in this game: " + string.Join(", ", app.Unmatched) : "") + (app.Blocked > 0 ? ". " + app.Blocked + " point(s) the tree would not allow at that moment were skipped" : "") + ".";
+                var msg = rb.Name + ": " + app.Points + " points" + (app.Adjusted.Count > 0 ? ", adjusted for this game version (see below)" : "") + (app.Blocked > 0 ? ". " + app.Blocked + " point(s) the tree would not allow were left out" : "") + ".";
                 msg += fromChar ? " Compared with " + charName + "'s talents: the guide above the trees says what to take next."
                     : " The guide above the trees starts at the first point: take the highlighted talent at each level, or press Full build to see the end result.";
-                SetStatus(msg, false, app.Unmatched.Count > 0 || app.Blocked > 0);
+                SetStatus(msg, false, app.Adjusted.Count > 0 || app.Blocked > 0);
             }
             else if (build is SavedBuild sbd)
             {
@@ -618,8 +618,8 @@ namespace ElansAddonHub
                 if (!string.IsNullOrEmpty(rb.Stats)) DetailPanel.Children.Add(Line("Stats: " + rb.Stats, "Text.Secondary", null, 8));
                 if (rb.Pets.Count > 0) DetailPanel.Children.Add(Line("Pets: " + string.Join(", ", rb.Pets), "Text.Secondary", null, 4));
                 if (!string.IsNullOrEmpty(rb.Tip)) DetailPanel.Children.Add(Line("Tip: " + rb.Tip, "Text.Secondary", null, 4));
-                var app = BuildsRecommended.Apply(tree, rb, NameOf, session.LegacyRanks);
-                if (app.Unmatched.Count > 0) DetailPanel.Children.Add(Line("Not in this game's tree: " + string.Join(", ", app.Unmatched), "Text.Secondary", Res("Brush.Warn"), 8));
+                var app = BuildsRecommended.Fit(tree, rb, NameOf, session.LegacyRanks);
+                if (app.Adjusted.Count > 0) DetailPanel.Children.Add(Line("Adjusted for this game version: " + string.Join("; ", app.Adjusted) + ".", "Text.Secondary", Res("Brush.Warn"), 8));
                 DetailPanel.Children.Add(Line("Leveling order (one point per level) - click a line to see the build at that point", "Text.Caption", null, 12));
                 stepsPanel = new StackPanel();
                 DetailPanel.Children.Add(stepsPanel);

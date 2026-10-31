@@ -8,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Db2;
+using ElansAddonHub.Services.Talents;
 
 namespace ElansAddonHub
 {
@@ -139,6 +140,13 @@ namespace ElansAddonHub
             return card;
         }
 
+        // hook (the self-test replaces it): the recommended builds the loaded trees made the calculator adjust
+        public static Func<List<string>> AdjustedBuilds = () =>
+        {
+            try { var root = ItemData.WowRoot(); return BuildsRecommended.AdjustedLines(TalentData.Data, TalentsPage.NameOf, BuildsRecommended.HunterHelperFile(root, ItemData.Flavor() ?? "_classic_beta_")); }
+            catch { return new List<string>(); }
+        };
+
         static string One(string kind)
         {
             switch (kind)
@@ -171,6 +179,15 @@ namespace ElansAddonHub
             }
             if (k.Total > k.Rows.Count && (open || hidden == 0))
                 sp.Children.Add(new TextBlock { Text = "The first " + k.Rows.Count.ToString("N0", CultureInfo.CurrentCulture) + " are kept; the counts above are complete.", Style = (Style)FindResource("Text.Caption"), Margin = new Thickness(16, 4, 0, 0) });
+            // the talent calculator's recommended builds against these trees (the build the game is on now: its trees are the ones loaded)
+            if (k.Kind == "talents" && k.Total > 0 && TalentData.Ready && e.Build == CurrentGameBuild())
+            {
+                var lines = AdjustedBuilds();
+                var cap = new TextBlock { Style = (Style)FindResource("Text.Caption"), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 2), Tag = "builds",
+                    Text = lines.Count == 0 ? "Every recommended talent build still fits these trees." : "Recommended talent builds this patch changed - the calculator adjusts them by itself:" };
+                sp.Children.Add(cap);
+                foreach (var l in lines) sp.Children.Add(new TextBlock { Text = l, Style = (Style)FindResource("Text.Secondary"), Foreground = (Brush)FindResource("Brush.Warn"), TextWrapping = TextWrapping.Wrap, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(16, 2, 0, 0) });
+            }
             return sp;
         }
 

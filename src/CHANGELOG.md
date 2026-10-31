@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.3.3
+- **Talent builds survive a patch.** When a patch changes a class's talent tree, the calculator repairs a recommended build that no longer fits instead of leaving it broken: a removed talent's points and ranks above a talent's new maximum are freed, a talent whose row would not open in time is taken a little later and the next fitting talent of the build comes first, and any points left go to talents the build already takes. The build's detail says what was adjusted, and Settings > About > Game patches lists the builds a patch changed under its talent changes.
+
 ## 3.3.2
 - **Ready for WoW Forever's launch.** The Outpost reads the released game from its own folder (_forever_) as soon as it is installed, and the add-ons go there too.
 - **Mage talent builds fit the launch tree.** Launch removes Piercing Ice and gives Elemental Precision 3 ranks; the Frostbite and Pyre builds are adjusted and checked against the launch client.
