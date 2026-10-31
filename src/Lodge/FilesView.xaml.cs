@@ -283,8 +283,13 @@ namespace ElansAddonHub.Lodge
             EName.Text = slot.Name;
             EDesc.Text = slot.Desc;
             ENote.Text = slot.Newest?.Note ?? "";
-            EAddon.Visibility = S.SupportsAddonFiles ? Visibility.Visible : Visibility.Collapsed;
+            EAddon.Visibility = S.SupportsAddonFiles && !slot.IsText ? Visibility.Visible : Visibility.Collapsed;
             EAddon.IsChecked = slot.IsAddon;
+            // only a zip can be an addon: say so instead of letting the Lodge refuse it
+            bool zip = LodgeFiles.IsZipName(slot.Newest?.FileName ?? "");
+            EAddon.IsEnabled = zip || slot.IsAddon;
+            EAddonWhy.Text = zip || slot.IsAddon ? "" : "Only a .zip of addon folders can be an addon - this file is a ." + Elans.Shared.DangerousFiles.Extension(slot.Newest?.FileName ?? "") + ". Upload the addon as a .zip to install it from here.";
+            EAddonWhy.Visibility = EAddon.Visibility == Visibility.Visible && EAddonWhy.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             ECatPanel.Visibility = S.SupportsFilesCats && !slot.IsAddon && !slot.IsText ? Visibility.Visible : Visibility.Collapsed;
             ECat.SelectedItem = ECat.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.Cat ?? ""));
             ESee.SelectedItem = ESee.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.See ?? "guest"));
@@ -600,6 +605,8 @@ namespace ElansAddonHub.Lodge
         public void ChipForTest(string label) { var rb = CatChips.Children.OfType<RadioButton>().First(r => (string)r.Content == label); rb.IsChecked = true; }
         public void EditCatForTest(string cat) => ECat.SelectedItem = ECat.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == cat);
         public bool EditCatShownForTest => ECatPanel.Visibility == Visibility.Visible;
+        public bool EditAddonEnabledForTest => EAddon.IsEnabled;
+        public string EditAddonWhyForTest => EAddonWhy.Text;
         public bool KitOpenForTest => KitOverlay.Visibility == Visibility.Visible;
         public string KitErrorForTest => KError.Text;
         public void KitSetForTest(string name, string desc, string see, params string[] slotNames)

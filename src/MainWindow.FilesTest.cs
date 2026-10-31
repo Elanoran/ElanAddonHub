@@ -981,6 +981,14 @@ namespace ElansAddonHub
                     fc.OpenEdit(Session.Slots.First(s => s.Name == "Boss mods"));
                     check("cats: an addon has no category to pick (its kind says it)", !fc.EditCatShownForTest);
                     fc.CloseEditForTest();
+                    var rar = R(8.ToString("x32"), "RXPGuides", null, null, new byte[] { 0x52, 0x61, 0x72, 0x21 }, "RXPGuides-v4.11.29.rar");
+                    Session.FeedForTest(fake.DataJson());
+                    fc.OpenEdit(Session.Slots.First(s => s.Name == "RXPGuides"));
+                    check("edit: a .rar can't be ticked as an addon, and the dialog says why (" + fc.EditAddonWhyForTest + ")", !fc.EditAddonEnabledForTest && fc.EditAddonWhyForTest.Contains("this file is a .rar"));
+                    check("refusals have words: not-addon, name-taken, not-image; an unknown one names its reason",
+                        LodgeSession.FilesWhy("not-addon").Contains(".zip of addon folders") && LodgeSession.FilesWhy("name-taken").Contains("already shared") && LodgeSession.FilesWhy("not-image").Contains("picture")
+                        && LodgeSession.FilesWhy("zzz") == "The lodge refused that (zzz)");
+                    fc.CloseEditForTest();
                     // the update card: Wing uploads v2 of the boss mods while I'm in the chat
                     LodgePage.HideFilesForTest();
                     Session.FeedForTest(FilesChangedFrame("version", "Wing", "Boss mods", 1));

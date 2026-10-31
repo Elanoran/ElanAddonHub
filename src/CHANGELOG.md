@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.1
+- **Fixed: "The lodge refused that" without saying why.** Every reason the Lodge gives now reads as a plain sentence - for example that only a .zip of addon folders can be an addon.
+- **Edit:** "This is a WoW addon" is greyed out, with the reason, when the file isn't a .zip.
+
 ## 3.5.0
 - **A new Files page.** Lodge > Files is now a grid of cards with a picture, the kind of file and who can see it; Details opens the description, who can see and update it, the actions and the versions. Search and filter chips (Addons, Import strings, UI packs, Guides, Maps, Talent builds) appear once the list gets long.
 - **Files that fit your ranks.** Officers and the Guild Master choose per file who can see it (everyone, members, veterans or officers only) and who can update it - so veterans can keep the raid's WeakAuras current without being officers. A file you can't see simply isn't there for you.

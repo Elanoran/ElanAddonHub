@@ -278,6 +278,7 @@
                   <ComboBox x:Name="ECat" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="What it is" />
                 </StackPanel>
                 <CheckBox x:Name="EAddon" Content="This is a WoW addon" Margin="0,12,0,0" ToolTip="Members can install it in WoW Forever from the Files page (the newest version must be a zip of addon folders)" />
+                <TextBlock x:Name="EAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="24,2,0,0" Visibility="Collapsed" />
                 <TextBlock Text="Note on the newest version" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="ENote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed" AutomationProperties.Name="Note on the newest version" />
                 <StackPanel x:Name="ERanksPanel">

@@ -164,7 +164,17 @@ namespace ElansAddonHub.Lodge
                 case "already-newest": return "That is already the newest version";
                 case "save": return "The lodge couldn't save that change - try again";
                 case "rate": return "Slow down a little";
-                default: return "The lodge refused that";
+                // 2.32 - 2.37
+                case "not-addon": return "That can't be an addon: an addon has to be a .zip of addon folders, each with its own .toc (a .rar or a single file won't do)";
+                case "not-text": return "That isn't plain text (a .txt of UTF-8 text, 256 KB at most)";
+                case "not-image": return "That isn't a picture (png, jpg, gif or webp)";
+                case "name-taken": return "A file with that name is already shared - pick another name";
+                case "bad-name": return "Give it a name";
+                case "bad-rank": return "Pick who can see or update it from the list";
+                case "bad-kind": case "bad-cat": return "The lodge doesn't know that kind of file - update the Lodge server";
+                case "too-many": return "There are too many - remove one first";
+                case "too-big": return "That is too big for the lodge";
+                default: return "The lodge refused that" + (string.IsNullOrEmpty(why) ? "" : " (" + why + ")");
             }
         }
 
