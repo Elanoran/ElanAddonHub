@@ -14,12 +14,13 @@ namespace ElansAddonHub.Lodge
         public int V;
         public string FileName, Sha256, UploadedBy, Note;
         public long Size, At;
+        public List<AddonFolder> Addon = new List<AddonFolder>();      // 2.35: the addon folders as their tocs say
 
         // a files.data slot's version (typed: shared/Elans.Shared/Lodge/FileMessages.cs FileVersion)
         public static SlotVersionInfo From(FileVersion d) => d == null ? null : new SlotVersionInfo
         {
             V = d.V, FileName = SafeFile.Name(d.FileName), Size = d.Size, Sha256 = (d.Sha256 ?? "").ToLowerInvariant(),
-            UploadedBy = d.UploadedBy ?? "", At = d.At, Note = d.Note ?? "",
+            UploadedBy = d.UploadedBy ?? "", At = d.At, Note = d.Note ?? "", Addon = d.Addon ?? new List<AddonFolder>(),
         };
     }
 
@@ -61,6 +62,7 @@ namespace ElansAddonHub.Lodge
             if (CoverV != d.Cover) { CoverV = d.Cover; if (d.Cover <= 0) CoverImage = null; }
             IsAddon = addonsOn && d.IsAddon;
             IsText = textOn && d.IsText;
+            HaveNewest = d.HaveNewest; HaveOlder = d.HaveOlder;
             Badge = LodgeFiles.Badge(Newest, saved);
             SetInstalled(IsAddon ? installed : null, Newest);
             RaiseAll();
@@ -78,6 +80,37 @@ namespace ElansAddonHub.Lodge
         public Visibility CoverVisibility => cover != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility PlaceholderVisibility => cover == null ? Visibility.Visible : Visibility.Collapsed;
         public bool IsText { get; private set; }
+
+        // ---- 2.35: the newest addon version's folders against this PC (the client's Interface, the AddOns folder), and who has it
+        public int HaveNewest { get; private set; }
+        public int HaveOlder { get; private set; }
+        public string AddonInfo { get; private set; } = "";
+        public string AddonWarn { get; private set; } = "";
+        public Visibility AddonInfoVisibility => IsAddon && AddonInfo.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility AddonWarnVisibility => IsAddon && AddonWarn.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string HaveLine => !IsAddon || HaveNewest + HaveOlder == 0 ? "" : (HaveNewest == 1 ? "1 member has" : HaveNewest + " members have") + " the newest" + (HaveOlder > 0 ? " · " + HaveOlder + " an older version" : "");
+        public Visibility HaveVisibility => HaveLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        public void SetAddonContext(int clientInterface, Func<string, bool> haveFolder)
+        {
+            var folders = Newest?.Addon ?? new List<AddonFolder>();
+            var lines = folders.Select(f => f.F + (f.V.Length > 0 ? " " + f.V : "") + (f.I.Count > 0 ? " · for " + string.Join(", ", f.I) : ""));
+            AddonInfo = string.Join("\n", lines);
+            var warn = new List<string>();
+            if (clientInterface > 0)
+            {
+                var off = folders.Where(f => f.I.Count > 0 && !f.I.Contains(clientInterface)).Select(f => f.F + " (" + string.Join(", ", f.I) + ")").ToList();
+                if (off.Count > 0) warn.Add("Built for another game version: " + string.Join(", ", off) + ". WoW Forever is " + clientInterface + " - it may show as out of date in game (tick \"Load out of date AddOns\").");
+            }
+            if (haveFolder != null)
+            {
+                var own = new HashSet<string>(folders.Select(f => f.F), StringComparer.OrdinalIgnoreCase);
+                var missing = folders.SelectMany(f => f.D).Where(d => !own.Contains(d) && !haveFolder(d)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (missing.Count > 0) warn.Add("Needs " + string.Join(", ", missing) + ", which " + (missing.Count == 1 ? "isn't" : "aren't") + " in your AddOns folder.");
+            }
+            AddonWarn = string.Join(" ", warn);
+            foreach (var n in new[] { nameof(AddonInfo), nameof(AddonWarn), nameof(AddonInfoVisibility), nameof(AddonWarnVisibility), nameof(HaveLine), nameof(HaveVisibility) }) Raise(n);
+        }
         public string KindGlyph => IsAddon ? "\uE74C" : IsText ? "\uE8C8" : "\uE8A5";        // a puzzle piece for addons, copy for import text, a page for files
         public string KindChip => IsAddon ? "Addon" : IsText ? "Import" : "";
         public string KindChipTip => IsAddon ? "A WoW addon: it can be installed in WoW Forever from here" : "An import string (a WeakAura, a profile, a macro): Copy puts it on the clipboard";

@@ -26,6 +26,7 @@ public sealed class SlotVersion
     public long At { get; set; }
     public string Note { get; set; }
     public string Blob { get; set; }     // server-generated file name on disk (32 hex) - never derived from anything a client sent
+    public List<AddonFolder> Addon { get; set; }   // 2.35: an addon version's folders as their tocs say (read on upload / when marked)
 }
 
 public sealed class Slot
@@ -40,6 +41,7 @@ public sealed class Slot
     public string Cover { get; set; }    // 2.33: the cover picture's blob (32 hex, server-made) and its type
     public string CoverType { get; set; }
     public int CoverV { get; set; }      // goes up with every new picture (clients cache by it)
+    public Dictionary<string, int> Installs { get; set; }   // 2.35: who (profile key) has which version installed - only counts leave the server
     public int NextV { get; set; } = 1;  // version numbers are never reused (not even after a roll back)
     public List<SlotVersion> Versions { get; set; } = new();
 }
@@ -244,7 +246,7 @@ public sealed class FilesModule : IModule
     // the views are typed in shared/Elans.Shared/Lodge/FileMessages.cs (FileVersion, FileSlot, FilesDataMsg); the HTTP upload answers a FileSlot too
     static FileVersion VersionOf(SlotVersion v) => new()
     {
-        V = v.V, FileName = v.FileName, Size = v.Size, Sha256 = v.Sha256, UploadedBy = v.UploadedBy, At = v.At, Note = v.Note ?? "",
+        V = v.V, FileName = v.FileName, Size = v.Size, Sha256 = v.Sha256, UploadedBy = v.UploadedBy, At = v.At, Note = v.Note ?? "", Addon = v.Addon ?? new List<AddonFolder>(),
     };
 
     static FileSlot SlotOf(Slot s, string role = null) => new()
@@ -252,6 +254,8 @@ public sealed class FilesModule : IModule
         Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Kind = s.Kind == FileSlot.AddonKind || s.Kind == FileSlot.TextKind ? s.Kind : null, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
         Desc = string.IsNullOrEmpty(s.Desc) ? null : s.Desc, See = s.See, Edit = s.Edit, Cover = s.Cover != null ? Math.Max(1, s.CoverV) : 0,
         CanUpdate = role != null && CanUpdate(role, s),
+        HaveNewest = s.Kind == FileSlot.AddonKind && s.Installs != null && s.Versions.Count > 0 ? s.Installs.Values.Count(v => v == s.Versions.Max(x => x.V)) : 0,
+        HaveOlder = s.Kind == FileSlot.AddonKind && s.Installs != null && s.Versions.Count > 0 ? s.Installs.Values.Count(v => v > 0 && v < s.Versions.Max(x => x.V)) : 0,
     };
 
     static JsonObject SlotJson(Slot s, string role = null) => LodgeJson.Build(SlotOf(s, role).Write);
@@ -343,6 +347,7 @@ public sealed class FilesModule : IModule
         }
         bool slotTaken = false;
         string part = null;
+        List<AddonFolder> addonInfo = null;
         try
         {
             CheckRate(rateKey);
@@ -388,8 +393,8 @@ public sealed class FilesModule : IModule
             }
             if (kind.Length == 0 && !isNew)
             {
-                bool wasText; lock (gate) wasText = Find(slotId)?.Kind == FileSlot.TextKind;
-                if (wasText) kind = FileSlot.TextKind;
+                string was; lock (gate) was = Find(slotId)?.Kind;
+                if (was == FileSlot.TextKind || was == FileSlot.AddonKind) kind = was;       // an older Outpost says nothing: the slot keeps its kind and its rules
             }
             if (kind == FileSlot.TextKind)
             {
@@ -404,6 +409,7 @@ public sealed class FilesModule : IModule
                 await using (var zs = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.Read))
                     ar = Elans.Shared.AddonZip.Check(zs);
                 if (!ar.Ok) throw new FilesException(415, "not-addon", ar.Problem);
+                addonInfo = AddonFolder.From(ar);
             }
 
             // commit: content to its server-generated name, then the index (tmp + rename), then old versions go
@@ -432,7 +438,7 @@ public sealed class FilesModule : IModule
                 part = null;
                 var v = new SlotVersion
                 {
-                    V = s.NextV, FileName = fileName, Size = size, Sha256 = actual, UploadedBy = by, Note = note, Blob = blob,
+                    V = s.NextV, FileName = fileName, Size = size, Sha256 = actual, UploadedBy = by, Note = note, Blob = blob, Addon = addonInfo,
                     At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
                 };
                 var before = s.Versions.ToList();
@@ -575,12 +581,14 @@ public sealed class FilesModule : IModule
                 addonCheckBlob = BlobPath(newest); addonCheckName = s.Id;
             }
         }
+        List<AddonFolder> markedInfo = null;
         if (addonCheckBlob != null)
         {
             AddonZip.Result ar;
             try { await using var fs = new FileStream(addonCheckBlob, FileMode.Open, FileAccess.Read, FileShare.Read); ar = AddonZip.Check(fs); }
             catch (IOException) { return (false, "missing", null); }
             if (!ar.Ok) return (false, "not-addon", null);
+            markedInfo = AddonFolder.From(ar);
         }
         lock (gate)
         {
@@ -593,6 +601,7 @@ public sealed class FilesModule : IModule
             if (req.See != null) s.See = req.See.Length == 0 || req.See == "guest" ? null : req.See;
             if (req.Edit != null) s.Edit = req.Edit.Length == 0 || req.Edit == "officer" ? null : req.Edit;
             if (req.Kind != null) s.Kind = req.Kind == FileSlot.AddonKind ? FileSlot.AddonKind : null;
+            if (markedInfo != null && s.Versions.Count > 0) s.Versions.OrderBy(v => v.V).Last().Addon = markedInfo;
             if (note != null) s.Versions.First(v => v.V == req.NoteV).Note = note;
             if (req.Cover == false && s.Cover != null) { coverGone = Path.Combine(dir, s.Cover + ".bin"); s.Cover = null; s.CoverType = null; }
             if (!SaveIndexLocked())
@@ -668,6 +677,26 @@ public sealed class FilesModule : IModule
         try { return (File.ReadAllBytes(path), type); } catch (IOException) { return null; }
     }
 
+    // 2.35: who has which version of an addon slot (a version the slot never had, a slot the member doesn't see or a non-addon is ignored)
+    public void NoteInstalled(string who, string role, string slotId, int v)
+    {
+        if (string.IsNullOrEmpty(who) || v < 0) return;
+        lock (gate)
+        {
+            var s = Find(slotId);
+            if (s == null || s.Kind != FileSlot.AddonKind || !CanSee(role, s) || v >= s.NextV) return;
+            s.Installs ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            if (v == 0) { if (!s.Installs.Remove(who)) return; }
+            else
+            {
+                if (s.Installs.TryGetValue(who, out var had) && had == v) return;
+                if (!s.Installs.ContainsKey(who) && s.Installs.Count >= 1000) return;
+                s.Installs[who] = v;
+            }
+            SaveIndexLocked();
+        }
+    }
+
     // ---------------------------------------------------------------- messages
 
     // to everybody who sees the slot (see = its rank before a change that hid it; a deleted slot: everybody who saw it)
@@ -717,6 +746,14 @@ public sealed class FilesModule : IModule
                     var widest = Array.IndexOf(FileSlot.SeeRanks, seeBefore ?? "guest") <= Array.IndexOf(FileSlot.SeeRanks, seeNow ?? "guest") ? seeBefore ?? "guest" : seeNow ?? "guest";
                     await Announce("edit", id, name, null, me.Name, widest);
                 }
+                return true;
+            }
+            case FilesInstalledMsg.Type:
+            {
+                var req = FilesInstalledMsg.Read(new LodgeJsonFields(m));
+                if (!Enabled || !Roles.AtLeast(me.Role, "member")) return true;                 // guests share one name: they are not counted
+                if (!me.Budget.Page.TryTake()) return true;
+                NoteInstalled(ProfileRules.Key(me.Name), me.Role, req.Slot ?? "", req.V);
                 return true;
             }
             case FilesRollbackMsg.Type:

@@ -22,8 +22,8 @@ namespace ElansAddonHub
         // a stand-in for the server's file endpoints: the same URLs, headers and answers, the same refusals, an in-memory store
         sealed class FakeFilesServer
         {
-            public sealed class Ver { public int V; public string FileName, Sha, By, Note; public byte[] Bytes; public long At; }
-            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind, Desc, See, Edit; public int Cover; public byte[] CoverBytes; public bool CanUpdate; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
+            public sealed class Ver { public int V; public string FileName, Sha, By, Note, AddonJson; public byte[] Bytes; public long At; }
+            public sealed class SlotRec { public string Id, Name, CreatedBy, Kind, Desc, See, Edit; public int Cover, HaveNewest, HaveOlder; public byte[] CoverBytes; public bool CanUpdate; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
 
             readonly HttpListener listener = new HttpListener();
             public readonly string Url;
@@ -69,11 +69,11 @@ namespace ElansAddonHub
                 Reply(c, status, "{\"error\":" + Q(text) + ",\"reason\":" + Q(reason) + "}");
 
             public static string VerJson(Ver v) =>
-                "{\"v\":" + v.V + ",\"fileName\":" + Q(v.FileName) + ",\"size\":" + v.Bytes.Length + ",\"sha256\":" + Q(v.Sha) + ",\"uploadedBy\":" + Q(v.By) + ",\"at\":" + v.At + ",\"note\":" + Q(v.Note) + "}";
+                "{\"v\":" + v.V + ",\"fileName\":" + Q(v.FileName) + ",\"size\":" + v.Bytes.Length + ",\"sha256\":" + Q(v.Sha) + ",\"uploadedBy\":" + Q(v.By) + ",\"at\":" + v.At + ",\"note\":" + Q(v.Note) + (v.AddonJson != null ? ",\"addon\":" + v.AddonJson : "") + "}";
 
             public string SlotJson(SlotRec s) =>
                 "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + (s.Kind != null ? ",\"kind\":" + Q(s.Kind) : "") + (s.Desc != null ? ",\"desc\":" + Q(s.Desc) : "") + (s.See != null ? ",\"see\":" + Q(s.See) : "")
-                + (s.Edit != null ? ",\"edit\":" + Q(s.Edit) : "") + (s.Cover > 0 ? ",\"cover\":" + s.Cover : "") + (s.CanUpdate ? ",\"canUpdate\":true" : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
+                + (s.Edit != null ? ",\"edit\":" + Q(s.Edit) : "") + (s.Cover > 0 ? ",\"cover\":" + s.Cover : "") + (s.CanUpdate ? ",\"canUpdate\":true" : "") + (s.HaveNewest > 0 ? ",\"haveNewest\":" + s.HaveNewest : "") + (s.HaveOlder > 0 ? ",\"haveOlder\":" + s.HaveOlder : "") + ",\"versions\":[" + string.Join(",", s.Versions.OrderBy(v => v.V).Select(VerJson)) + "]}";
 
             // what files.list answers
             public string DataJson() =>
@@ -318,10 +318,10 @@ namespace ElansAddonHub
             finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
         }
 
-        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false)
+        string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1, bool addons = false, bool files2 = false, bool text = false, bool info = false)
 
         {
-            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "");
+            var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "") + (addons ? ",\"filesaddons\"" : "") + (files2 ? ",\"files2\"" : "") + (text ? ",\"filestext\"" : "") + (info ? ",\"filesinfo\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
             bool manage = role == "owner" || role == "officer";
             return w.Substring(0, w.Length - 1) + ",\"canManageFiles\":" + (manage ? "true" : "false") + ",\"filesMaxMb\":" + maxMb + "}";
@@ -849,6 +849,45 @@ namespace ElansAddonHub
                     Session.Disconnect();
                     fake.Slots.Clear();
                     try { if (Directory.Exists(LodgeSession.TextDir)) Directory.Delete(LodgeSession.TextDir, true); } catch { }
+                }
+
+                // ---- 2.35 "filesinfo": an addon version's folders against this PC (Interface, what it needs), who has it, and telling the Lodge what is installed
+                {
+                    fake.Slots.Clear();
+                    var aoDir = Path.Combine(work, "wow2", "_forever_", "Interface", "AddOns");
+                    Directory.CreateDirectory(Path.Combine(aoDir, "Ace3"));
+                    var hadIface = LodgeAddons.ClientInterface;
+                    LodgeAddons.AddOnsDir = () => aoDir; LodgeAddons.ClientInterface = () => 16001;
+                    try
+                    {
+                        var dz = MakeZip(Path.Combine(work, "dbm.zip"), ("DBM-Raid/DBM-Raid.toc", "## Interface: 11509\n## Version: 2.1\n## Dependencies: DBM-Core, Ace3\n"), ("DBM-Raid/x.lua", "x"));
+                        var db = File.ReadAllBytes(dz);
+                        var rec = new FakeFilesServer.SlotRec { Id = 777.ToString("x32"), Name = "DBM raid", CreatedBy = "Wing", Kind = "addon", HaveNewest = 4, HaveOlder = 2 };
+                        rec.Versions.Add(new FakeFilesServer.Ver { V = 1, FileName = "dbm.zip", Sha = LodgeFiles.Hex(System.Security.Cryptography.SHA256.Create().ComputeHash(db)), By = "Wing", Note = "", Bytes = db, At = 1_790_000_000_000L,
+                            AddonJson = "[{\"f\":\"DBM-Raid\",\"v\":\"2.1\",\"i\":\"11509\",\"d\":\"DBM-Core,Ace3\"}]" });
+                        fake.Slots.Add(rec);
+                        Session.Disconnect(); sent.Clear();
+                        Session.FeedForTest(FilesWelcome("member", true, "2.35.0", 1, addons: true, files2: true, text: true, info: true));
+                        Session.FilesClientForTest(new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan"));
+                        Session.FeedForTest(fake.DataJson());
+                        var ds = Session.Slots.First();
+                        check("addon info: the details list the folder with its version and game version (" + ds.AddonInfo + ")", ds.AddonInfo == "DBM-Raid 2.1 · for 11509");
+                        check("addon info: built for another game version and a missing addon are warned about; one you have (Ace3) is not (" + ds.AddonWarn + ")",
+                            ds.AddonWarn.Contains("Built for another game version: DBM-Raid (11509)") && ds.AddonWarn.Contains("WoW Forever is 16001") && ds.AddonWarn.Contains("Needs DBM-Core,") && !ds.AddonWarn.Contains("Ace3"));
+                        check("addon info: who has it, in counts (" + ds.HaveLine + ")", ds.HaveLine == "4 members have the newest · 2 an older version");
+                        var fv4 = LodgePage.FilesForTest;
+                        fv4.ConfirmInstall = (chk, s) => true;
+                        var ierr = await fv4.InstallAsync(ds);
+                        var told = sent.Where(o => o.Str("t") == "files.installed").ToList();
+                        check("addon info: after installing, the Lodge is told which version this PC has - once (" + (ierr ?? "ok") + ")",
+                            ierr == null && told.Count == 1 && told[0].Str("slot") == ds.Id && told[0].Int("v") == 1);
+                        Session.FeedForTest(fake.DataJson());
+                        check("addon info: a fresh list doesn't tell it again", sent.Count(o => o.Str("t") == "files.installed") == 1);
+                        fv4.ConfirmInstall = null;
+                    }
+                    finally { LodgeAddons.ClientInterface = hadIface; LodgeAddons.AddOnsDir = hadAddOnsDir; }
+                    Session.Disconnect();
+                    fake.Slots.Clear();
                 }
 
                 // ---- the badge rules on their own

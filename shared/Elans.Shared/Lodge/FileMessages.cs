@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Elans.Shared
 {
@@ -100,6 +101,7 @@ namespace Elans.Shared
         public string Id, Name, CreatedBy, Kind, Desc, See, Edit;
         public int Cover;
         public bool CanUpdate;
+        public int HaveNewest, HaveOlder;              // 2.35 (addon slots): how many people have the newest / an older version installed (counts only, no names)
         public bool IsAddon => Kind == AddonKind;
         public bool IsText => Kind == TextKind;
         public const long MaxTextBytes = 256 * 1024;
@@ -128,6 +130,8 @@ namespace Elans.Shared
             if (!string.IsNullOrEmpty(Edit)) w.Set("edit", Edit);
             if (Cover > 0) w.Set("cover", Cover);
             if (CanUpdate) w.Set("canUpdate", true);
+            if (HaveNewest > 0) w.Set("haveNewest", HaveNewest);
+            if (HaveOlder > 0) w.Set("haveOlder", HaveOlder);
             var l = w.List("versions"); foreach (var v in Versions) v.Write(l.Add());
         }
 
@@ -137,7 +141,7 @@ namespace Elans.Shared
             {
                 Id = f.Str("id"), Name = f.Str("name"), CreatedBy = f.Str("createdBy"), Kind = f.Str("kind") == AddonKind ? AddonKind : f.Str("kind") == TextKind ? TextKind : null,
                 Desc = f.Str("desc"), See = Array.IndexOf(SeeRanks, f.Str("see")) >= 0 ? f.Str("see") : null, Edit = Array.IndexOf(EditRanks, f.Str("edit")) >= 0 ? f.Str("edit") : null,
-                Cover = Math.Max(0, f.Int("cover")), CanUpdate = f.Bool("canUpdate"),
+                Cover = Math.Max(0, f.Int("cover")), CanUpdate = f.Bool("canUpdate"), HaveNewest = Math.Max(0, f.Int("haveNewest")), HaveOlder = Math.Max(0, f.Int("haveOlder")),
             };
             foreach (var v in f.List("versions")) s.Versions.Add(FileVersion.Read(v));
             return s;
@@ -150,16 +154,62 @@ namespace Elans.Shared
         public int V;
         public string FileName, Sha256, UploadedBy, Note;
         public long Size, At;
+        public List<AddonFolder> Addon = new List<AddonFolder>();       // 2.35: an addon version's folders as their tocs say (empty = not read / not an addon)
 
         public void Write(ILodgeWriter w)
         {
             w.Set("v", V); w.Set("fileName", FileName); w.Set("size", Size); w.Set("sha256", Sha256); w.Set("uploadedBy", UploadedBy); w.Set("at", At); w.Set("note", Note);
+            if (Addon.Count > 0) { var l = w.List("addon"); foreach (var a in Addon) a.Write(l.Add()); }
         }
 
-        public static FileVersion Read(ILodgeFields f) => new FileVersion
+        public static FileVersion Read(ILodgeFields f)
         {
-            V = f.Int("v"), FileName = f.Str("fileName"), Size = f.Long("size"), Sha256 = f.Str("sha256"), UploadedBy = f.Str("uploadedBy"), At = f.Long("at"), Note = f.Str("note"),
-        };
+            var v = new FileVersion
+            {
+                V = f.Int("v"), FileName = f.Str("fileName"), Size = f.Long("size"), Sha256 = f.Str("sha256"), UploadedBy = f.Str("uploadedBy"), At = f.Long("at"), Note = f.Str("note"),
+            };
+            foreach (var a in f.List("addon").Take(AddonZip.MaxFolders)) v.Addon.Add(AddonFolder.Read(a));
+            v.Addon.RemoveAll(a => !AddonZip.SafeFolder(a.F));
+            return v;
+        }
+    }
+
+    // 2.35: one folder of an addon version { f (folder), v (its toc's version), i ("16001,11509": the Interface numbers), d ("DBM-Core,Ace3": what it needs) }
+    public sealed class AddonFolder
+    {
+        public string F = "", V = "";
+        public List<int> I = new List<int>();
+        public List<string> D = new List<string>();
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("f", F);
+            if (V.Length > 0) w.Set("v", V);
+            if (I.Count > 0) w.Set("i", string.Join(",", I));
+            if (D.Count > 0) w.Set("d", string.Join(",", D));
+        }
+
+        public static AddonFolder Read(ILodgeFields f)
+        {
+            var a = new AddonFolder { F = f.Str("f") ?? "", V = (f.Str("v") ?? "").Length > 40 ? f.Str("v").Substring(0, 40) : f.Str("v") ?? "" };
+            foreach (var x in (f.Str("i") ?? "").Split(',')) if (int.TryParse(x, out var i) && i > 0 && i < 1000000 && a.I.Count < 8) a.I.Add(i);
+            foreach (var x in (f.Str("d") ?? "").Split(',')) if (AddonZip.SafeFolder(x.Trim()) && a.D.Count < 20) a.D.Add(x.Trim());
+            return a;
+        }
+
+        public static List<AddonFolder> From(AddonZip.Result r) =>
+            r == null || !r.Ok ? new List<AddonFolder>() : r.Folders.Select(f => r.Info.TryGetValue(f, out var i)
+                ? new AddonFolder { F = f, V = i.Version, I = i.Interfaces.ToList(), D = i.Deps.ToList() } : new AddonFolder { F = f }).ToList();
+    }
+
+    // 2.35: this Outpost has version v of an addon slot installed in WoW (0 = not any more) - only counts go back out (FileSlot.HaveNewest / HaveOlder)
+    public sealed class FilesInstalledMsg
+    {
+        public const string Type = "files.installed";
+        public string Slot;
+        public int V;
+        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("slot", Slot); w.Set("v", V); }
+        public static FilesInstalledMsg Read(ILodgeFields f) => new FilesInstalledMsg { Slot = f.Str("slot"), V = f.Int("v") };
     }
 
     // to everybody: a slot changed { action: new | version | rollback | delete, slot, name, by, at (unix ms), v? (not on delete) }

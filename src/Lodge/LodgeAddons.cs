@@ -28,6 +28,20 @@ namespace ElansAddonHub.Lodge
             return WowLocator.AddOnsDir(root, WowLocator.ForeverFolder);
         };
 
+        // the Interface number of the Forever client (1.60.1 -> 16001), 0 when it can't be read (the self-test replaces it)
+        public static Func<int> ClientInterface = () =>
+        {
+            try
+            {
+                var root = ItemData.WowRoot();
+                if (string.IsNullOrEmpty(root)) return 0;
+                var b = ItemData.GameBuild(root, WowLocator.Resolve(root, WowLocator.ForeverFolder));
+                var parts = (b ?? "").Split('|');
+                return parts.Length >= 2 ? AddonZip.InterfaceOf(parts[1]) : 0;
+            }
+            catch { return 0; }
+        };
+
         public sealed class Result { public bool Ok; public string Error; public List<string> Folders = new List<string>(); public string BackupDir; }
 
         internal static Action<string> SwapHook;              // self-test: called before each new folder is moved in (throws = a failure mid-swap)

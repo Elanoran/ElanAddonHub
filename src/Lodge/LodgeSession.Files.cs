@@ -36,6 +36,8 @@ namespace ElansAddonHub.Lodge
         public bool SupportsAddonFiles { get; private set; }     // 2.32 "filesaddons": slots can be marked as WoW addons and installed
         public bool SupportsFiles2 { get; private set; }         // 2.33 "files2": who sees / updates a slot, description, cover picture, files.edit
         public bool SupportsFilesText { get; private set; }      // 2.34 "filestext": text slots (import strings) with a Copy button
+        public bool SupportsFilesInfo { get; private set; }      // 2.35 "filesinfo": addon versions carry their tocs; Outposts say what they have installed (counts only)
+        readonly HashSet<string> installReported = new HashSet<string>(StringComparer.Ordinal);   // "slot:v" told to this Lodge on this connection
 
         void ReadFilesFeatures(WelcomeMsg w, List<string> features)
         {
@@ -45,6 +47,8 @@ namespace ElansAddonHub.Lodge
             SupportsAddonFiles = SupportsFiles && features.Contains("filesaddons");
             SupportsFiles2 = SupportsFiles && features.Contains("files2");
             SupportsFilesText = SupportsFiles && features.Contains("filestext");
+            SupportsFilesInfo = SupportsFiles && features.Contains("filesinfo");
+            installReported.Clear();
             if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
             savedFiles = null; installedAddons = null;
             if (!SupportsFiles) { Slots.Clear(); FilesLoaded = false; }
@@ -52,7 +56,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetFiles()
         {
-            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; FilesLoaded = false; savedFiles = null; installedAddons = null;
+            SupportsFiles = false; CanManageFiles = false; SupportsAddonFiles = false; SupportsFiles2 = false; SupportsFilesText = false; SupportsFilesInfo = false; installReported.Clear(); FilesLoaded = false; savedFiles = null; installedAddons = null;
             Slots.Clear(); FilesNoticeText = ""; FilesNoticeFor = null; FilesUsedBytes = 0;
             filesLastRequest = DateTime.MinValue;
         }
@@ -92,6 +96,16 @@ namespace ElansAddonHub.Lodge
                 if (have == null) { have = new SlotVM(); Slots.Insert(Math.Min(i, Slots.Count), have); }
                 have.Update(d, CanManageFiles, Saved().Get(d.Id), SupportsAddonFiles ? Installed().Get(d.Id) : null, SupportsAddonFiles, SupportsFilesText);
                 if (SupportsFiles2) _ = LoadCoverAsync(have);
+            }
+            if (SupportsAddonFiles)
+            {
+                int iface = 0; string addOns = null;
+                try { iface = LodgeAddons.ClientInterface(); addOns = LodgeAddons.AddOnsDir(); } catch { }
+                foreach (var s in Slots.Where(s => s.IsAddon))
+                {
+                    s.SetAddonContext(iface, addOns == null ? null : (Func<string, bool>)(f => Directory.Exists(Path.Combine(addOns, f))));
+                    if (s.InstalledV > 0) ReportInstalled(s.Id, s.InstalledV);
+                }
             }
             FilesLoaded = true;
             FilesChanged?.Invoke();
@@ -264,6 +278,7 @@ namespace ElansAddonHub.Lodge
                 var rec = new InstalledRecord { V = ver.V, Sha = ver.Sha256, Auto = before?.Auto ?? false, Folders = res.Folders };
                 Installed().Set(slot.Id, rec);
                 slot.SetInstalled(rec, slot.Newest);
+                ReportInstalled(slot.Id, rec.V);
                 FilesChanged?.Invoke();
                 return null;
             }
@@ -299,6 +314,13 @@ namespace ElansAddonHub.Lodge
         }
 
         public InstalledRecord InstalledOfForTest(string slotId) => Installed().Get(slotId);
+
+        // tell the Lodge which version of an addon slot this PC has (once per version and connection; the Lodge only ever shows counts)
+        void ReportInstalled(string slotId, int v)
+        {
+            if (!SupportsFilesInfo || v <= 0 || !installReported.Add(slotId + ":" + v)) return;
+            _ = Send(LodgeJson.Build(new FilesInstalledMsg { Slot = slotId, V = v }.Write));
+        }
         public void NoteFiles(string text, string slotId) { FilesNoticeText = text ?? ""; FilesNoticeFor = slotId; FilesChanged?.Invoke(); }
 
         // ---- 2.34: text slots (import strings). Shared as a .txt of UTF-8 text; Copy fetches the newest (checked like Save, kept in files-text) and returns it
