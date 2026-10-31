@@ -3,6 +3,16 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.0
+- **A new Files page.** Lodge > Files is now a grid of cards with a picture, the kind of file and who can see it; Details opens the description, who can see and update it, the actions and the versions. Search and filter chips (Addons, Import strings, UI packs, Guides, Maps, Talent builds) appear once the list gets long.
+- **Files that fit your ranks.** Officers and the Guild Master choose per file who can see it (everyone, members, veterans or officers only) and who can update it - so veterans can keep the raid's WeakAuras current without being officers. A file you can't see simply isn't there for you.
+- **Edit without uploading.** Rename a file, write a description, add a cover picture or screenshot, fix a version's note, mark it as an addon and pick what it is - all from Edit.
+- **Import strings.** Share a WeakAura, a Plater profile, a macro or a talent code as text: members get a Copy button instead of a download, with a preview and versions.
+- **Addon details.** An addon's card shows its folders, versions and the game version it is built for, warns when it isn't built for WoW Forever or needs an addon you don't have, and how many members have the newest version (counts only).
+- **Kits.** Put several files together - a "Raid night kit" - and members install all its addons with one click and can keep them all updated.
+- **Update cards in the chat.** When a file gets a new version, the card above the chat shows its picture and version with its button: Install or Update in WoW, Copy or Save.
+- Needs Lodge server 2.37 (older Lodges keep the files as before).
+
 ## 3.4.0
 - **Install addons straight from your Lodge.** When an officer shares an addon in Lodge > Files, they tick "This is a WoW addon" (ticked by itself for a zip of addon folders). Everyone then gets **Install in WoW**: the Outpost downloads it, checks the zip on your PC (only addon folders with their own .toc, no programs or scripts, no unsafe paths), asks you, backs up what you have, and puts it in WoW Forever's AddOns folder - everything is put back if anything goes wrong. When a new version is shared the card says **Update in WoW**, and **Keep it updated** installs new versions by itself (a version that changes the addon's folders still asks). Needs Lodge server 2.32.
 - **CurseForge and WoW Forever's launch.** When the beta ended, CurseForge removed its WoW Forever install and doesn't list the new _forever_ folder by itself yet. The Other addons list now says so ("Not set up for this folder") instead of quietly dropping CurseForge's updates; add the _forever_ folder in CurseForge's WoW settings and they come back.
