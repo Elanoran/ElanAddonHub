@@ -17,6 +17,18 @@ namespace ElansAddonHub.Lodge
     {
         public static bool IsZipName(string path) => Elans.Shared.DangerousFiles.Extension(Path.GetFileName(path ?? "")) == "zip";
 
+        // why a file can't be an addon, and what to do: only zips are unpacked on members' PCs (the one archive reader we trust there - .NET's
+        // own, with our checks on top); other archives are named so the uploader knows to zip the addon folder instead
+        static readonly string[] OtherArchives = { "rar", "7z", "gz", "tgz", "tar", "bz2", "xz", "zst", "cab", "arj", "lzh" };
+        public static string NotZipHint(string fileName)
+        {
+            var ext = Elans.Shared.DangerousFiles.Extension(Path.GetFileName(fileName ?? ""));
+            if (Array.IndexOf(OtherArchives, ext) >= 0)
+                return "This is a ." + ext + " - only a .zip can be an addon (it's the one kind of archive members' PCs unpack). To share an addon, zip its folder instead: in Explorer, "
+                    + "right-click the addon's folder (the one with the .toc in it) and choose Compress to ZIP file.";
+            return "Only a .zip of addon folders can be an addon" + (ext.Length > 0 ? " - this file is a ." + ext : "") + ".";
+        }
+
         // 2.33 cover pictures: the type by the file's own first bytes (png, jpg, gif, webp), null = not one of them
         public static string PictureType(string file)
         {

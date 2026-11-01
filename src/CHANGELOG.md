@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.2
+- **Sharing a .rar or .7z addon** now says what to do: only a .zip can be an addon (the one kind of archive members' PCs unpack), so zip the addon's folder instead - Explorer's right-click > Compress to ZIP file.
+
 ## 3.5.1
 - **Fixed: "The lodge refused that" without saying why.** Every reason the Lodge gives now reads as a plain sentence - for example that only a .zip of addon folders can be an addon.
 - **Edit:** "This is a WoW addon" is greyed out, with the reason, when the file isn't a .zip.

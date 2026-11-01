@@ -288,7 +288,7 @@ namespace ElansAddonHub.Lodge
             // only a zip can be an addon: say so instead of letting the Lodge refuse it
             bool zip = LodgeFiles.IsZipName(slot.Newest?.FileName ?? "");
             EAddon.IsEnabled = zip || slot.IsAddon;
-            EAddonWhy.Text = zip || slot.IsAddon ? "" : "Only a .zip of addon folders can be an addon - this file is a ." + Elans.Shared.DangerousFiles.Extension(slot.Newest?.FileName ?? "") + ". Upload the addon as a .zip to install it from here.";
+            EAddonWhy.Text = zip || slot.IsAddon ? "" : LodgeFiles.NotZipHint(slot.Newest?.FileName ?? "");
             EAddonWhy.Visibility = EAddon.Visibility == Visibility.Visible && EAddonWhy.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             ECatPanel.Visibility = S.SupportsFilesCats && !slot.IsAddon && !slot.IsText ? Visibility.Visible : Visibility.Collapsed;
             ECat.SelectedItem = ECat.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == (slot.Cat ?? ""));
@@ -517,7 +517,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!S.SupportsAddonFiles || formPath == null) { FAddonWhy.Text = ""; return; }
             var chk = LodgeFiles.IsZipName(formPath) ? Elans.Shared.AddonZip.Check(formPath) : null;
-            if (chk == null) { FAddon.IsChecked = false; FAddon.IsEnabled = false; FAddonWhy.Text = "Only a .zip of addon folders can be marked as an addon."; return; }
+            if (chk == null) { FAddon.IsChecked = false; FAddon.IsEnabled = false; FAddonWhy.Text = LodgeFiles.NotZipHint(formPath); return; }
             FAddon.IsEnabled = true;
             if (!addonTouched) FAddon.IsChecked = chk.Ok || formSlot?.IsAddon == true;
             FAddonWhy.Text = chk.Ok ? "Addon folders: " + string.Join(", ", chk.Folders.Select(f => f + (chk.Versions.TryGetValue(f, out var v) && v.Length > 0 ? " " + v : ""))) + "."
