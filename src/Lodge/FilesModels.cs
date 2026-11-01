@@ -85,6 +85,19 @@ namespace ElansAddonHub.Lodge
         public Visibility PlaceholderVisibility => cover == null ? Visibility.Visible : Visibility.Collapsed;
         public bool IsText { get; private set; }
 
+        // ---- the Details view's columns (3.5.2)
+        public string KindText => IsAddon ? "Addon" : IsText ? "Import string" : Cat != null ? CatLabel(Cat).TrimEnd('s') : Newest == null ? "" : (Elans.Shared.DangerousFiles.Extension(Newest.FileName).ToUpperInvariant() + " file").Trim();
+        public string VersionText => Newest == null ? "" : "v" + Newest.V;
+        public string SizeText => Newest == null ? "" : LodgeFiles.Size(Newest.Size);
+        public long SizeBytes => Newest?.Size ?? 0;
+        public string UpdatedText => Newest == null ? "" : LodgeFiles.Stamp(Newest.At);
+        public long UpdatedAt => Newest?.At ?? 0;
+        public string ByText => Newest == null ? "" : DisplayNames.Shown(Newest.UploadedBy);
+        public string InWowText => !IsAddon ? "" : InstalledV == 0 ? "-" : Newest != null && Newest.V > InstalledV ? "v" + InstalledV + " → v" + Newest.V : "v" + InstalledV + (AutoUpdate ? " · auto" : "");
+        bool selected;
+        public bool IsSelected { get => selected; set { if (Set(ref selected, value)) Raise(nameof(RowBackground)); } }
+        public System.Windows.Media.Brush RowBackground => (System.Windows.Media.Brush)Application.Current.Resources[selected ? "Brush.Surface3" : "Brush.Surface2"];
+
         // ---- 2.35: the newest addon version's folders against this PC (the client's Interface, the AddOns folder), and who has it
         public int HaveNewest { get; private set; }
         public int HaveOlder { get; private set; }
@@ -143,7 +156,7 @@ namespace ElansAddonHub.Lodge
             InstalledV = r?.V ?? 0; AutoUpdate = r?.Auto ?? false;
             if (InstalledV > 0 && newest != null && newest.V > InstalledV) Badge = "Update";
             else if (InstalledV > 0 && Badge == "New") Badge = "";
-            foreach (var n in new[] { nameof(IsAddon), nameof(InstalledV), nameof(AutoUpdate), nameof(InstallVisibility), nameof(InstallLabel), nameof(InstallTip), nameof(InstalledLine),
+            foreach (var n in new[] { nameof(IsAddon), nameof(InstalledV), nameof(AutoUpdate), nameof(InstallVisibility), nameof(InstallLabel), nameof(InstallTip), nameof(InstalledLine), nameof(InWowText),
                 nameof(InstalledLineVisibility), nameof(AutoVisibility), nameof(AddonChipVisibility) }) Raise(n);
         }
         public Visibility InstallVisibility => IsAddon ? Visibility.Visible : Visibility.Collapsed;
@@ -160,7 +173,8 @@ namespace ElansAddonHub.Lodge
                 nameof(VersionsLabel), nameof(ProgressVisibility), nameof(Progress), nameof(BusyText), nameof(IdleEnabled),
                 nameof(CanUpdate), nameof(Desc), nameof(DescShort), nameof(DescVisibility), nameof(SeeLine), nameof(EditLine), nameof(SeeChip), nameof(SeeChipVisibility),
                 nameof(UpdateVisibility), nameof(SaveCardVisibility), nameof(KindGlyph), nameof(CoverVisibility), nameof(PlaceholderVisibility),
-                nameof(IsText), nameof(KindChip), nameof(KindChipTip), nameof(KindChipVisibility), nameof(CopyVisibility), nameof(PreviewVisibility) }) Raise(n);
+                nameof(IsText), nameof(KindChip), nameof(KindChipTip), nameof(KindChipVisibility), nameof(CopyVisibility), nameof(PreviewVisibility),
+                nameof(KindText), nameof(VersionText), nameof(SizeText), nameof(SizeBytes), nameof(UpdatedText), nameof(UpdatedAt), nameof(ByText), nameof(InWowText) }) Raise(n);
         }
 
         public string Badge { get => badge; set { if (Set(ref badge, value ?? "")) { Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeTip)); } } }
@@ -237,6 +251,35 @@ namespace ElansAddonHub.Lodge
         {
             foreach (var n in new[] { nameof(Name), nameof(Desc), nameof(CountLine), nameof(StateLine), nameof(InstallAllLabel), nameof(InstallAllVisibility), nameof(AutoAll), nameof(AutoVisibility),
                 nameof(ManageVisibility), nameof(DescVisibility), nameof(SeeChip), nameof(SeeChipVisibility), nameof(FileNames) }) Raise(n);
+        }
+    }
+
+    // 3.5.2: the Details view's column widths - shared by the header and every row (they bind to one instance), so a narrow window drops the
+    // least needed columns everywhere at once: In WoW, then Shared by, Updated, Size, Version (Name, Kind and the buttons stay)
+    public sealed class FileColumns : Bindable
+    {
+        public static readonly (string Key, double Width)[] Order = { ("Kind", 110), ("Version", 60), ("Size", 80), ("Updated", 110), ("By", 110), ("InWow", 100) };
+        readonly Dictionary<string, GridLength> w = Order.ToDictionary(o => o.Key, o => new GridLength(o.Width));
+        public GridLength Kind => w["Kind"];
+        public GridLength Version => w["Version"];
+        public GridLength Size => w["Size"];
+        public GridLength Updated => w["Updated"];
+        public GridLength By => w["By"];
+        public GridLength InWow => w["InWow"];
+        public bool Shown(string key) => w[key].Value > 0;
+
+        // the room the list has: keep columns in Order while the name keeps at least NameMin
+        public const double NameMin = 200, Actions = 210;
+        public void Fit(double width)
+        {
+            double left = width - NameMin - Actions - 32;
+            foreach (var (key, cw) in Order)
+            {
+                bool fits = key == "Kind" || left >= cw;
+                if (fits && key != "Kind") left -= cw; else if (key == "Kind") left -= cw;
+                var g = new GridLength(fits ? cw : 0);
+                if (w[key] != g) { w[key] = g; Raise(key); }
+            }
         }
     }
 }

@@ -971,7 +971,22 @@ namespace ElansAddonHub
                     fc.ChipForTest("Guides");
                     check("cats: Guides shows the two guides", fc.CardsShownForTest == 2);
                     fc.ChipForTest("All");
+                    check("details view: the list (Details) is the default view", fc.DetailsViewForTest);
+                    fc.SortBy(nameof(SlotVM.Name));
+                    var zToA = fc.RowOrderForTest;
+                    fc.SortBy(nameof(SlotVM.Name));
+                    check("details view: the list starts A to Z; clicking Name flips it, like Explorer (" + string.Join(",", zToA.Take(2)) + " / " + string.Join(",", fc.RowOrderForTest.Take(2)) + ")",
+                        zToA.First() == "Raid WA" && fc.RowOrderForTest.First() == "Boss mods");
+                    fc.SortBy(nameof(SlotVM.SizeBytes));
+                    check("details view: Size sorts biggest first", fc.RowOrderForTest.First() == "Boss mods");
+                    fc.SortBy(nameof(SlotVM.Name)); fc.SortBy(nameof(SlotVM.Name));
                     ShowTab("lodge"); await Task.Delay(400); Snapshot(Path.Combine(dir, "files-chips.png"));
+                    check("details view: a narrow list drops In WoW, Shared by, Updated first; a wide one shows all (" + string.Join(",", fc.ShownColumnsForTest(700)) + " / " + string.Join(",", fc.ShownColumnsForTest(1200)) + ")",
+                        fc.ShownColumnsForTest(700).SequenceEqual(new[] { "Kind", "Version", "Size" }) && fc.ShownColumnsForTest(1200).Count == 6 && fc.ShownColumnsForTest(400).SequenceEqual(new[] { "Kind" }));
+                    await Task.Delay(200);
+                    fc.DetailsViewForTest = false; await Task.Delay(300); Snapshot(Path.Combine(dir, "files-tiles.png"));
+                    check("details view: Tiles switches to the cards and the choice is kept", !fc.DetailsViewForTest && settings.FilesView == "tiles");
+                    fc.DetailsViewForTest = true;
                     fc.OpenEdit(Session.Slots.First(s => s.Name == "Loot list"));
                     check("cats: Edit of a plain file offers 'What it is'", fc.EditCatShownForTest);
                     fc.EditCatForTest("other");

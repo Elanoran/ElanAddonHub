@@ -46,6 +46,9 @@ namespace ElansAddonHub.Lodge
         {
             S = session;
             SlotList.ItemsSource = S.Slots;
+            SlotRows.ItemsSource = S.Slots;
+            BuildHeads();
+            if (S.Settings?.FilesView == "tiles") ViewTiles.IsChecked = true; else ViewDetails.IsChecked = true;
             KitList.ItemsSource = S.Kits;
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots);
             view.Filter = o => Matches(o as SlotVM);
@@ -81,6 +84,70 @@ namespace ElansAddonHub.Lodge
                 if (!S.Slots.Contains(versionsSlot)) CloseVersions(); else FillVersions();
             }
             if (editSlot != null && EditOverlay.Visibility == Visibility.Visible && !S.Slots.Contains(editSlot)) CloseEdit();
+        }
+
+        // ---- the view (3.5.2): Details (a list like Explorer's, sortable) or Tiles (the cards); remembered in the settings
+        bool Details => ViewDetails.IsChecked == true;
+        void View_Checked(object sender, RoutedEventArgs e)
+        {
+            if (S == null) return;
+            DetailsList.Visibility = Details ? Visibility.Visible : Visibility.Collapsed;
+            SlotList.Visibility = Details ? Visibility.Collapsed : Visibility.Visible;
+            var want = Details ? "details" : "tiles";
+            if (S.Settings != null && S.Settings.FilesView != want) { S.Settings.FilesView = want; try { SettingsStore.Save(S.Settings); } catch { } }
+        }
+
+        static readonly (string Label, string Key, bool Right)[] Columns =
+        {
+            ("Name", nameof(SlotVM.Name), false), ("Kind", nameof(SlotVM.KindText), false), ("Version", nameof(SlotVM.VersionText), false), ("Size", nameof(SlotVM.SizeBytes), true),
+            ("Updated", nameof(SlotVM.UpdatedAt), false), ("Shared by", nameof(SlotVM.ByText), false), ("In WoW", nameof(SlotVM.InWowText), false),
+        };
+        string sortKey = nameof(SlotVM.Name);
+        bool sortDown;
+
+        void BuildHeads()
+        {
+            ColumnHeads.Children.Clear();
+            for (int i = 0; i < Columns.Length; i++)
+            {
+                var c = Columns[i];
+                var colKey = i == 1 ? "Kind" : i == 2 ? "Version" : i == 3 ? "Size" : i == 4 ? "Updated" : i == 5 ? "By" : i == 6 ? "InWow" : null;
+                if (colKey != null && !Cols.Shown(colKey)) continue;
+                bool on = c.Key == sortKey;
+                var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = c.Right ? HorizontalAlignment.Right : HorizontalAlignment.Left };
+                sp.Children.Add(new TextBlock { Text = c.Label, Style = (Style)FindResource("Text.Caption"), Foreground = (System.Windows.Media.Brush)FindResource(on ? "Brush.Text.Primary" : "Brush.Text.Secondary") });
+                if (on) sp.Children.Add(new TextBlock { Text = sortDown ? "\uE70D" : "\uE70E", FontFamily = (System.Windows.Media.FontFamily)FindResource("Font.Icons"), FontSize = 9, Margin = new Thickness(4, 2, 0, 0), Foreground = (System.Windows.Media.Brush)FindResource("Brush.Text.Primary") });
+                var b = new Button { Style = (Style)FindResource("GhostButton"), Content = sp, Tag = c.Key, Height = 26, Padding = new Thickness(i == 0 ? 34 : 8, 0, c.Right ? 12 : 8, 0), HorizontalContentAlignment = c.Right ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                    HorizontalAlignment = HorizontalAlignment.Stretch, ToolTip = "Sort by " + c.Label.ToLowerInvariant() };
+                b.Click += (s, e) => SortBy((string)((Button)s).Tag);
+                Grid.SetColumn(b, i);
+                ColumnHeads.Children.Add(b);
+            }
+        }
+
+        FileColumns Cols => (FileColumns)Resources["Cols"];
+        void DetailsList_SizeChanged(object sender, SizeChangedEventArgs e) { Cols.Fit(e.NewSize.Width); BuildHeads(); }
+
+        public void SortBy(string key)
+        {
+            sortDown = key == sortKey ? !sortDown : key == nameof(SlotVM.UpdatedAt) || key == nameof(SlotVM.SizeBytes);     // newest / biggest first
+            sortKey = key;
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots);
+            using (view.DeferRefresh())
+            {
+                view.SortDescriptions.Clear();
+                view.SortDescriptions.Add(new System.ComponentModel.SortDescription(key, sortDown ? System.ComponentModel.ListSortDirection.Descending : System.ComponentModel.ListSortDirection.Ascending));
+                if (key != nameof(SlotVM.Name)) view.SortDescriptions.Add(new System.ComponentModel.SortDescription(nameof(SlotVM.Name), System.ComponentModel.ListSortDirection.Ascending));
+            }
+            BuildHeads();
+        }
+
+        // click selects a row, double-click opens its details (the buttons inside a row handle their own clicks)
+        void Row_Down(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is SlotVM slot)) return;
+            foreach (var s in S.Slots) s.IsSelected = s == slot;
+            if (e.ClickCount == 2) { OpenVersions(slot); e.Handled = true; }
         }
 
         // ---- search: name and description, any word order
@@ -601,6 +668,9 @@ namespace ElansAddonHub.Lodge
         public string FormHeadingForTest => FormHeading.Text;
         public void PickForTest(string path) => SetFormFile(path);
         public bool KitsShownForTest => KitsSection.Visibility == Visibility.Visible;
+        public bool DetailsViewForTest { get => Details; set { (value ? ViewDetails : ViewTiles).IsChecked = true; } }
+        public System.Collections.Generic.List<string> ShownColumnsForTest(double width) { Cols.Fit(width); return FileColumns.Order.Where(o => Cols.Shown(o.Key)).Select(o => o.Key).ToList(); }
+        public System.Collections.Generic.List<string> RowOrderForTest => System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Cast<SlotVM>().Where(Matches).Select(s => s.Name).ToList();
         public System.Collections.Generic.List<string> ChipsForTest => CatChips.Visibility == Visibility.Visible ? CatChips.Children.OfType<RadioButton>().Select(r => (string)r.Content).ToList() : new System.Collections.Generic.List<string>();
         public void ChipForTest(string label) { var rb = CatChips.Children.OfType<RadioButton>().First(r => (string)r.Content == label); rb.IsChecked = true; }
         public void EditCatForTest(string cat) => ECat.SelectedItem = ECat.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == cat);
