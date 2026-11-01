@@ -9,6 +9,7 @@
   Tools\selftest.ps1 -Full                    # every section, the real-game-file ones included (about 9 min; pictures only with ELANSHUB_SHOTS=1): before a release
   Tools\selftest.ps1 -WhatIf [-Paths a,b]    # what changed mode (or -Only) would run and why, without running
   Tools\selftest.ps1 -Only worldmapreal      # one real-game-file section (worldmapreal, mapdatareal, instancesreal, buildingsreal, dungeonmapsreal, atlaspagereal)
+  Tools\selftest.ps1 -Speed                  # the speed run only (about a minute, on demand): time to show and freezes with a lot of data
   Tools\selftest.ps1 -NoCache                # never skip a real-game-file section because it passed before
   Tools\selftest.ps1 -List                    # section names
 
@@ -31,6 +32,7 @@ param(
     [switch]$NoBuild,
     [switch]$UseCache,  # let -Full / -Only skip a real-game-file section that passed before with the same game build and sources (changed mode always does)
     [switch]$NoCache,   # never skip a real-game-file section
+    [switch]$Speed,     # the speed run only (about a minute): how the Outpost feels with a lot of data, compared with the previous run
     [switch]$Visible,   # run on the real desktop (watch it); default is a hidden desktop that never steals focus
     [int]$TimeoutMinutes = 15
 )
@@ -65,6 +67,7 @@ if ($WhatIf) {
     & $exe @wargs | Out-String | Write-Host; exit 0
 }
 
+if ($Speed) { $Only = @('speed') }
 $argv = @('--repo', $root)
 $useCache = [bool]$UseCache
 if ($Full) { $mode = 'FULL (all sections)' }
@@ -140,6 +143,8 @@ if ($failedSecs) { Write-Host ('Failed sections: ' + ($failedSecs -join ', ')) -
 $tot = $lines | Where-Object { $_ -match '^total: ' }
 Write-Host ('Summary: {0} section(s), {1}; slowest {2}' -f $secs.Count, $tot, (($secs | Select-Object -First 3 | ForEach-Object { $_.Name + ' ' + $_.Sec.ToString('0.0', $inv) + ' s' }) -join ', '))
 Write-Host "  (wall clock incl. build-free start and exit: $([math]::Round($wall,1)) s)"
+$speedFile = Join-Path $scratch 'speed.txt'
+if (Test-Path $speedFile) { Write-Host ''; Get-Content $speedFile | ForEach-Object { Write-Host $_ -ForegroundColor $(if ($_ -match 'SLOW|FREEZE|slower') { 'Yellow' } else { 'Gray' }) }; Write-Host '' }
 Write-Host "Result: $resultFile"
 if ($new) { Write-Host "NEW FAILURES: $($new.Count)" -ForegroundColor Red; exit 1 }
 Write-Host 'OK: no new failures'

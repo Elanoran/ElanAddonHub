@@ -378,6 +378,10 @@ unknown file by that.
 - Pictures (`1-before.png` ... and the world map / buildings WebView captures) are not assertions: they are only taken
   with `ELANSHUB_SHOTS=1` (not in `-Full`), together with the waits that only serve them. Design pictures go to
   `docs/design/`, which is git-ignored; the README's pictures in `docs/readme/` are the only ones committed.
+- `Tools\selftest.ps1 -Speed` (on demand, about a minute, never in `-Full`): how the Outpost feels with a lot of data - page
+  switches, every Settings section, What's new, a chat of 1,500 messages, a Library of 300 items, the Atlas and Ctrl+K.
+  Per action the time to show and the longest freeze of the window, against budgets and the previous run
+  (`speed-history.txt` in the self-test cache). Nothing fails; it shows what to make faster.
 - The README's pictures are all the window at 1280 x 800 (shown at width 860). `ELANSHUB_README_SHOTS=<folder>` saves them
   under their README names (`MainWindow.ReadmeShots.cs`): from the sections `atlasclasses`, `talents` (real game files),
   `lodgefiles`, `radio` and `objectsreal` (with `ELANSHUB_WORLDMAP_FULL=1`), and the design modes `1` (addons, from the

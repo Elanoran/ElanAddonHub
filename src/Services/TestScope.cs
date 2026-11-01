@@ -103,6 +103,7 @@ namespace ElansAddonHub.Services
             ["inputs"] = "text inputs: Input / SecretInput / Dropdown draw g j p q y without clipping at 100 % and 125 % (pixel check)",
             ["round3"] = "settings round 3 (WoW watch pause / resume, lodge update, welcome, privacy page, CurseForge status ...)",
             ["coldstart"] = "the game data's start against the real game files (skipped without a WoW install): cold (no saved copies), warm and after a patch (the previous build's data at once, the new files read in the background); time to Atlas Home, the Zones list, its levels and all data, peak working set, UI stalls, the progress strip, the waiting page and the 'Updated with the new game data' notice; budgets in MainWindow.ColdStartTest.cs",
+            ["speed"] = "on demand only (Tools\\selftest.ps1 -Speed): how the Outpost feels with a lot of data - page switches, every Settings section, What's new, a chat of 1,500 messages, a Library of 300 items, the Atlas and Ctrl+K, each 3 times: time to show and the longest freeze of the window, against budgets and the previous run (speed.txt, speed-history.txt in the self-test cache)",
             ["idlecpu"] = "the CPU the idle hub uses with WoW running vs paused (3 alternating samples per mode, medians, about a minute): runs when something that ticks changes (WoW watch, pixel strip, presence, the Lodge session, shared files)",
             ["cairnjoin"] = "Settings > Guild Master > The Cairn (2.90, Lodge feature cairnjoin) against synthetic frames, no network: an older Lodge and members see nothing and nothing is asked, officers see the status but not the switch, the Guild Master's switch opens the address (prefilled) and in the beta the invite code, Ask to join sends admin.cairn {on, publicUrl, code} once and empties the code box, http is refused, the honest text, the one-time suggestion card (Not now / Turn on, remembered), every status line (needs a code, beta full, code expired / invalid / used, not verified, waiting place and day, admitted with probation, good, lapsed, refused, revoked, on through lodge.env, Atlas off), switching off / back on",
             ["cairnnotices"] = "the Cairn operator's notices on the Lodge page (3.0, Lodge 2.31 feature cairnnotices) against frames signed with a throwaway pinned key, no network: an older Lodge asks nothing, cairn.notices.get after the welcome, only correctly signed notices show (forged text, other key, expired, bad level dropped), the most urgent wins, coloured and titled by level, closing remembers the id and an officer sends cairn.notice.seen while a member doesn't, closed stays closed after a reconnect, ids the Cairn stops sending are forgotten, withdrawn = no banner",
@@ -415,13 +416,16 @@ namespace ElansAddonHub.Services
             return Order(set).ToList();
         }
 
+        // sections that run only when named (--only speed / Tools\selftest.ps1 -Speed): never in a full or a changed run
+        public static readonly string[] OnDemand = { "speed" };
+
         // --only a,b,c -> sections; unknown names are returned so the caller can fail loudly instead of silently running nothing
         public static List<string> ParseOnly(string csv, out List<string> unknown)
         {
             var names = (csv ?? "").Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim().ToLowerInvariant()).ToList();
-            unknown = names.Where(n => n != "all" && !All.Contains(n)).ToList();
+            unknown = names.Where(n => n != "all" && !All.Contains(n) && !OnDemand.Contains(n)).ToList();
             if (names.Contains("all")) return All.ToList();
-            return Closure(names.Where(n => All.Contains(n)));
+            return Closure(names.Where(n => All.Contains(n))).Concat(OnDemand.Where(names.Contains)).ToList();
         }
 
         // the chosen sections for this process (no flag = everything); `explain` goes into result.txt, `error` means run nothing
@@ -462,7 +466,7 @@ namespace ElansAddonHub.Services
                 }
             }
             explain = sb.ToString().TrimEnd();
-            return Closure(picked);
+            return Closure(picked).Concat(OnDemand.Where(picked.Contains)).ToList();
         }
 
         public static string ArgValue(string[] args, string name)
@@ -563,6 +567,8 @@ namespace ElansAddonHub.Services
                 !Map("src/Controls/WorldMapView.cs", "src/WorldMap/worldmap.js", "src/AtlasPage.Nav.cs", "src/InventoryPage.Bags.cs").Any(s => s.EndsWith("real")) && Same(Map("src/Services/Casc.cs").Where(s => s.EndsWith("real")), "mapdatareal", "worldmapreal", "instancesreal", "buildingsreal", "objectsreal", "dungeonmapsreal", "atlaspagereal")
                 && Map("src/Services/WorldMap/WdtFile.cs").Contains("worldmapreal") && !Map("src/Services/WorldMap/WdtFile.cs").Contains("atlaspagereal") && Map("src/MainWindow.BuildingsTest.Real.cs").SequenceEqual(new[] { "buildingsreal" })
                 && Map("src/MainWindow.WorldMapTest.Real.cs").SequenceEqual(new[] { "worldmapreal" }) && !Map("src/MainWindow.WorldMapTest.Page.cs").Contains("worldmapreal"));
+            Ck("the speed run is on demand: --only speed runs it (and only it), a full run and a changed run never do",
+                ParseOnly("speed", out var unkSpeed).SequenceEqual(new[] { "speed" }) && unkSpeed.Count == 0 && !FromArgs(new string[0], out _, out _).Contains("speed") && !All.Contains("speed"));
             Ck("backslash paths are normalised", Same(Map("src\\InventoryPage.Bags.cs"), "characters", "upgrades", "armory", "itemdata", "spelldata", "inventory"));
             var lodge = Map("src/Lodge/LodgeView.xaml.cs");
             Ck("Lodge files -> lodge, viewer, toasts, presence (not inventory)", new[] { "lodge", "viewer", "toasts", "presence" }.All(lodge.Contains) && !lodge.Contains("inventory"));

@@ -484,6 +484,7 @@ namespace ElansAddonHub
             if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             if (Begin("coldstart")) { result += "\r\n" + await ColdStartTest(dir); End(); }
+            if (Begin("speed")) { result += "\r\n" + await SpeedTest(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
             result += "\r\n" + string.Join("\r\n", timings) + "\r\n" + SelfTestClock.Report() + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
