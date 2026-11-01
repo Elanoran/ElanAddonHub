@@ -1,6 +1,7 @@
 bin/
 obj/
 *.user
+*_wpftmp.csproj
 .vs/
 
 # design screenshots stay on the PC (made by the self-test); never published
