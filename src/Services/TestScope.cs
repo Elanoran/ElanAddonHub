@@ -251,13 +251,13 @@ namespace ElansAddonHub.Services
             // ---- lodge: chat, voice, files, profiles, toasts, presence, viewer
             // the Lodge's feature files pick their own sections (+ lodgefeatures as the chat smoke); the session core, the models and the page
             // itself (LodgeSession.cs, LodgeModels.cs, LodgeView.xaml(.cs)) and anything new under Lodge/ still run every Lodge section
-            const string lodgeFeature = @"(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar)|Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges|Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile"
+            const string lodgeFeature = @"(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar)|Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges|Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile|MacroSyntax"
                 + @"|Invite\w*|CreateLodgeGuide\w*|LodgeInvites|LodgeSession\.(Invites|Leave)|Lfg\w*|LodgeView\.(Lfg|History)|LodgeSession\.History|ItemChipVM|MemberGroups|LodgeSession\.(Realms|Armory|Atlas|Classic|FlightShare)|ArmoryModels"
                 + @"|VideoViewer\w*|YouTube|ImageViewer\w*|Toast\w*|Overlay\w*|Avatar\w*|Profile\w*|AutoStatus|LodgeSession\.LivePos)(\.xaml)?(\.cs)?$";
             R(@"^src/Lodge/(?!" + lodgeFeature + ")", lodgeAll);
             R(@"^src/Lodge/(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar))(\.xaml)?(\.cs)?$", "calendar", "wowevents", "lodgefeatures");
             R(@"^src/Lodge/(Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges)(\.xaml)?(\.cs)?$", "badges", "profile", "lodgefeatures");
-            R(@"^src/Lodge/(Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile)(\.xaml)?(\.cs)?$", "lodgefiles", "lodgehardening", "lodgefeatures");
+            R(@"^src/Lodge/(Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile|MacroSyntax)(\.xaml)?(\.cs)?$", "lodgefiles", "lodgehardening", "lodgefeatures");
             R(@"^src/Lodge/(Invite\w*|CreateLodgeGuide\w*|LodgeInvites|LodgeSession\.(Invites|Leave))(\.xaml)?(\.cs)?$", "invites", "invites2", "linkopen", "lodgefeatures");
             R(@"^src/Lodge/(Lfg\w*|LodgeView\.(Lfg|History)|LodgeSession\.History|ItemChipVM|MemberGroups)(\.xaml)?(\.cs)?$", "lodgefun", "presence", "lodgefeatures");
             R(@"^src/Lodge/LodgeSession\.Realms\.cs$", "realms", "lodgefeatures");
