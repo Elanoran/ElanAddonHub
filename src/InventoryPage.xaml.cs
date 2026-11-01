@@ -362,6 +362,7 @@ namespace ElansAddonHub
             Body.Visibility = Visibility.Collapsed;
             CharList.ItemsSource = null;            // no stale rows behind the empty state (the folder may have changed)
             EmptyBox.Visibility = Visibility.Visible;
+            TitleText.Text = "Characters"; TitleText.Foreground = Res("Brush.Text.Primary"); Summary.Text = "";   // no character's name over the empty state
             EmptyTitle.Text = title;
             EmptyText.Text = text;
             EmptyButton.Visibility = addonsButton ? Visibility.Visible : Visibility.Collapsed;

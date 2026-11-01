@@ -40,57 +40,29 @@
     </Style>
   </UserControl.Resources>
 
-  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
+  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art. Like the Atlas and the Lodge: the side menu runs the full height on its
+       menu fill (the two views on top, then the characters), the page is beside it (title + search, then the character's tabs) -->
   <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
   <Grid>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-    </Grid.RowDefinitions>
-
-    <!-- the two views of this page: my own characters, or the characters the Lodge shares (the Armory) -->
-    <Border x:Name="ModeStrip" Grid.Row="0" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,12">
-      <StackPanel Orientation="Horizontal">
-        <RadioButton x:Name="ModeMine" Style="{StaticResource Segment}" Content="My characters" GroupName="inv-mode" IsChecked="True" Tag="mine" Checked="Mode_Checked" AutomationProperties.Name="My characters" />
-        <RadioButton x:Name="ModeLodge" Style="{StaticResource Segment}" Content="Lodge" GroupName="inv-mode" Tag="lodge" Checked="Mode_Checked" AutomationProperties.Name="Lodge armory" />
-      </StackPanel>
-    </Border>
-
-    <!-- title + search -->
-    <Grid Grid.Row="1" Margin="0,0,0,16">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <StackPanel VerticalAlignment="Center">
-        <TextBlock x:Name="TitleText" Text="Characters" Style="{StaticResource Text.Title}" />
-        <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-      </StackPanel>
-      <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="256" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
-               VerticalAlignment="Center" AutomationProperties.Name="Search all characters" />
-    </Grid>
-
-    <!-- empty state -->
-    <Border x:Name="EmptyBox" Grid.Row="2" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}"
-            Padding="32" VerticalAlignment="Top" Margin="0,4,4,0">
-      <StackPanel HorizontalAlignment="Center" MaxWidth="460">
-        <Image x:Name="EmptyIcon" Width="80" Height="80" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,12" />
-        <TextBlock x:Name="EmptyTitle" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
-        <TextBlock x:Name="EmptyText" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0" />
-        <Button x:Name="EmptyButton" Style="{StaticResource Button.Primary.M}" Content="Go to Addons" HorizontalAlignment="Center" Margin="0,16,0,0" Click="GoAddons_Click" />
-      </StackPanel>
-    </Border>
-
-    <!-- characters on the left, items on the right -->
-    <Grid x:Name="Body" Grid.Row="2">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="{local:SideMenuColumn Bleed=8}" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-      <!-- the faint menu fill behind the character list (Brush.Section.Panel): the list reads apart from the page -->
-      <Border x:Name="ListBackdrop" Grid.Column="0" Margin="-8,-8,0,-8" Background="{StaticResource Brush.Section.Panel}" CornerRadius="{StaticResource Radius.Control}" IsHitTestVisible="False" />
-      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="{local:SideMenuColumn Bleed=8}" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <!-- the faint menu fill behind the menu (Brush.Section.Panel): the list reads apart from the page -->
+    <Border x:Name="ListBackdrop" Grid.Column="0" Margin="-8,-8,0,-8" Background="{StaticResource Brush.Section.Panel}" CornerRadius="{StaticResource Radius.Control}" IsHitTestVisible="False" />
+    <Grid Grid.Column="0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <!-- the two views of this page: my own characters, or the characters the Lodge shares (the Armory) -->
+      <Border x:Name="ModeStrip" Grid.Row="0" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="8,0,12,12">
+        <StackPanel Orientation="Horizontal">
+          <RadioButton x:Name="ModeMine" Style="{StaticResource Segment}" Content="My characters" GroupName="inv-mode" IsChecked="True" Tag="mine" Checked="Mode_Checked" AutomationProperties.Name="My characters" />
+          <RadioButton x:Name="ModeLodge" Style="{StaticResource Segment}" Content="Lodge" GroupName="inv-mode" Tag="lodge" Checked="Mode_Checked" AutomationProperties.Name="Lodge armory" />
+        </StackPanel>
+      </Border>
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0" Visibility="{Binding Visibility, ElementName=Body}">
         <StackPanel>
           <!-- the Lodge view: filters, then the characters the Lodge shares (same rows as my own) -->
           <StackPanel x:Name="ArmoryLeft" Visibility="Collapsed">
@@ -193,8 +165,40 @@
           <TextBlock x:Name="SaveHint" Text="WoW saves this when you /reload or log out." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="8,8,0,0" />
         </StackPanel>
       </ScrollViewer>
+    </Grid>
 
-      <Grid Grid.Column="1" Margin="8,0,0,0">
+    <Grid Grid.Column="1" Margin="8,0,0,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <!-- title + search -->
+      <Grid Grid.Row="0" Margin="0,0,0,16">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock x:Name="TitleText" Text="Characters" Style="{StaticResource Text.Title}" TextTrimming="CharacterEllipsis" />
+          <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="256" Margin="12,0,0,0" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
+                 VerticalAlignment="Center" AutomationProperties.Name="Search all characters" />
+      </Grid>
+
+      <!-- empty state -->
+      <Border x:Name="EmptyBox" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}"
+              Padding="32" VerticalAlignment="Top" Margin="0,4,4,0">
+        <StackPanel HorizontalAlignment="Center" MaxWidth="460">
+          <Image x:Name="EmptyIcon" Width="80" Height="80" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,12" />
+          <TextBlock x:Name="EmptyTitle" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+          <TextBlock x:Name="EmptyText" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0" />
+          <Button x:Name="EmptyButton" Style="{StaticResource Button.Primary.M}" Content="Go to Addons" HorizontalAlignment="Center" Margin="0,16,0,0" Click="GoAddons_Click" />
+        </StackPanel>
+      </Border>
+
+      <!-- the chosen character (or all of them, or the search results) -->
+      <Grid x:Name="Body" Grid.Row="1">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />

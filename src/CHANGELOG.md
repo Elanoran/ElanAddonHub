@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.3
+- **Characters looks like the other pages.** The character list runs the full height on the left, like the Atlas and the Lodge menus, with My characters / Lodge on top of it; the character's name, summary and the search sit beside it.
+
 ## 3.5.2
 - **Files like a file manager.** Lodge > Files opens as a Details list, like Explorer: kind, version, size, updated, shared by and what you have in WoW in columns - click a column to sort, double-click a file for its details, the buttons show on the row under the mouse. The small icons next to the search switch to Tiles (the cards) and back; the Outpost remembers your choice. In a narrow window the least needed columns step aside.
 - **Sharing a .rar or .7z addon** now says what to do: only a .zip can be an addon (the one kind of archive members' PCs unpack), so zip the addon's folder instead - Explorer's right-click > Compress to ZIP file.
