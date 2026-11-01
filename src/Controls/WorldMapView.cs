@@ -1235,6 +1235,8 @@ namespace ElansAddonHub
             return r;
         }
 
+        public FrameworkElement WebForTest => web;
+
         public async Task<byte[]> CaptureForTest()
         {
             if (web?.CoreWebView2 == null) return null;

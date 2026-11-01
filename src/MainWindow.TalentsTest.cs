@@ -627,15 +627,16 @@ EHH.DefaultBuild = ""pack""
         {
             var real = Environment.GetEnvironmentVariable("ELANSHUB_WOW");
             if (string.IsNullOrEmpty(real)) real = WowLocator.Find();
-            if (string.IsNullOrEmpty(real) || !Directory.Exists(Path.Combine(real, "Data", "data")) || !Directory.Exists(Path.Combine(real, "_classic_beta_")))
+            var flv = string.IsNullOrEmpty(real) ? WowLocator.ForeverBetaFolder : WowLocator.Resolve(real, WowLocator.ForeverBetaFolder);   // _forever_ once released
+            if (string.IsNullOrEmpty(real) || !Directory.Exists(Path.Combine(real, "Data", "data")) || !Directory.Exists(Path.Combine(real, flv)))
             {
-                notes.Add("skip real game files: no WoW install with the Forever beta client on this PC");
+                notes.Add("skip real game files: no WoW install with the Forever client on this PC");
                 return;
             }
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var raw = TalentData.ReadCasc(real, "_classic_beta_");
+                var raw = TalentData.ReadCasc(real, flv);
                 var set = TalentParse.All(raw);
                 long ms = sw.ElapsedMilliseconds;
                 if (set.Problems.ContainsKey("all") && set.Problems["all"].Contains("game updated"))
@@ -648,7 +649,7 @@ EHH.DefaultBuild = ""pack""
                 Check("real game files: the Hunter tree has 50..52 talents in three trees (Beast Mastery / Marksmanship / Survival) and the 51 point currency", h != null && h.Nodes.Count >= 50 && h.Nodes.Count <= 52 && h.SpecNames.SequenceEqual(new[] { "Beast Mastery", "Marksmanship", "Survival" }) && h.MaxPoints == 51 && TalentRules.PointLevels(h, 0).Count == 51, h?.Nodes.Count + " " + string.Join("|", h?.SpecNames ?? new string[0]));
                 Check("real game files: every class tree is a legal start: a 5 point first row is open, the second tier is closed", set.Trees.All(x => { var s0 = new TalentState(); var first = x.Nodes.First(n => n.Row == 0); var second = x.Nodes.FirstOrDefault(n => n.Row == 1 && n.Spec == first.Spec && TalentRules.GateNeeded(x, n) >= 5); return TalentRules.CanAdd(x, s0, first.Id, 51) == Why.Ok && (second == null || TalentRules.CanAdd(x, s0, second.Id, 51) == Why.Blocked); }));
                 // the spells (names) from the same install
-                var spellRaw = SpellData.ReadCasc(real, "_classic_beta_");
+                var spellRaw = SpellData.ReadCasc(real, flv);
                 var spells = SpellParse.All(spellRaw);
                 SpellData.SetForTest(spells);
                 TalLinkReal(Check, notes, set, n => TalentData.NodeName(n));
@@ -676,7 +677,7 @@ EHH.DefaultBuild = ""pack""
                     foreach (var cf in new[] { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" })
                     {
                         var t2 = set.ForClassFile(cf);
-                        var all = BuildsRecommended.BuiltIn(cf, out _).Concat(cf == "HUNTER" ? BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, "_classic_beta_"), out _) : new List<RecBuild>());
+                        var all = BuildsRecommended.BuiltIn(cf, out _).Concat(cf == "HUNTER" ? BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, flv), out _) : new List<RecBuild>());
                         foreach (var b in all)
                         {
                             var f = t2 == null ? null : BuildsRecommended.Fit(t2, b, x => TalentData.NodeName(x), 0);
@@ -698,7 +699,7 @@ EHH.DefaultBuild = ""pack""
                             && bf.Adjusted.Any(a => a.StartsWith("Piercing Ice is not")) && bf.Adjusted.Any(a => a.StartsWith("Elemental Precision has 3 ranks")), bf.Points + " | " + string.Join("; ", bf.Adjusted));
                     }
                     else notes.Add("note real builds: this game's Mage tree still has Piercing Ice (the beta tree): the launch repair check did not run");
-                    var hh = BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, "_classic_beta_"), out var hp);
+                    var hh = BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, flv), out var hp);
                     var hBad = hh.Where(b => { var app = BuildsRecommended.Apply(h, b, x => TalentData.NodeName(x), 0); return app.Points != 51 || app.Blocked > 0 || app.Unmatched.Count > 0; }).Select(b => b.Name).ToList();
                     if (hh.Count == 0) notes.Add("note real builds: Hunter Helper is not installed here (" + hp + "): its builds were not checked");
                     else Check("real game files, builds: Hunter Helper's " + hh.Count + " installed builds lay all 51 points on the game's Hunter tree (" + hBad.Count + " broken)", hBad.Count == 0, string.Join(", ", hBad));
@@ -716,7 +717,7 @@ EHH.DefaultBuild = ""pack""
                 foreach (var p in set.Problems) notes.Add("note real game files: " + p.Key + ": " + p.Value);
 
                 // the Hunter's tree with a recommended build, on the real data (the Hunter Helper file is only read)
-                var hhReal = BuildsRecommended.HunterHelperFile(real, "_classic_beta_");
+                var hhReal = BuildsRecommended.HunterHelperFile(real, flv);
                 var savedRoot = IconStore.WowRoot;
                 try
                 {
@@ -757,6 +758,14 @@ EHH.DefaultBuild = ""pack""
                     page.ScrollTopForTest(); await Task.Delay(300);
                     Snapshot(P("24-talents-real-mage.png"));
                     Check("real game files: the page shows the Mage's tree with its icons loaded", page.NodeCountForTest >= 50 && page.NodeHasIconForTest(page.TreeForTest.Nodes[0].Id), page.NodeCountForTest.ToString());
+                    if (ReadmeOn)
+                    {
+                        page.SelectClass("HUNTER");
+                        for (int i = 0; i < 40; i++) { await Task.Delay(200); if (page.TreeForTest.Nodes.Take(10).All(n => page.NodeHasIconForTest(n.Id))) break; }
+                        if (page.RecBuildsForTest.Count > 0) { page.OpenBuild(page.RecBuildsForTest[0]); for (int i = 0; i < 14; i++) page.GuideTakeForTest(); }
+                        page.ScrollTopForTest(); await Task.Delay(400);
+                        await ReadmeShot("talents");
+                    }
                 }
                 finally { IconStore.WowRoot = savedRoot; IconStore.ForgetMemory(); }
             }

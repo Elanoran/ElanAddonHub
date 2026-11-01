@@ -409,6 +409,15 @@ namespace ElansAddonHub
                     Check("pill: a title that does not fit scrolls slowly (after a rest at the start), clipped to 240",
                         RadioPlayerBar.MarqueeRunningForTest && Math.Abs(RadioPlayerBar.TitleWidthForTest - 240) < 0.5 && off0 > -1 && off1 < -5 && !RadioPlayerBar.TitleTrimmedForTest,
                         $"marquee {RadioPlayerBar.MarqueeRunningForTest} w {RadioPlayerBar.TitleWidthForTest} offset {off0:0.0} -> {off1:0.0}");
+                    if (ReadmeOn)
+                    {
+                        await Until(() => RadioPlayerBar.CoverShownForTest, 4000);
+                        ShowTab("atlas");
+                        RadioPlayerBar.FlyoutForTest.IsOpen = true; await Until(() => RadioPlayerBar.FlyCoverShownForTest, 4000);
+                        await ReadmeShot("radio", popup: RadioPlayerBar.FlyoutForTest);
+                        RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                        ShowTab("addons");
+                    }
                     if (SelfTestClock.ShotsOn)
                     {
                         await Until(() => RadioPlayerBar.CoverShownForTest, 4000);

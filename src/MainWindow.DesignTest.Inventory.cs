@@ -54,6 +54,7 @@ namespace ElansAddonHub
             InventoryView.FilterForTest("Forever-Elan");
             await Task.Delay(600);
             SnapshotScaled(Path.Combine(dir, "i1-bags-100.png"), 1);
+            await ReadmeShot("characters");
 
             // bank tab, then the tooltip of the White Cloak (worn by Elan and Measley, in Elan's bank bag and in the guild bank)
             InventoryView.SelectTabForTest("bank");

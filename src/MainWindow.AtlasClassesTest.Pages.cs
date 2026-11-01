@@ -169,6 +169,7 @@ namespace ElansAddonHub
             if (AtlasView.ContentScrollerForTest != null) { AtlasView.ContentScrollerForTest.ScrollToVerticalOffset(520); UpdateLayout(); }
             await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-classpage-hunter-scrolled.png"));
             await OpenPage("race:2"); await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-racepage-orc.png"));
+            await ReadmeShot("atlas-race");
             await OpenPage("race:2?tab=abilities"); await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-racepage-orc-abilities.png"));
             Width = 1300; Height = 900;
         }

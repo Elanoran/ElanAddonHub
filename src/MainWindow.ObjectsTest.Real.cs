@@ -197,6 +197,7 @@ namespace ElansAddonHub
                     var oCity = await Settle();
                     var cities = oCity != null && oCity.TryGetValue("cities", out var cv2) ? cv2 as Dictionary<string, object> : null;
                     var pngC = SelfTestClock.ShotsOn || !string.IsNullOrEmpty(shotEnv) ? await WorldMapView.CaptureForTest() : null; if (pngC != null) File.WriteAllBytes(Shot("stormwind"), pngC);
+                    await ReadmeShot("worldmap-3d", withMap: true);
                     var errs = Json.Obj(Json.Parse(await WmEval("window.wm3.state()")) as string ?? "{}")?.List("errs");
                     Check("real cities: the page shows Stormwind in detail near the spot it looks at (" + cities?.Int("shown") + " buildings, " + cities?.Int("tris") + " triangles) with no page errors (" + (errs?.Count ?? -1) + ")",
                         cities != null && cities.Int("shown") >= 1 && cities.Int("tris") > 100000 && errs != null && errs.Count == 0, Json.Write(errs));

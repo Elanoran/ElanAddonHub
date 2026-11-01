@@ -14,7 +14,7 @@ addons kept up to date, a game database built from your own client, a 3D world m
   <a href="https://github.com/Elanoran/ElanAddonHub/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Elanoran/ElanAddonHub?label=latest&color=7fb04a"></a>
 </p>
 
-<p align="center"><img src="docs/readme/addons.png" width="860" alt="The Addons page: Elan's addons with install and update buttons, and the other addons in your AddOns folder with suggested sources"></p>
+<p align="center"><img src="docs/readme/addons.png" width="860" alt="The Addons page: Elan's addons with install buttons, and the other addons in your AddOns folder with their sources (CurseForge, GitHub, WoWInterface, Wago)"></p>
 
 ---
 
@@ -56,7 +56,7 @@ plans your way from 1 to 300. Press **Ctrl+K** anywhere to search it.
 
 <p align="center"><img src="docs/readme/atlas-race.jpg" width="860" alt="An Atlas race page: the Orc, with a painted banner, the game's own description, history and racial abilities"></p>
 
-<p align="center"><img src="docs/readme/talents.png" width="640" alt="The talent calculator with the Hunter's Beast Mastery tree"></p>
+<p align="center"><img src="docs/readme/talents.jpg" width="860" alt="The talent calculator following a Hunter build guide: the next talent to take at level 24, and the levels of the points to come in the tree"></p>
 
 ### The world map
 
@@ -67,7 +67,7 @@ paw prints in your class colour (hoofprints when mounted, ripples when swimming)
 the way (a kill, notable loot, a herb or ore you gathered, a level-up), and on flights the dot follows the real route
 in the air. Flight paths that Forever changed are learned from your own flights.
 
-<p align="center"><img src="docs/readme/worldmap-3d.jpg" width="860" alt="The 3D world map over Orgrimmar and Durotar, with flight routes, zone borders and the layer list"></p>
+<p align="center"><img src="docs/readme/worldmap-3d.jpg" width="860" alt="The 3D world map over Stormwind with the city's buildings, trees and the layer list"></p>
 
 ### The Lodge
 
@@ -93,16 +93,22 @@ is admitted automatically from a waiting list (a few Lodges a day, first come fi
 Cairn's numbers right after its first contribution, but its own numbers only count toward the agreement rule after a week
 of contributing.
 
-<p align="center"><img src="docs/readme/lodge-chat.png" width="640" alt="Lodge chat: a channel with a few messages and a reply"></p>
+<p align="center"><img src="docs/readme/lodge-chat.png" width="860" alt="Lodge chat: a channel with a few messages and a reply, and who is online and in game beside it"></p>
 
-<p align="center"><img src="docs/readme/calendar.png" width="860" alt="The Lodge calendar: a month with raid nights and the next day's events with Going, Maybe and Can't buttons"></p>
+<p align="center"><img src="docs/readme/calendar.png" width="860" alt="The Lodge calendar: a month with raid nights and dungeon runs"></p>
+
+**Shared files.** Officers share files with the Lodge: addons that members install into WoW with one click (and keep up
+to date if they like), import strings such as a WeakAura, a Plater profile or a talent code to copy, guides and maps.
+Files have a picture and notes, a kind, and who may see and update them by rank; kits put several files together.
+
+<p align="center"><img src="docs/readme/files.png" width="860" alt="The Lodge's Files page in its Details view: addons, import strings, guides and maps with their kind, version, size and date"></p>
 
 ### Characters
 
 All your characters in one place: bags, bank, guild bank, gear with upgrade suggestions, talents and professions,
 saved by Elan's Hub whenever you /reload or log out. Search every bag at once.
 
-<p align="center"><img src="docs/readme/characters.png" width="640" alt="The Characters page: a list of characters and one character's bags"></p>
+<p align="center"><img src="docs/readme/characters.png" width="860" alt="The Characters page: a list of characters and one character's bags"></p>
 
 ### And a few small things
 
@@ -113,7 +119,7 @@ saved by Elan's Hub whenever you /reload or log out. Search every bag at once.
 - **Built-in browser** for Wowhead and the Forever sites, private by default, with an ad and tracker blocker.
 - **Realm status** dots in the title bar (when your Lodge supports it).
 
-<p align="center"><img src="docs/readme/radio.png" width="280" alt="The radio card: song, cover, channels, sound quality and volume"></p>
+<p align="center"><img src="docs/readme/radio.png" width="860" alt="The radio card open from the title bar: song, cover, channels, sound quality and volume"></p>
 
 ## Where the data comes from
 
@@ -372,6 +378,10 @@ unknown file by that.
 - Pictures (`1-before.png` ... and the world map / buildings WebView captures) are not assertions: they are only taken
   with `ELANSHUB_SHOTS=1` (not in `-Full`), together with the waits that only serve them. Design pictures go to
   `docs/design/`, which is git-ignored; the README's pictures in `docs/readme/` are the only ones committed.
+- The README's pictures are all the window at 1280 x 800 (shown at width 860). `ELANSHUB_README_SHOTS=<folder>` saves them
+  under their README names (`MainWindow.ReadmeShots.cs`): from the sections `atlasclasses`, `talents` (real game files),
+  `lodgefiles`, `radio` and `objectsreal` (with `ELANSHUB_WORLDMAP_FULL=1`), and the design modes `1` (addons, from the
+  public release manifest), `inventory`, `calendar` and `lodgefun`. Painted and 3D pictures are saved as JPG.
 - The exe takes `--only a,b`, `--changed <base> [--repo <dir>]` and `--list`; no flag runs everything. Unselected
   sections are logged as `skipped <name>` in `result.txt`, each run section as `section <name>: 12.3 s`, plus `total:`.
   `scope.txt` says why each file chose its sections.

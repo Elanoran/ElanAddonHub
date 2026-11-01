@@ -173,6 +173,7 @@ namespace ElansAddonHub
             LodgePage.ComposerTextForTest = "Heading over now";
             await Task.Delay(400);
             Snapshot(System.IO.Path.Combine(dir, "lodge-fun-chat.png"));
+            await ReadmeShot("lodge-chat");
             if (msgs.Count > 3) msgs[3].ForceTools = false;
             LodgePage.ComposerTextForTest = "";
         }

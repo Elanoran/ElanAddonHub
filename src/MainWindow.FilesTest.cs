@@ -981,6 +981,7 @@ namespace ElansAddonHub
                     check("details view: Size sorts biggest first", fc.RowOrderForTest.First() == "Boss mods");
                     fc.SortBy(nameof(SlotVM.Name)); fc.SortBy(nameof(SlotVM.Name));
                     ShowTab("lodge"); await Task.Delay(400); Snapshot(Path.Combine(dir, "files-chips.png"));
+                    await ReadmeShot("files");
                     check("details view: a narrow list drops In WoW, Shared by, Updated first; a wide one shows all (" + string.Join(",", fc.ShownColumnsForTest(700)) + " / " + string.Join(",", fc.ShownColumnsForTest(1200)) + ")",
                         fc.ShownColumnsForTest(700).SequenceEqual(new[] { "Kind", "Version", "Size" }) && fc.ShownColumnsForTest(1200).Count == 6 && fc.ShownColumnsForTest(400).SequenceEqual(new[] { "Kind" }));
                     await Task.Delay(200);

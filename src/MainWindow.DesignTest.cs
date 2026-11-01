@@ -90,6 +90,17 @@ namespace ElansAddonHub
             AddonsPage.ScrollToTop();
             await Task.Delay(300);
             SnapshotScaled(System.IO.Path.Combine(dir, $"d1-rest-{tag}.png"), scale);
+            if (scale == 1 && ReadmeOn)
+            {
+                // the README shows Elan's real addons: the public release manifest (read only), not the fixture's test addons
+                var fakeUrl = settings.ManifestUrl;
+                settings.ManifestUrl = Services.SettingsStore.DefaultManifestUrl;
+                await CheckNow();
+                for (int i = 0; i < 150 && (checking || scanning || checkingOthers || suggesting); i++) await Task.Delay(100);
+                AddonsPage.ScrollToTop();
+                await ReadmeShot("addons");
+                settings.ManifestUrl = fakeUrl;
+            }
 
             // hover: the second own card and the second other card
             //AFTER

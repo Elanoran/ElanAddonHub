@@ -58,6 +58,7 @@ namespace ElansAddonHub
                 cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 12));
                 await Task.Delay(700);
                 Snapshot(System.IO.Path.Combine(dir, "calendar-month.png"));
+                await ReadmeShot("calendar");
 
                 cal.SetModeForTest(true);
                 await Task.Delay(300);
