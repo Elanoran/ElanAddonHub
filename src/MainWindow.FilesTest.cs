@@ -1009,11 +1009,13 @@ namespace ElansAddonHub
                     Session.FeedForTest(fake.DataJson());
                     fc.OpenEdit(Session.Slots.First(s => s.Name == "RXPGuides"));
                     check("edit: a .rar can't be ticked as an addon, and the dialog says why and what to do (" + fc.EditAddonWhyForTest + ")", !fc.EditAddonEnabledForTest && fc.EditAddonWhyForTest.Contains("This is a .rar") && fc.EditAddonWhyForTest.Contains("Compress to ZIP file"));
+                    await ShotWait(300); Snapshot(Path.Combine(dir, "files-edit-rar.png"));
                     fc.CloseEditForTest();
                     var rarFile = Path.Combine(work, "RXPGuides-v4.11.29.rar");
                     File.WriteAllBytes(rarFile, new byte[] { 0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00 });
                     fc.OpenForm(null); fc.PickForTest(rarFile);
                     check("share form: a .rar says to zip the addon folder instead (" + fc.FormAddonWhyForTest + ")", fc.FormAddonForTest == false && fc.FormAddonWhyForTest.Contains("Compress to ZIP file"));
+                    await ShotWait(300); Snapshot(Path.Combine(dir, "files-form-rar.png"));
                     fc.CloseFormForTest();
                     fc.OpenEdit(Session.Slots.First(s => s.Name == "RXPGuides"));
                     check("refusals have words: not-addon, name-taken, not-image; an unknown one names its reason",
