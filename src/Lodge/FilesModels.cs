@@ -93,8 +93,19 @@ namespace ElansAddonHub.Lodge
         {
             if (Newest == null) return;
             kindOf = ImportText.Kind(text); kindSha = Newest.Sha256;
+            firstLine = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? "";
             RaiseAll();
         }
+
+        // ---- 3.5.6: the Content view (a list row with more to read): one meta line, the text's first line, the newest version's note
+        string firstLine = "";
+        public string ContentMeta => string.Join(" · ", new[] { KindText, VersionText, SizeText, UpdatedText, ByText.Length > 0 ? "by " + ByText : "" }.Where(x => !string.IsNullOrEmpty(x)));
+        public string TextFirstLine => IsText && TextKind != null ? firstLine : "";
+        public Visibility TextFirstLineVisibility => TextFirstLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string AddonLine => IsAddon ? AddonInfo.Replace("\n", "  ·  ") : "";
+        public Visibility AddonLineVisibility => AddonLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string NoteLine => string.IsNullOrWhiteSpace(Newest?.Note) ? "" : "v" + Newest.V + ": " + Newest.Note.Trim();
+        public Visibility NoteLineVisibility => NoteLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public int CoverV { get; private set; }
         System.Windows.Media.ImageSource cover;
         public System.Windows.Media.ImageSource CoverImage { get => cover; set { cover = value; Raise(nameof(CoverImage)); Raise(nameof(CoverVisibility)); Raise(nameof(PlaceholderVisibility)); Raise(nameof(CoverHeight)); } }

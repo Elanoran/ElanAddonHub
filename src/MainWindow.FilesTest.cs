@@ -1008,8 +1008,11 @@ namespace ElansAddonHub
                     check("details view: a narrow list drops In WoW, Shared by, Updated first; a wide one shows all (" + string.Join(",", fc.ShownColumnsForTest(700)) + " / " + string.Join(",", fc.ShownColumnsForTest(1200)) + ")",
                         fc.ShownColumnsForTest(700).SequenceEqual(new[] { "Kind", "Version", "Size" }) && fc.ShownColumnsForTest(1200).Count == 6 && fc.ShownColumnsForTest(400).SequenceEqual(new[] { "Kind" }));
                     await Task.Delay(200);
-                    fc.DetailsViewForTest = false; await Task.Delay(300); Snapshot(Path.Combine(dir, "files-tiles.png"));
-                    check("details view: Tiles switches to the cards and the choice is kept", !fc.DetailsViewForTest && settings.FilesView == "tiles");
+                    fc.DetailsViewForTest = false; await Task.Delay(300); Snapshot(Path.Combine(dir, "files-content.png"));
+                    check("content view: the second view is Content and the choice is kept", !fc.DetailsViewForTest && settings.FilesView == "tiles");
+                    var raid = Session.Slots.First(x => x.Name == "Raid WA"); var heal = Session.Slots.First(x => x.Name == "Heal macro");
+                    check("content view: a row says more than Details - kind, version, size, date and who in one line, a text's first line (" + raid.ContentMeta + " | " + heal.TextFirstLine + ")",
+                        raid.ContentMeta.StartsWith("WeakAura · v1 · ") && raid.ContentMeta.EndsWith("by Wing") && heal.TextFirstLine == "#showtooltip" && raid.TextFirstLine == "!WA:2!S3xwZTnsr1");
                     fc.DetailsViewForTest = true;
                     fc.OpenEdit(Session.Slots.First(s => s.Name == "Loot list"));
                     check("cats: Edit of a plain file offers 'What it is'", fc.EditCatShownForTest);

@@ -11,59 +11,58 @@
       </StackPanel>
     </DataTemplate>
     <local:FileColumns x:Key="Cols" />
-    <!-- one slot as a card in the grid (3.5): the cover picture (or the kind's icon), the badges over it, name, version, the first line of the
-         description, what is installed in WoW, progress and errors, the main button and Details -->
-    <DataTemplate x:Key="SlotCard">
-      <Border Width="296" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Margin="0,0,12,12" ClipToBounds="True"
-              AutomationProperties.Name="{Binding Name}" Tag="slot-card">
-        <StackPanel>
-          <Grid Height="{Binding CoverHeight}">
-            <Border Background="{StaticResource Brush.Surface3}" CornerRadius="12,12,0,0" />
-            <TextBlock Text="{Binding KindGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="24" Foreground="{StaticResource Brush.Text.Tertiary}"
+    <!-- 3.5.6: one item in the Content view (replaces the Tiles cards): a list row with more to read than Details - the picture as a thumbnail,
+         name and chips, one meta line (kind, version, size, date, who), the description or the text's first line, the addon's folders and game
+         version, what is in WoW, who has it, warnings and the newest version's note; the buttons under it, always shown. Click selects, double-click opens. -->
+    <DataTemplate x:Key="SlotContent">
+      <Border Background="{Binding RowBackground}" CornerRadius="{StaticResource Radius.Card}" Padding="12" Margin="0,0,0,8"
+              Tag="{Binding}" MouseLeftButtonDown="Row_Down" AutomationProperties.Name="{Binding Name}">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <Grid Width="96" Height="64" VerticalAlignment="Top" Margin="0,0,14,0">
+            <Border Background="{StaticResource Brush.Surface3}" CornerRadius="{StaticResource Radius.Control}" />
+            <TextBlock Text="{Binding KindGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="22" Foreground="{StaticResource Brush.Text.Tertiary}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PlaceholderVisibility}" />
-            <Border CornerRadius="12,12,0,0" ClipToBounds="True" Visibility="{Binding CoverVisibility}">
+            <Border CornerRadius="{StaticResource Radius.Control}" Visibility="{Binding CoverVisibility}">
               <Border.Background><ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill" /></Border.Background>
             </Border>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10">
-              <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Scrim}" Visibility="{Binding SeeChipVisibility}" Margin="0,0,6,0" ToolTip="{Binding SeeLine}">
+          </Grid>
+          <StackPanel Grid.Column="1" VerticalAlignment="Top">
+            <WrapPanel>
+              <Ellipse Width="7" Height="7" Fill="{StaticResource Brush.Info}" Visibility="{Binding BadgeVisibility}" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="{Binding BadgeTip}" AutomationProperties.Name="{Binding Badge}" />
+              <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <Border Style="{StaticResource Chip}" Visibility="{Binding SeeChipVisibility}" ToolTip="{Binding SeeLine}" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Font.Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                  <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
+                  <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Font.Icons}" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
+                  <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                 </StackPanel>
               </Border>
-              <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Scrim}" Visibility="{Binding KindChipVisibility}" ToolTip="{Binding KindChipTip}">
-                <TextBlock Text="{Binding KindChip}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
-              </Border>
-            </StackPanel>
-            <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Info.Tint}" Visibility="{Binding BadgeVisibility}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="10" ToolTip="{Binding BadgeTip}">
-              <TextBlock Text="{Binding Badge}" Foreground="{StaticResource Brush.Info}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
-            </Border>
-          </Grid>
-          <StackPanel Margin="14,12,14,14">
-            <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
-            <TextBlock Text="{Binding DescShort}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
-            <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Accent}"
+            </WrapPanel>
+            <TextBlock Text="{Binding ContentMeta}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+            <TextBlock Text="{Binding DescShort}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" ToolTip="{Binding Desc}" />
+            <TextBlock Text="{Binding TextFirstLine}" Visibility="{Binding TextFirstLineVisibility}" FontFamily="Consolas" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}"
                        TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
-            <TextBlock Text="{Binding AddonWarn}" Visibility="{Binding AddonWarnVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Warn}"
-                       TextTrimming="CharacterEllipsis" Margin="0,6,0,0" ToolTip="{Binding AddonWarn}" />
-            <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,10,0,0">
+            <TextBlock Text="{Binding AddonLine}" Visibility="{Binding AddonLineVisibility}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" ToolTip="{Binding AddonInfo}" />
+            <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Accent}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+            <TextBlock Text="{Binding HaveLine}" Visibility="{Binding HaveVisibility}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+            <TextBlock Text="{Binding AddonWarn}" Visibility="{Binding AddonWarnVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Warn}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" ToolTip="{Binding AddonWarn}" />
+            <TextBlock Text="{Binding NoteLine}" Visibility="{Binding NoteLineVisibility}" Style="{StaticResource Text.Caption}" FontStyle="Italic" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" ToolTip="{Binding NoteLine}" />
+            <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,8,0,0">
               <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
               <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
             </StackPanel>
-            <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
-            <WrapPanel Margin="0,12,0,0" IsEnabled="{Binding IdleEnabled}">
-              <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,0"
-                      ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
-              <Button Content="Save..." Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Save_Click" Visibility="{Binding SaveCardVisibility}" Margin="0,0,8,0"
-                      ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
-              <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,8,0"
-                      ToolTip="Put the text on the clipboard - then paste it into WeakAuras, Plater or the macro window" AutomationProperties.Name="Copy" />
-              <Button Content="Details" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" ToolTip="Description, versions and settings" AutomationProperties.Name="Details" />
-            </WrapPanel>
+            <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,6,0,0" />
+          <WrapPanel Margin="0,10,0,0" IsEnabled="{Binding IdleEnabled}">
+            <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,6,0"
+                    ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
+            <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,6,0"
+                    ToolTip="{Binding KindChipTip}" AutomationProperties.Name="Copy" />
+            <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="Save_Click" Visibility="{Binding SaveCardVisibility}" Margin="0,0,6,0"
+                    ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+            <Button Content="Details" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" ToolTip="Description, versions and settings" AutomationProperties.Name="Details" />
+          </WrapPanel>
           </StackPanel>
-        </StackPanel>
+        </Grid>
       </Border>
     </DataTemplate>
 
@@ -182,14 +181,14 @@
           <DockPanel MinHeight="32" SizeChanged="Head_SizeChanged">
             <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Add" Click="New_Click" Margin="8,0,0,0"
                     ToolTip="Add an addon, a file, or text to copy (a macro, a WeakAura, a profile) to the lodge's library" AutomationProperties.Name="Add to the library" Visibility="Collapsed" />
-            <!-- the view switch, like Explorer's: Details (the list) and Tiles (the cards) -->
+            <!-- the view switch, like Explorer's: Details (the list) and Content (taller rows with more to read) -->
             <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}" Margin="8,0,0,0" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="ViewDetails" Style="{StaticResource Segment}" GroupName="files-view" Checked="View_Checked" ToolTip="Details" AutomationProperties.Name="Details view">
                   <TextBlock Text="&#xE8FD;" FontFamily="{StaticResource Font.Icons}" FontSize="13" />
                 </RadioButton>
-                <RadioButton x:Name="ViewTiles" Style="{StaticResource Segment}" GroupName="files-view" Checked="View_Checked" ToolTip="Tiles" AutomationProperties.Name="Tiles view">
-                  <TextBlock Text="&#xE8A9;" FontFamily="{StaticResource Font.Icons}" FontSize="13" />
+                <RadioButton x:Name="ViewTiles" Style="{StaticResource Segment}" GroupName="files-view" Checked="View_Checked" ToolTip="Content: more about each item" AutomationProperties.Name="Content view">
+                  <TextBlock Text="&#xE179;" FontFamily="{StaticResource Font.Icons}" FontSize="13" />
                 </RadioButton>
               </StackPanel>
             </Border>
@@ -244,13 +243,17 @@
               <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
             </ItemsControl>
           </Grid>
-          <!-- Tiles: the cards (a wrap of cards cannot be virtualised; its own scroll) -->
-          <ScrollViewer x:Name="TilesScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
-            <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}" Margin="0,0,0,16">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
-            </ItemsControl>
-          </ScrollViewer>
+          <!-- Content (3.5.6): taller rows with more to read; a list too, so only the rows on screen are built -->
+          <ItemsControl x:Name="SlotList" Grid.Row="1" Visibility="Collapsed" ItemTemplate="{StaticResource SlotContent}" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                        VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
+            <ItemsControl.Template>
+              <ControlTemplate TargetType="ItemsControl">
+                <ScrollViewer Focusable="False" CanContentScroll="True" VerticalScrollBarVisibility="Auto" Padding="0,0,12,16" app:Motion.EdgeFade="True"><ItemsPresenter /></ScrollViewer>
+              </ControlTemplate>
+            </ItemsControl.Template>
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
+          </ItemsControl>
           <Grid Grid.Row="1">
               <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
                 <TextBlock Text="&#xE8F1;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />

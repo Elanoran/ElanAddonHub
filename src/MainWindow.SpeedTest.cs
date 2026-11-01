@@ -149,7 +149,7 @@ namespace ElansAddonHub
                 var fc = LodgePage.FilesForTest;
                 rows.Add(await Speed("Library: sort by size", 250, null, async () => { fc.SortBy(nameof(SlotVM.SizeBytes)); await Task.CompletedTask; }));
                 rows.Add(await Speed("Library: group on / off", 250, null, async () => { fc.GroupedForTest = !fc.GroupedForTest; await Task.CompletedTask; }));
-                rows.Add(await Speed("Library: Tiles / Details", 400, null, async () => { fc.DetailsViewForTest = !fc.DetailsViewForTest; await Task.CompletedTask; }));
+                rows.Add(await Speed("Library: Content / Details", 400, null, async () => { fc.DetailsViewForTest = !fc.DetailsViewForTest; await Task.CompletedTask; }));
                 fc.DetailsViewForTest = true; fc.GroupedForTest = true;
 
                 // ---- the Atlas: Home and the Ctrl+K search

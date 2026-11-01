@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.6
+- **Content view in the Library** instead of Tiles: a list with taller rows that tell more - the picture, kind, version, size, date and who shared it, the description or the first line of a macro or WeakAura, an addon's folders and game version, what you have in WoW, how many members have it, warnings and the newest version's note - with the buttons under each item. It stays quick with a big Library too.
+
 ## 3.5.5
 - **A big Library stays quick.** The list builds only the rows on screen, so opening, sorting and grouping 300 items takes a blink instead of half a second; the kits, filters and column headings stay put while the list scrolls under them, like Explorer.
 - **Opening a busy chat channel is smoother.** The newest messages show at once and the older ones are added right after, so the window no longer stalls on a long history.

@@ -89,13 +89,14 @@ namespace ElansAddonHub.Lodge
             if (editSlot != null && EditOverlay.Visibility == Visibility.Visible && !S.Slots.Contains(editSlot)) CloseEdit();
         }
 
-        // ---- the view (3.5.2): Details (a list like Explorer's, sortable) or Tiles (the cards); remembered in the settings
+        // ---- the view (3.5.2): Details (a list like Explorer's, sortable) or Content (3.5.6: taller rows with more to read; it replaced the Tiles
+        // cards and keeps their settings value "tiles"); remembered in the settings
         bool Details => ViewDetails.IsChecked == true;
         void View_Checked(object sender, RoutedEventArgs e)
         {
             if (S == null) return;
             DetailsList.Visibility = Details ? Visibility.Visible : Visibility.Collapsed;
-            TilesScroll.Visibility = Details ? Visibility.Collapsed : Visibility.Visible;
+            SlotList.Visibility = Details ? Visibility.Collapsed : Visibility.Visible;
             var want = Details ? "details" : "tiles";
             if (S.Settings != null && S.Settings.FilesView != want) { S.Settings.FilesView = want; try { SettingsStore.Save(S.Settings); } catch { } }
         }
