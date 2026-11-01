@@ -22,7 +22,7 @@ namespace ElansAddonHub
         // a stand-in for the server's file endpoints: the same URLs, headers and answers, the same refusals, an in-memory store
         sealed class FakeFilesServer
         {
-            public sealed class Ver { public int V; public string FileName, Sha, By, Note, AddonJson; public byte[] Bytes; public long At; }
+            public sealed class Ver { public int V; public string FileName, Sha, By, Note, AddonJson; public byte[] Bytes; public long At, ShownSize; }   // ShownSize: a size to list (README picture only)
             public sealed class SlotRec { public string Id, Name, CreatedBy, Kind, Desc, See, Edit, Cat; public int Cover, HaveNewest, HaveOlder; public byte[] CoverBytes; public bool CanUpdate; public int NextV = 1; public List<Ver> Versions = new List<Ver>(); }
 
             readonly HttpListener listener = new HttpListener();
@@ -70,7 +70,7 @@ namespace ElansAddonHub
                 Reply(c, status, "{\"error\":" + Q(text) + ",\"reason\":" + Q(reason) + "}");
 
             public static string VerJson(Ver v) =>
-                "{\"v\":" + v.V + ",\"fileName\":" + Q(v.FileName) + ",\"size\":" + v.Bytes.Length + ",\"sha256\":" + Q(v.Sha) + ",\"uploadedBy\":" + Q(v.By) + ",\"at\":" + v.At + ",\"note\":" + Q(v.Note) + (v.AddonJson != null ? ",\"addon\":" + v.AddonJson : "") + "}";
+                "{\"v\":" + v.V + ",\"fileName\":" + Q(v.FileName) + ",\"size\":" + (v.ShownSize > 0 ? v.ShownSize : v.Bytes.Length) + ",\"sha256\":" + Q(v.Sha) + ",\"uploadedBy\":" + Q(v.By) + ",\"at\":" + v.At + ",\"note\":" + Q(v.Note) + (v.AddonJson != null ? ",\"addon\":" + v.AddonJson : "") + "}";
 
             public string SlotJson(SlotRec s) =>
                 "{\"id\":" + Q(s.Id) + ",\"name\":" + Q(s.Name) + ",\"createdBy\":" + Q(s.CreatedBy) + (s.Kind != null ? ",\"kind\":" + Q(s.Kind) : "") + (s.Desc != null ? ",\"desc\":" + Q(s.Desc) : "") + (s.See != null ? ",\"see\":" + Q(s.See) : "")
@@ -78,7 +78,7 @@ namespace ElansAddonHub
 
             // what files.list answers
             public string DataJson() =>
-                "{\"t\":\"files.data\",\"maxMb\":" + MaxMb + ",\"totalMb\":500,\"usedBytes\":" + Slots.Sum(s => s.Versions.Sum(v => (long)v.Bytes.Length)) + ",\"keep\":3,\"canManage\":"
+                "{\"t\":\"files.data\",\"maxMb\":" + MaxMb + ",\"totalMb\":500,\"usedBytes\":" + Slots.Sum(s => s.Versions.Sum(v => v.ShownSize > 0 ? v.ShownSize : v.Bytes.Length)) + ",\"keep\":3,\"canManage\":"
                 + (Role == "officer" || Role == "owner" ? "true" : "false") + ",\"slots\":[" + string.Join(",", Slots.OrderBy(s => s.Name).Select(SlotJson)) + "]" + (KitsJson.Count > 0 ? ",\"kits\":[" + string.Join(",", KitsJson) + "]" : "") + "}";
 
             static readonly HashSet<string> Blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "exe", "dll", "com", "bat", "cmd", "ps1", "js", "msi", "lnk", "reg", "hta" };
@@ -981,7 +981,15 @@ namespace ElansAddonHub
                     check("details view: Size sorts biggest first", fc.RowOrderForTest.First() == "Boss mods");
                     fc.SortBy(nameof(SlotVM.Name)); fc.SortBy(nameof(SlotVM.Name));
                     ShowTab("lodge"); await Task.Delay(400); Snapshot(Path.Combine(dir, "files-chips.png"));
-                    await ReadmeShot("files");
+                    if (ReadmeOn)
+                    {
+                        // the README picture lists sizes like real files have (the test's files are a few bytes)
+                        var shown = new Dictionary<string, long> { ["Raid WA"] = 4900, ["Nameplates"] = 1260000, ["Molten Core map"] = 2450000, ["Loot list"] = 3100, ["Leveling guide"] = 184000, ["Dungeon guide"] = 96500, ["Boss mods"] = 3240000 };
+                        void Sizes(bool on) { foreach (var sr in fake.Slots) foreach (var v in sr.Versions) v.ShownSize = on && shown.TryGetValue(sr.Name, out var n) ? n : 0; Session.FeedForTest(fake.DataJson()); }
+                        Sizes(true); await Task.Delay(300);
+                        await ReadmeShot("files");
+                        Sizes(false); await Task.Delay(300);
+                    }
                     check("details view: a narrow list drops In WoW, Shared by, Updated first; a wide one shows all (" + string.Join(",", fc.ShownColumnsForTest(700)) + " / " + string.Join(",", fc.ShownColumnsForTest(1200)) + ")",
                         fc.ShownColumnsForTest(700).SequenceEqual(new[] { "Kind", "Version", "Size" }) && fc.ShownColumnsForTest(1200).Count == 6 && fc.ShownColumnsForTest(400).SequenceEqual(new[] { "Kind" }));
                     await Task.Delay(200);
