@@ -87,7 +87,7 @@
             <Button Content="Edit" Style="{StaticResource Button.S}" Tag="{Binding}" Click="KitEdit_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8" AutomationProperties.Name="Edit kit" />
             <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="KitDelete_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8"
                     ToolTip="Remove the kit (its files stay)" AutomationProperties.Name="Delete kit" />
-            <CheckBox Content="Keep all updated" IsChecked="{Binding AutoAll, Mode=OneWay}" Tag="{Binding}" Click="KitAuto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
+            <CheckBox Style="{StaticResource Switch}" Content="Keep all updated" IsChecked="{Binding AutoAll, Mode=OneWay}" Tag="{Binding}" Click="KitAuto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
                       AutomationProperties.Name="Keep all updated" />
           </WrapPanel>
         </StackPanel>
@@ -300,7 +300,7 @@
                             ToolTip="Name, description, picture and who can see or update it" AutomationProperties.Name="Edit" />
                     <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8"
                             ToolTip="Remove this file and all its versions" AutomationProperties.Name="Delete" />
-                    <CheckBox Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
+                    <CheckBox Style="{StaticResource Switch}" Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
                               ToolTip="Install new versions in WoW by themselves when someone uploads one (you'll be asked if a version changes the addon's folders)" AutomationProperties.Name="Keep it updated" />
                   </WrapPanel>
                   <TextBlock Text="Versions" Style="{StaticResource Text.RowTitle}" Margin="0,16,0,4" />
@@ -353,8 +353,8 @@
                   <TextBlock Text="What it is" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                   <ComboBox x:Name="ECat" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="What it is" />
                 </StackPanel>
-                <CheckBox x:Name="EAddon" Content="This is a WoW addon" Margin="0,12,0,0" ToolTip="Members can install it in WoW Forever from the Files page (the newest version must be a zip of addon folders)" />
-                <TextBlock x:Name="EAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="24,2,0,0" Visibility="Collapsed" />
+                <CheckBox x:Name="EAddon" Style="{StaticResource Switch}" HorizontalAlignment="Left" Content="This is a WoW addon" Margin="0,12,0,0" ToolTip="Members can install it in WoW Forever from the Files page (the newest version must be a zip of addon folders)" />
+                <TextBlock x:Name="EAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="48,2,0,0" Visibility="Collapsed" />
                 <TextBlock Text="Note on the newest version" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="ENote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed" AutomationProperties.Name="Note on the newest version" />
                 <StackPanel x:Name="ERanksPanel">
@@ -417,10 +417,12 @@
                 <TextBlock x:Name="FormSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
                 <TextBlock Text="Name" Style="{StaticResource Text.Caption}" />
                 <TextBox x:Name="FName" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" Tag="What people see in the list" KeyDown="Form_KeyDown" AutomationProperties.Name="Name" />
-                <StackPanel x:Name="FModePanel" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
-                  <RadioButton x:Name="FModeFile" Content="A file" GroupName="files-mode" IsChecked="True" Click="FMode_Click" Margin="0,0,16,0" AutomationProperties.Name="Share a file" />
-                  <RadioButton x:Name="FModeText" Content="Text to copy (WeakAura, Plater, macro...)" GroupName="files-mode" Click="FMode_Click" AutomationProperties.Name="Share text" />
-                </StackPanel>
+                <Border x:Name="FModePanel" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,12,0,0" Visibility="Collapsed">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="FModeFile" Style="{StaticResource Segment}" Content="A file" GroupName="files-mode" IsChecked="True" Click="FMode_Click" AutomationProperties.Name="Share a file" />
+                    <RadioButton x:Name="FModeText" Style="{StaticResource Segment}" Content="Text to copy (WeakAura, Plater, macro...)" GroupName="files-mode" Click="FMode_Click" AutomationProperties.Name="Share text" />
+                  </StackPanel>
+                </Border>
                 <StackPanel x:Name="FFilePanel">
                   <TextBlock Text="File" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                   <DockPanel Margin="0,4,0,0">
@@ -433,9 +435,9 @@
                   <TextBox x:Name="FText" Style="{StaticResource Input}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" MaxHeight="220" VerticalScrollBarVisibility="Auto"
                            FontFamily="Consolas" FontSize="12" Margin="0,4,0,0" Tag="Paste the import string here" AutomationProperties.Name="Text to share" />
                 </StackPanel>
-                <CheckBox x:Name="FAddon" Content="This is a WoW addon" Margin="0,12,0,0" Visibility="Collapsed" Click="FAddon_Click" AutomationProperties.Name="This is a WoW addon"
+                <CheckBox x:Name="FAddon" Style="{StaticResource Switch}" HorizontalAlignment="Left" Content="This is a WoW addon" Margin="0,12,0,0" Visibility="Collapsed" Click="FAddon_Click" AutomationProperties.Name="This is a WoW addon"
                           ToolTip="Members can install it in WoW Forever from the Files page, and keep it updated" />
-                <TextBlock x:Name="FAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="24,2,0,0" />
+                <TextBlock x:Name="FAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="48,2,0,0" />
                 <TextBlock Text="Note" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="FNote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed (optional)" KeyDown="Form_KeyDown" AutomationProperties.Name="Note" />
                 <TextBlock x:Name="FError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />

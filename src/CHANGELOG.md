@@ -5,6 +5,7 @@ Keep one `## x.y.z` section per hub version. This file is also shown in the Outp
 
 ## 3.5.3
 - **Characters looks like the other pages.** The character list runs the full height on the left, like the Atlas and the Lodge menus, with My characters / Lodge on top of it; the character's name, summary and the search sit beside it.
+- **Fixed: dark, hard to read text in Files.** "This is a WoW addon", "Keep it updated" and "Keep all updated" are switches like everywhere else in the Outpost, and "A file / Text to copy" is a two-way button.
 
 ## 3.5.2
 - **Files like a file manager.** Lodge > Files opens as a Details list, like Explorer: kind, version, size, updated, shared by and what you have in WoW in columns - click a column to sort, double-click a file for its details, the buttons show on the row under the mouse. The small icons next to the search switch to Tiles (the cards) and back; the Outpost remembers your choice. In a narrow window the least needed columns step aside.

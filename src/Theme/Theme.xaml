@@ -608,7 +608,7 @@
     </Setter>
   </Style>
 
-  <!-- toggle switch (DESIGN 8): 40 x 24, track Surface3 -> accent, 18 px thumb that slides 180 ms, hover veil, keyboard focus ring. Use on a CheckBox, no content. -->
+  <!-- toggle switch (DESIGN 8): 40 x 24, track Surface3 -> accent, 18 px thumb that slides 180 ms, hover veil, keyboard focus ring. Use on a CheckBox; its Content, if any, is the label to its right. -->
   <Style x:Key="Switch" TargetType="CheckBox">
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -616,7 +616,8 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="CheckBox">
-          <Grid Background="Transparent" Width="40" Height="24" SnapsToDevicePixels="True">
+          <DockPanel Background="Transparent">
+          <Grid DockPanel.Dock="Left" Background="Transparent" Width="40" Height="24" SnapsToDevicePixels="True">
             <Border x:Name="track" CornerRadius="12" Background="{StaticResource Brush.Surface3}" />
             <Border x:Name="on" CornerRadius="12" Background="{StaticResource Brush.Accent}" Opacity="0" />
             <Border x:Name="hv" CornerRadius="12" Background="{StaticResource Brush.Overlay.Hover}" Opacity="0" IsHitTestVisible="False" />
@@ -626,7 +627,11 @@
             </Ellipse>
             <Border x:Name="ring" Margin="-3" CornerRadius="15" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
+          <!-- a label, when the switch has one (3.5.3): to its right, in the page's text colour, clicking it toggles too -->
+          <ContentPresenter x:Name="label" Margin="8,0,0,0" VerticalAlignment="Center" TextElement.Foreground="{StaticResource Brush.Text.Primary}" RecognizesAccessKey="False" />
+          </DockPanel>
           <ControlTemplate.Triggers>
+            <Trigger Property="HasContent" Value="False"><Setter TargetName="label" Property="Visibility" Value="Collapsed" /></Trigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
               <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
