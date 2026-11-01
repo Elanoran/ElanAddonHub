@@ -422,9 +422,9 @@ namespace ElansAddonHub.Lodge
 
         public static string TextDir => Path.Combine(Util.DataDir, "files-text");
         readonly Dictionary<string, Task<string>> textLoads = new Dictionary<string, Task<string>>();   // 3.5.4: one download per text version, whoever asks
-        public async Task<(string text, string error)> FetchTextAsync(SlotVM slot)
+        public Task<(string text, string error)> FetchTextAsync(SlotVM slot) => FetchTextAsync(slot, slot?.Newest);
+        public async Task<(string text, string error)> FetchTextAsync(SlotVM slot, SlotVersionInfo ver)
         {
-            var ver = slot?.Newest;
             if (slot == null || !slot.IsText || ver == null) return (null, "That isn't text");
             var file = Path.Combine(TextDir, slot.Id + "-" + ver.V + ".txt");
             if (!File.Exists(file) || !string.Equals(LodgeFiles.Sha256(file), ver.Sha256, StringComparison.OrdinalIgnoreCase))
@@ -438,7 +438,7 @@ namespace ElansAddonHub.Lodge
             var why = FileSlot.TextProblem(data);
             if (why != null) return (null, why);
             var text = new System.Text.UTF8Encoding(false, true).GetString(data);
-            slot.SetText(text);
+            if (ver.V == slot.Newest?.V) slot.SetText(text);
             return (text, null);
         }
 
@@ -447,7 +447,8 @@ namespace ElansAddonHub.Lodge
             Directory.CreateDirectory(TextDir);
             var err = await SaveVersionAsync(slot, ver, file);
             if (err != null) return err;
-            foreach (var old in Directory.GetFiles(TextDir, slot.Id + "-*.txt")) if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch { }
+            var kept = new HashSet<string>(slot.Versions.Select(v => Path.Combine(TextDir, slot.Id + "-" + v.V + ".txt")), StringComparer.OrdinalIgnoreCase);
+            foreach (var old in Directory.GetFiles(TextDir, slot.Id + "-*.txt")) if (!kept.Contains(old)) try { File.Delete(old); } catch { }
             return null;
         }
 

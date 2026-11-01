@@ -216,6 +216,16 @@
   <SolidColorBrush x:Key="Brush.Overlay.Hover" Color="#0FFFFFFF" />
   <SolidColorBrush x:Key="Brush.Overlay.Pressed" Color="#1AFFFFFF" />
   <SolidColorBrush x:Key="Brush.Divider" Color="#12FFFFFF" />
+  <!-- code (3.5.8: a macro's preview in the Library): commands accent green, conditions gold, units blue, #show and Lua keywords violet,
+       Lua strings soft orange, numbers pale gold, brackets and separators faint; an unknown slash command (an addon's) stays plain secondary -->
+  <SolidColorBrush x:Key="Brush.Code.Command" Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="Brush.Code.OtherCommand" Color="#B8C0CC" />
+  <SolidColorBrush x:Key="Brush.Code.Condition" Color="{StaticResource GoldColor}" />
+  <SolidColorBrush x:Key="Brush.Code.Unit" Color="{StaticResource Color.Info}" />
+  <SolidColorBrush x:Key="Brush.Code.Meta" Color="#C3A6F0" />
+  <SolidColorBrush x:Key="Brush.Code.String" Color="#E8A87C" />
+  <SolidColorBrush x:Key="Brush.Code.Number" Color="#E6D08A" />
+  <SolidColorBrush x:Key="Brush.Code.Punct" Color="#7A8494" />
   <SolidColorBrush x:Key="Brush.Focus" Color="{StaticResource AccentColor}" />
 
   <!-- media + game surfaces (viewers, in-game overlay): never used on regular pages -->

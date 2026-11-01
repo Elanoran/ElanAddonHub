@@ -31,7 +31,9 @@ namespace ElansAddonHub.Lodge
         public SlotVersionInfo Info;
         public bool IsNewest, CanRollBack;
         public string Title => "v" + Info.V + (IsNewest ? " (newest)" : "");
-        public string Line => Info.FileName + " · " + LodgeFiles.Size(Info.Size);
+        public string Line => (Slot.IsText ? "" : Info.FileName + " · ") + LodgeFiles.Size(Info.Size);
+        public Visibility CopyVisibility => Slot.IsText ? Visibility.Visible : Visibility.Collapsed;      // 3.5.8: a text's version is copied, a file's saved
+        public Visibility SaveVisibility => Slot.IsText ? Visibility.Collapsed : Visibility.Visible;
         public string By => DisplayNames.Shown(Info.UploadedBy) + " · " + LodgeFiles.Stamp(Info.At);
         public string Note => Info.Note;
         public Visibility NoteVisibility => string.IsNullOrEmpty(Info.Note) ? Visibility.Collapsed : Visibility.Visible;
@@ -105,6 +107,23 @@ namespace ElansAddonHub.Lodge
         public string AddonLine => IsAddon ? AddonInfo.Replace("\n", "  ·  ") : "";
         public Visibility AddonLineVisibility => AddonLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public string NoteLine => string.IsNullOrWhiteSpace(Newest?.Note) ? "" : "v" + Newest.V + ": " + Newest.Note.Trim();
+
+        // ---- 3.5.8: the details dialog - two fact lines, the paste hint, versions only when there is a choice
+        public string FactsLine => Newest == null ? "" : string.Join(" · ", new[] { "v" + Newest.V, IsText ? null : Newest.FileName, LodgeFiles.Size(Newest.Size) }.Where(x => !string.IsNullOrEmpty(x)))
+            + " · shared by " + DisplayNames.Shown(Newest.UploadedBy) + ", " + LodgeFiles.Stamp(Newest.At);
+        public string RanksLine => (See == "member" ? "Members and up" : See == "veteran" ? "Veterans and up" : See == "officer" ? "Officers only" : "Everyone (guests too)") + " can see it · "
+            + (EditRank == "member" ? "members and up" : EditRank == "veteran" ? "veterans and up" : "officers") + " can update it";
+        public string PasteHint => IsText ? "Copy it, then " + ImportText.PasteHint(TextKind) + "." : "";
+        public Visibility TextVisibility => IsText ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility MainButtonsVisibility => IsText ? Visibility.Collapsed : Visibility.Visible;   // a text's main button is Copy, in its preview
+        public bool IsMacro => IsText && TextKind == "macro";
+        public string MacroLengthLine => !IsMacro ? "" : TextPreviewFull.Length + " / " + MacroSyntax.Limit + " characters" + (TextPreviewFull.Length > MacroSyntax.Limit ? " - too long for the macro window, WoW cuts it off" : "");
+        public Visibility MacroLengthVisibility => IsMacro ? Visibility.Visible : Visibility.Collapsed;
+        public bool MacroTooLong => IsMacro && TextPreviewFull.Length > MacroSyntax.Limit;
+        string fullText = "";
+        public string TextPreviewFull { get => fullText; set { fullText = value ?? ""; Raise(string.Empty); } }
+        public Visibility ManyVersionsVisibility => Versions.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ManageBarVisibility => CanUpdate || CanManage ? Visibility.Visible : Visibility.Collapsed;
         public Visibility NoteLineVisibility => NoteLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public int CoverV { get; private set; }
         System.Windows.Media.ImageSource cover;
@@ -196,15 +215,8 @@ namespace ElansAddonHub.Lodge
         public Visibility InstalledLineVisibility => InstalledV > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility AutoVisibility => InstalledV > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        public void RaiseAll()
-        {
-            foreach (var n in new[] { nameof(Name), nameof(VersionLine), nameof(MetaLine), nameof(Note), nameof(NoteVisibility), nameof(ManageVisibility), nameof(HasOlderVisibility),
-                nameof(VersionsLabel), nameof(ProgressVisibility), nameof(Progress), nameof(BusyText), nameof(IdleEnabled),
-                nameof(CanUpdate), nameof(Desc), nameof(DescShort), nameof(DescVisibility), nameof(SeeLine), nameof(EditLine), nameof(SeeChip), nameof(SeeChipVisibility),
-                nameof(UpdateVisibility), nameof(SaveCardVisibility), nameof(KindGlyph), nameof(CoverVisibility), nameof(PlaceholderVisibility),
-                nameof(IsText), nameof(KindChip), nameof(KindChipTip), nameof(KindChipVisibility), nameof(CopyVisibility), nameof(PreviewVisibility),
-                nameof(KindText), nameof(VersionText), nameof(SizeText), nameof(SizeBytes), nameof(UpdatedText), nameof(UpdatedAt), nameof(ByText), nameof(InWowText) }) Raise(n);
-        }
+        // every property at once (an empty name): a list of names would forget the ones added later (3.5.8: the Content view's did)
+        public void RaiseAll() => Raise(string.Empty);
 
         public string Badge { get => badge; set { if (Set(ref badge, value ?? "")) { Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeTip)); } } }
         public Visibility BadgeVisibility => badge.Length > 0 ? Visibility.Visible : Visibility.Collapsed;

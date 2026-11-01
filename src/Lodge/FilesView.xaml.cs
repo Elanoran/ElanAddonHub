@@ -312,7 +312,7 @@ namespace ElansAddonHub.Lodge
         async Task LoadPreviewAsync(SlotVM slot)
         {
             var (text, err) = await S.FetchTextAsync(slot);
-            if (err == null) slot.TextPreview = Preview(text);
+            if (err == null) { slot.TextPreview = Preview(text); slot.TextPreviewFull = text; }
         }
 
         // ---- Copy (text slots, 2.34)
@@ -326,7 +326,7 @@ namespace ElansAddonHub.Lodge
             try { SetClipboard(text); }
             catch (Exception) { slot.Error = "Couldn't reach the clipboard - try again"; return slot.Error; }
             S.NoteFiles(slot.Name + " is on the clipboard - paste it in the game", slot.Id);
-            slot.TextPreview = Preview(text);
+            slot.TextPreview = Preview(text); slot.TextPreviewFull = text;
             return null;
         }
 
@@ -352,8 +352,8 @@ namespace ElansAddonHub.Lodge
         {
             var s = versionsSlot;
             DetailsCard.DataContext = s;
-            DSee.Visibility = DEdit.Visibility = S.SupportsFiles2 ? Visibility.Visible : Visibility.Collapsed;
-            VersionsSub.Text = "The newest " + LodgeFiles.KeptVersions + " versions are kept. Save any of them" + (s.CanUpdate ? ", or roll back to an older one." : ".");
+            DSee.Visibility = S.SupportsFiles2 ? Visibility.Visible : Visibility.Collapsed;
+            VersionsSub.Text = "The newest " + LodgeFiles.KeptVersions + " are kept" + (s.CanUpdate ? "; roll back to make an older one the newest again." : ".");
             VersionList.ItemsSource = s.VersionRows();
         }
 
@@ -373,6 +373,16 @@ namespace ElansAddonHub.Lodge
         }
 
         void VersionsClose_Click(object sender, RoutedEventArgs e) => CloseVersions();
+
+        // 3.5.8: Copy on a version row (texts): that version's text on the clipboard
+        async void VersionCopy_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is VersionVM row)) return;
+            var (text, err) = await S.FetchTextAsync(row.Slot, row.Info);
+            if (err != null) { VersionsError.Text = err; return; }
+            try { SetClipboard(text); VersionsError.Text = ""; S.NoteFiles(row.Slot.Name + " v" + row.Info.V + " is on the clipboard", row.Slot.Id); }
+            catch (Exception) { VersionsError.Text = "Couldn't reach the clipboard - try again"; }
+        }
 
         void CloseVersions()
         {

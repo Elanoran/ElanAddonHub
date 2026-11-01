@@ -1018,6 +1018,38 @@ namespace ElansAddonHub
                     var raid = Session.Slots.First(x => x.Name == "Raid WA"); var heal = Session.Slots.First(x => x.Name == "Heal macro");
                     check("content view: a row says more than Details - kind, version, size, date and who in one line, a text's first line (" + raid.ContentMeta + " | " + heal.TextFirstLine + ")",
                         raid.ContentMeta.StartsWith("WeakAura · v1 · ") && raid.ContentMeta.EndsWith("by Wing") && heal.TextFirstLine == "#showtooltip" && raid.TextFirstLine == "!WA:2!S3xwZTnsr1");
+
+                    // ---- 3.5.8: macro colours - #show, known commands, [conditions] with units, ; and , apart, reset=, Lua after /run; an addon's command is plain
+                    {
+                        bool Has(List<(string Text, MacroSyntax.Kind Kind)> t, string text, MacroSyntax.Kind k) => t.Any(x => x.Text == text && x.Kind == k);
+                        var t1 = MacroSyntax.Tokens("#showtooltip\n/cast [@mouseover,help,nodead][] Lesser Heal; Renew");
+                        var t2 = MacroSyntax.Tokens("/castsequence reset=target/combat Serpent Sting, Arcane Shot\n/run print(\"hi\", 5)\n/myaddon toggle\n/cast [mod:shift,target=focus] Polymorph");
+                        check("macro colours: #showtooltip, /cast, @mouseover, help, nodead, the ; between spells; reset=, Lua strings and numbers; an addon's /command plain; mod:shift and target=focus",
+                            Has(t1, "#showtooltip", MacroSyntax.Kind.Meta) && Has(t1, "/cast", MacroSyntax.Kind.Command) && Has(t1, "@mouseover", MacroSyntax.Kind.Unit) && Has(t1, "help", MacroSyntax.Kind.Condition)
+                            && Has(t1, "nodead", MacroSyntax.Kind.Condition) && Has(t1, ";", MacroSyntax.Kind.Punct) && Has(t1, "[", MacroSyntax.Kind.Bracket)
+                            && Has(t2, "/castsequence", MacroSyntax.Kind.Command) && Has(t2, "reset=target/combat", MacroSyntax.Kind.Option) && Has(t2, ",", MacroSyntax.Kind.Punct)
+                            && Has(t2, "\"hi\"", MacroSyntax.Kind.LuaString) && Has(t2, "5", MacroSyntax.Kind.LuaNumber) && Has(t2, "/myaddon", MacroSyntax.Kind.OtherCommand)
+                            && Has(t2, "mod:shift", MacroSyntax.Kind.Condition) && Has(t2, "target=focus", MacroSyntax.Kind.Unit)
+                            && string.Concat(MacroSyntax.Tokens("/cast [@mouseover] A; B").Select(x => x.Text)) == "/cast [@mouseover] A; B");
+                    }
+                    // ---- 3.5.8: the details dialog - the main thing first, two fact lines, versions only when there is a choice
+                    check("details: a macro's facts leave out the internal file name and say where to paste it (" + heal.FactsLine + " | " + heal.PasteHint + ")",
+                        heal.FactsLine.StartsWith("v1 · ") && !heal.FactsLine.Contains(".txt") && heal.FactsLine.Contains("shared by Wing") && heal.PasteHint.Contains("/macro")
+                        && heal.ManyVersionsVisibility == System.Windows.Visibility.Collapsed);
+                    var guide = fake.Slots.First(x => x.Name == "Leveling guide");
+                    var g2 = System.Text.Encoding.UTF8.GetBytes("Leveling guide, take two");
+                    guide.Versions.Add(new FakeFilesServer.Ver { V = 2, FileName = "Leveling guide.txt", Sha = LodgeFiles.Hex(System.Security.Cryptography.SHA256.Create().ComputeHash(g2)), By = "Mia", Note = "Added the Stranglethorn part", Bytes = g2, At = 1_790_100_000_000L });
+                    Session.FeedForTest(fake.DataJson());
+                    var lg = Session.Slots.First(x => x.Name == "Leveling guide");
+                    check("details: a file with two versions lists them (" + lg.Versions.Count + "), a file name in its facts (" + lg.FactsLine + ")",
+                        lg.ManyVersionsVisibility == System.Windows.Visibility.Visible && lg.FactsLine.Contains("Leveling guide.txt") && lg.RanksLine.EndsWith("can update it"));
+                    fc.DetailsViewForTest = true;
+                    foreach (var (slotName, shot) in new[] { ("Heal macro", "files-dlg-macro.png"), ("Boss mods", "files-dlg-addon.png"), ("Leveling guide", "files-dlg-versions.png") })
+                    {
+                        fc.OpenVersions(Session.Slots.First(x => x.Name == slotName)); await Task.Delay(500);
+                        Snapshot(Path.Combine(dir, shot));
+                        fc.CloseVersionsForTest();
+                    }
                     fc.DetailsViewForTest = true;
                     fc.OpenEdit(Session.Slots.First(s => s.Name == "Loot list"));
                     check("cats: Edit of a plain file offers 'What it is'", fc.EditCatShownForTest);

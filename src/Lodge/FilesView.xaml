@@ -161,18 +161,18 @@
       </DataTemplate.Triggers>
     </DataTemplate>
 
-    <!-- one kept version in the details -->
+    <!-- one kept version in the details (shown when there are two or more): version, size, who and when, the note; Copy (text) or Save (files), Roll back -->
     <DataTemplate x:Key="VersionRow">
-      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12" Margin="0,0,0,8">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12,8" Margin="0,0,0,6">
         <DockPanel>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-            <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="VersionSave_Click" Margin="0,0,8,0" AutomationProperties.Name="Save this version" />
-            <Button Content="Roll back" Style="{StaticResource Button.S}" Tag="{Binding}" Click="VersionRollBack_Click" Visibility="{Binding RollBackVisibility}"
+            <Button Content="Copy" Style="{StaticResource Button.S}" Tag="{Binding}" Click="VersionCopy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,8,0" AutomationProperties.Name="Copy this version" />
+            <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="VersionSave_Click" Visibility="{Binding SaveVisibility}" Margin="0,0,8,0" AutomationProperties.Name="Save this version" />
+            <Button Content="Roll back" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="VersionRollBack_Click" Visibility="{Binding RollBackVisibility}"
                     ToolTip="Make this the newest version again (newer ones are removed)" AutomationProperties.Name="Roll back to this version" />
           </StackPanel>
           <StackPanel>
-            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" />
-            <TextBlock Text="{Binding Line}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Style="{StaticResource Text.Body}"><Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Line, Mode=OneWay}" Foreground="{StaticResource Brush.Text.Secondary}" /></TextBlock>
             <TextBlock Text="{Binding By}" Style="{StaticResource Text.Caption}" />
             <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
           </StackPanel>
@@ -275,85 +275,106 @@
         </Grid>
       </Grid>
 
-      <!-- ===== details: the picture, the description, who sees / updates it, the actions and the versions ===== -->
+      <!-- ===== details (3.5.8): name and kind with a close button; the main thing with its one main button (a text's preview with Copy, an addon's
+           Install, a file's Save); the description; two fact lines; the addon's folders and state; the versions only when there is a choice;
+           New version / Edit at the bottom left and Delete in red at the bottom right, for those who may ===== -->
       <Border x:Name="VersionsOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="Scrim_Down">
         <Border x:Name="DetailsCard" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
-                MaxWidth="620" MaxHeight="700" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down" ClipToBounds="True">
+                MaxWidth="560" MaxHeight="700" Margin="24" HorizontalAlignment="Stretch" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down" ClipToBounds="True">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <ScrollViewer VerticalScrollBarVisibility="Auto">
               <StackPanel>
-                <Border Height="220" Visibility="{Binding CoverVisibility}">
+                <Border Height="200" Visibility="{Binding CoverVisibility}">
                   <Border.Background><ImageBrush ImageSource="{Binding CoverImage}" Stretch="UniformToFill" /></Border.Background>
                 </Border>
-                <StackPanel Margin="24,20,24,0">
+                <StackPanel Margin="24,18,16,8">
+                  <!-- header -->
                   <DockPanel>
-                    <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
-                      <Border Style="{StaticResource Chip}" Visibility="{Binding SeeChipVisibility}" Margin="8,0,0,0" ToolTip="{Binding SeeLine}">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Click="VersionsClose_Click" ToolTip="Close (Esc)" AutomationProperties.Name="Close" VerticalAlignment="Top">
+                      <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="12" />
+                    </Button>
+                    <WrapPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                      <TextBlock x:Name="VersionsHeading" Text="{Binding Name}" Style="{StaticResource Text.Section}" TextWrapping="Wrap" Margin="0,0,10,0" VerticalAlignment="Center" />
+                      <Border Style="{StaticResource Chip}" Visibility="{Binding KindChipVisibility}" ToolTip="{Binding KindChipTip}" Margin="0,2,6,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding KindChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                      </Border>
+                      <Border Style="{StaticResource Chip}" Visibility="{Binding SeeChipVisibility}" ToolTip="{Binding SeeLine}" Margin="0,2,0,0" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                           <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Font.Icons}" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
                           <TextBlock Text="{Binding SeeChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                         </StackPanel>
                       </Border>
-                      <Border Style="{StaticResource Chip}" Visibility="{Binding KindChipVisibility}" Margin="8,0,0,0" ToolTip="{Binding KindChipTip}">
-                        <TextBlock Text="{Binding KindChip}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
-                      </Border>
                     </WrapPanel>
-                    <TextBlock x:Name="VersionsHeading" Text="{Binding Name}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
                   </DockPanel>
-                  <TextBlock Text="{Binding Desc}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                  <TextBox Text="{Binding TextPreview, Mode=OneWay}" Visibility="{Binding PreviewVisibility}" IsReadOnly="True" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
-                           MaxHeight="140" VerticalScrollBarVisibility="Auto" Background="{StaticResource Brush.Surface2}" Foreground="{StaticResource Brush.Text.Secondary}" BorderThickness="0"
-                           Padding="10,8" Margin="0,12,0,0" AutomationProperties.Name="Text preview" />
-                  <Grid Margin="0,16,0,0">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
-                    <TextBlock Text="Newest" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
-                    <TextBlock Grid.Column="1" Text="{Binding VersionLine}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,2" />
-                    <TextBlock Grid.Row="1" Text="Shared by" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MetaLine}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,2" />
-                    <TextBlock Grid.Row="2" Text="Who can see it" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="DSee" Text="{Binding SeeLine}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,2" />
-                    <TextBlock Grid.Row="3" Text="Who can update it" Style="{StaticResource Text.Caption}" Margin="0,2,0,2" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" x:Name="DEdit" Text="{Binding EditLine}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,2" />
-                  </Grid>
-                  <StackPanel Visibility="{Binding AddonInfoVisibility}" Margin="0,12,0,0">
-                    <TextBlock Text="Addon folders" Style="{StaticResource Text.Caption}" />
-                    <TextBlock Text="{Binding AddonInfo}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                  <StackPanel Margin="0,0,8,0">
+                    <!-- a text: its preview with Copy in the corner, and where to paste it -->
+                    <StackPanel Visibility="{Binding TextVisibility}" Margin="0,14,0,0">
+                      <Grid>
+                        <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" MinHeight="56">
+                          <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                            <TextBlock local:MacroSyntax.IsMacro="{Binding IsMacro}" local:MacroSyntax.Code="{Binding TextPreview}" FontFamily="Consolas" FontSize="12.5" TextWrapping="Wrap"
+                                       Foreground="{StaticResource Brush.Text.Primary}" Margin="12,10,84,10" AutomationProperties.Name="Text preview" />
+                          </ScrollViewer>
+                        </Border>
+                        <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                                IsEnabled="{Binding IdleEnabled}" ToolTip="Put the text on the clipboard" AutomationProperties.Name="Copy" />
+                      </Grid>
+                      <DockPanel Margin="0,6,0,0">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding MacroLengthLine}" Visibility="{Binding MacroLengthVisibility}" Style="{StaticResource Text.Caption}" Margin="12,0,0,0"
+                                   ToolTip="WoW's macro window takes 255 characters at most" />
+                        <TextBlock Text="{Binding PasteHint}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" />
+                      </DockPanel>
+                    </StackPanel>
+                    <!-- an addon or a file: its main button -->
+                    <WrapPanel Margin="0,14,0,0" IsEnabled="{Binding IdleEnabled}" Visibility="{Binding MainButtonsVisibility}">
+                      <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.M}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,0"
+                              ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
+                      <Button Content="Save..." Style="{StaticResource Button.Primary.M}" Tag="{Binding}" Click="Save_Click" Visibility="{Binding SaveCardVisibility}" Margin="0,0,8,0"
+                              ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+                      <Button Content="Save..." Style="{StaticResource Button.M}" Tag="{Binding}" Click="Save_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,12,0"
+                              ToolTip="Save the addon's zip to this PC" AutomationProperties.Name="Save the zip" />
+                      <CheckBox Style="{StaticResource Switch}" Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center"
+                                ToolTip="Install new versions in WoW by themselves when someone uploads one (you'll be asked if a version changes the addon's folders)" AutomationProperties.Name="Keep it updated" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Desc}" Visibility="{Binding DescVisibility}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,14,0,0" />
+                    <!-- the facts in two lines -->
+                    <TextBlock Text="{Binding FactsLine}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,14,0,0" />
+                    <TextBlock x:Name="DSee" Text="{Binding RanksLine}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    <!-- an addon: its folders, what is in WoW, who has it, warnings -->
+                    <TextBlock Text="{Binding AddonInfo}" Visibility="{Binding AddonInfoVisibility}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                    <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Accent}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <TextBlock Text="{Binding HaveLine}" Visibility="{Binding HaveVisibility}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding AddonWarn}" Visibility="{Binding AddonWarnVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Warn}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,12,0,0">
+                      <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
+                      <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <!-- the versions, only when there is a choice -->
+                    <StackPanel Visibility="{Binding ManyVersionsVisibility}" Margin="0,18,0,0">
+                      <TextBlock Text="Versions" Style="{StaticResource Text.RowTitle}" />
+                      <TextBlock x:Name="VersionsSub" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,8" />
+                      <ItemsControl x:Name="VersionList" ItemTemplate="{StaticResource VersionRow}" />
+                    </StackPanel>
+                    <TextBlock x:Name="VersionsError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
                   </StackPanel>
-                  <TextBlock Text="{Binding AddonWarn}" Visibility="{Binding AddonWarnVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Warn}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                  <TextBlock Text="{Binding HaveLine}" Visibility="{Binding HaveVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
-                  <TextBlock Text="{Binding InstalledLine}" Visibility="{Binding InstalledLineVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Accent}" TextWrapping="Wrap" Margin="0,12,0,0" />
-                  <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,12,0,0">
-                    <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
-                    <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
-                  </StackPanel>
-                  <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                  <WrapPanel Margin="0,16,0,0" IsEnabled="{Binding IdleEnabled}">
-                    <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,8,8"
-                            ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
-                    <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,8,8"
-                            ToolTip="Put the text on the clipboard" AutomationProperties.Name="Copy" />
-                    <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,8" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
-                    <Button Content="Upload a new version" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding UpdateVisibility}" Margin="0,0,8,8"
-                            ToolTip="Upload a new version of this file" AutomationProperties.Name="Replace" />
-                    <Button x:Name="EditButton" Content="Edit" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Edit_Click" Visibility="{Binding UpdateVisibility}" Margin="0,0,8,8"
-                            ToolTip="Name, description, picture and who can see or update it" AutomationProperties.Name="Edit" />
-                    <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,8"
-                            ToolTip="Remove this file and all its versions" AutomationProperties.Name="Delete" />
-                    <CheckBox Style="{StaticResource Switch}" Content="Keep it updated" IsChecked="{Binding AutoUpdate, Mode=OneWay}" Tag="{Binding}" Click="Auto_Click" Visibility="{Binding AutoVisibility}" VerticalAlignment="Center" Margin="0,0,8,8"
-                              ToolTip="Install new versions in WoW by themselves when someone uploads one (you'll be asked if a version changes the addon's folders)" AutomationProperties.Name="Keep it updated" />
-                  </WrapPanel>
-                  <TextBlock Text="Versions" Style="{StaticResource Text.RowTitle}" Margin="0,16,0,4" />
-                  <TextBlock x:Name="VersionsSub" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                  <ItemsControl x:Name="VersionList" ItemTemplate="{StaticResource VersionRow}" />
-                  <TextBlock x:Name="VersionsError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,0,0,12" />
                 </StackPanel>
               </StackPanel>
             </ScrollViewer>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
-              <Button Content="Done" Style="{StaticResource Button.M}" Click="VersionsClose_Click" />
-            </StackPanel>
+            <!-- managing it: for those who may update it (New version, Edit) or remove it (Delete, kept apart in red) -->
+            <Border Grid.Row="1" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,1,0,0" Padding="24,10,24,14" Visibility="{Binding ManageBarVisibility}">
+              <DockPanel IsEnabled="{Binding IdleEnabled}">
+                <Button DockPanel.Dock="Right" Content="Delete" Style="{StaticResource GhostButton}" Foreground="{StaticResource Brush.Danger}" Height="28" Tag="{Binding}" Click="Delete_Click"
+                        Visibility="{Binding ManageVisibility}" ToolTip="Remove it and all its versions from the lodge" AutomationProperties.Name="Delete" />
+                <StackPanel Orientation="Horizontal">
+                  <Button Content="New version" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding UpdateVisibility}" Margin="0,0,8,0"
+                          ToolTip="Upload a new version (the older ones are kept)" AutomationProperties.Name="Replace" />
+                  <Button x:Name="EditButton" Content="Edit" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Edit_Click" Visibility="{Binding UpdateVisibility}"
+                          ToolTip="Name, description, picture and who can see or update it" AutomationProperties.Name="Edit" />
+                </StackPanel>
+              </DockPanel>
+            </Border>
           </Grid>
         </Border>
       </Border>
