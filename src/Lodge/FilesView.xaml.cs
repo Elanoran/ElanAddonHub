@@ -95,7 +95,7 @@ namespace ElansAddonHub.Lodge
         {
             if (S == null) return;
             DetailsList.Visibility = Details ? Visibility.Visible : Visibility.Collapsed;
-            SlotList.Visibility = Details ? Visibility.Collapsed : Visibility.Visible;
+            TilesScroll.Visibility = Details ? Visibility.Collapsed : Visibility.Visible;
             var want = Details ? "details" : "tiles";
             if (S.Settings != null && S.Settings.FilesView != want) { S.Settings.FilesView = want; try { SettingsStore.Save(S.Settings); } catch { } }
         }

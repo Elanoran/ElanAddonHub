@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.5
+- **A big Library stays quick.** The list builds only the rows on screen, so opening, sorting and grouping 300 items takes a blink instead of half a second; the kits, filters and column headings stay put while the list scrolls under them, like Explorer.
+- **Opening a busy chat channel is smoother.** The newest messages show at once and the older ones are added right after, so the window no longer stalls on a long history.
+
 ## 3.5.4
 - **Files is now the Library.** It holds more than files - addons, macros, WeakAuras and profiles, talent builds, guides and maps - so the Lodge's page is called Library, and Share a file is Add (a File or Text to copy).
 - **A text knows what it is.** The Library reads a shared text and names it: Macro, WeakAura, Plater profile, ElvUI profile, Talent build, or Import string - in the list, on the card and in the filter chips, and Copy says where to paste it.

@@ -203,24 +203,29 @@
           </DockPanel>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
-          <StackPanel Margin="24,16,12,24">
-            <StackPanel x:Name="KitsSection" Visibility="Collapsed">
-              <DockPanel Margin="0,0,12,8">
-                <Button x:Name="NewKitButton" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="New kit" Click="NewKit_Click" Visibility="Collapsed"
-                        ToolTip="Put several files together, like a raid night kit" />
-                <TextBlock Text="Kits" Style="{StaticResource Text.RowTitle}" VerticalAlignment="Center" />
-              </DockPanel>
-              <ItemsControl x:Name="KitList" ItemTemplate="{StaticResource KitCard}">
-                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              </ItemsControl>
-              <TextBlock x:Name="KitsEmpty" Text="No kits yet. A kit puts several addons and files together, so members install them with one click." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,12" />
-              <TextBlock Text="Everything shared" Style="{StaticResource Text.RowTitle}" Margin="0,4,0,8" />
-            </StackPanel>
-            <WrapPanel x:Name="CatChips" Visibility="Collapsed" Margin="0,0,0,12" />
-            <!-- Details: the header (click a column to sort) and the rows -->
-            <StackPanel x:Name="DetailsList" Visibility="Collapsed" Margin="0,0,12,0" SizeChanged="DetailsList_SizeChanged">
-              <Grid x:Name="ColumnHeads" Margin="8,0,8,4">
+        <!-- 3.5.5: kits, chips and the column heads stay on top; the list scrolls on its own and builds only the rows on screen (a Library of
+             300 froze the window half a second on open, sort and Group: Tools\selftest.ps1 -Speed) -->
+        <Grid Grid.Row="1" Margin="24,16,12,0">
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+          <StackPanel Grid.Row="0">
+              <StackPanel x:Name="KitsSection" Visibility="Collapsed">
+                <DockPanel Margin="0,0,12,8">
+                  <Button x:Name="NewKitButton" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="New kit" Click="NewKit_Click" Visibility="Collapsed"
+                          ToolTip="Put several files together, like a raid night kit" />
+                  <TextBlock Text="Kits" Style="{StaticResource Text.RowTitle}" VerticalAlignment="Center" />
+                </DockPanel>
+                <ItemsControl x:Name="KitList" ItemTemplate="{StaticResource KitCard}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <TextBlock x:Name="KitsEmpty" Text="No kits yet. A kit puts several addons and files together, so members install them with one click." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                <TextBlock Text="Everything shared" Style="{StaticResource Text.RowTitle}" Margin="0,4,0,8" />
+              </StackPanel>
+              <WrapPanel x:Name="CatChips" Visibility="Collapsed" Margin="0,0,0,12" />
+          </StackPanel>
+          <!-- Details: the header (click a column to sort) and the rows -->
+          <Grid x:Name="DetailsList" Grid.Row="1" Visibility="Collapsed" SizeChanged="DetailsList_SizeChanged">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+            <Grid x:Name="ColumnHeads" Margin="8,0,20,4">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*" MinWidth="180" />
                   <ColumnDefinition Width="{Binding Kind, Source={StaticResource Cols}}" /><ColumnDefinition Width="{Binding Version, Source={StaticResource Cols}}" />
@@ -228,22 +233,33 @@
                   <ColumnDefinition Width="{Binding By, Source={StaticResource Cols}}" /><ColumnDefinition Width="{Binding InWow, Source={StaticResource Cols}}" /><ColumnDefinition x:Name="ActionsCol" Width="210" />
                 </Grid.ColumnDefinitions>
               </Grid>
-              <ItemsControl x:Name="SlotRows" ItemTemplate="{StaticResource SlotRow}">
-                <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
-              </ItemsControl>
-            </StackPanel>
-            <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}">
+            <ItemsControl x:Name="SlotRows" Grid.Row="1" ItemTemplate="{StaticResource SlotRow}" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                          VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
+              <ItemsControl.Template>
+                <ControlTemplate TargetType="ItemsControl">
+                  <ScrollViewer Focusable="False" CanContentScroll="True" VerticalScrollBarVisibility="Auto" Padding="0,0,12,16" app:Motion.EdgeFade="True"><ItemsPresenter /></ScrollViewer>
+                </ControlTemplate>
+              </ItemsControl.Template>
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
+            </ItemsControl>
+          </Grid>
+          <!-- Tiles: the cards (a wrap of cards cannot be virtualised; its own scroll) -->
+          <ScrollViewer x:Name="TilesScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
+            <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}" Margin="0,0,0,16">
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
             </ItemsControl>
-            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
-              <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
-              <TextBlock x:Name="EmptyTitle" Text="No files shared yet" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
-              <TextBlock x:Name="EmptyHint" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
-            </StackPanel>
-            <TextBlock x:Name="UsageText" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
-          </StackPanel>
-        </ScrollViewer>
+          </ScrollViewer>
+          <Grid Grid.Row="1">
+              <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
+                <TextBlock Text="&#xE8F1;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="EmptyTitle" Text="No files shared yet" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
+                <TextBlock x:Name="EmptyHint" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
+              </StackPanel>
+          </Grid>
+          <TextBlock x:Name="UsageText" Grid.Row="2" Style="{StaticResource Text.Caption}" Margin="0,8,0,12" />
+        </Grid>
       </Grid>
 
       <!-- ===== details: the picture, the description, who sees / updates it, the actions and the versions ===== -->

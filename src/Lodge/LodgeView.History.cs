@@ -110,6 +110,7 @@ namespace ElansAddonHub.Lodge
                 if (ch == null) return false;
                 Session.Select(ch);
             }
+            if (Session.Selected?.Id == channel) window.FinishFill();   // 3.5.5: the opening window whole (it is built in steps), as a jump expects
             var list = Session.MessagesOf(channel);
             if (list.All(m => m.Id != id) && Session.HasMoreOlder(channel))
             {

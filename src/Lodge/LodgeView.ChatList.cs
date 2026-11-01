@@ -53,16 +53,43 @@ namespace ElansAddonHub.Lodge
                 source.CollectionChanged += SourceChanged;
             }
             int at = focus == null ? -1 : source.IndexOf(focus);
-            if (at < 0 || at >= source.Count - OpenRows) ShowEnd();
+            if (at < 0) ShowEnd(staged: true);       // a plain open at the newest messages: the slow case, built in steps
+            else if (at >= source.Count - OpenRows) ShowEnd();
             else Around(at);
         }
 
-        public void ShowEnd() => Show(Math.Max(0, source.Count - OpenRows), source.Count);
+        // 3.5.5: the newest FirstRows are built at once (more than a screenful: the channel shows right away), the rest of the opening window
+        // Chunk rows at a time between frames (Background priority: after the first frame, before the app is idle) - the same window in the
+        // end, without a 0.4 s freeze when a channel with a long history opens (Tools\selftest.ps1 -Speed)
+        public const int FirstRows = 40;
+        public void ShowEnd(bool staged = false)
+        {
+            int start = Math.Max(0, source.Count - OpenRows), first = staged ? Math.Max(start, source.Count - FirstRows) : start;
+            Show(first, source.Count);
+            if (first > start) { fillTarget = start; FillTop(Version, start); }
+        }
+        int fillTarget = -1;
+        // whatever needs the whole opening window now (a jump, a search hit) gets it at once
+        public void FinishFill()
+        {
+            if (fillTarget >= 0 && Start > fillTarget) GrowTop(Start - fillTarget);
+            fillTarget = -1;
+        }
+        void FillTop(int version, int target)
+        {
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+            {
+                if (Version != version || fillTarget != target || Start <= target || Start > source.Count) return;     // the window moved or changed meanwhile, or is filled
+                GrowTop(Math.Min(Chunk, Start - target));
+                if (Start > target) FillTop(version, target); else fillTarget = -1;
+            }));
+        }
         public int IndexOf(MessageVM m) => source.IndexOf(m);
 
         // makes sure `m` has a row (a jump): the window moves to it when it is outside
         public void Include(MessageVM m)
         {
+            FinishFill();
             int at = source.IndexOf(m);
             if (at < 0 || (at >= Start && at < End)) return;
             Around(at);
@@ -78,7 +105,7 @@ namespace ElansAddonHub.Lodge
 
         void Show(int start, int end)
         {
-            Version++;
+            Version++; fillTarget = -1;
             Start = start;
             Shown.ReplaceAll(source.Skip(start).Take(Math.Max(0, end - start)).ToList());
         }
@@ -86,7 +113,7 @@ namespace ElansAddonHub.Lodge
         // n more rows above the window / below it
         public void GrowTop(int n)
         {
-            n = Math.Min(n, Start);
+            n = Math.Min(n, Math.Min(Start, source.Count));
             for (int i = 1; i <= n; i++) Shown.Insert(0, source[Start - i]);
             Start -= Math.Max(0, n);
         }
@@ -102,6 +129,9 @@ namespace ElansAddonHub.Lodge
         // the channel's own list changed: the window follows (new messages join a live window; an older page joins a window at the start)
         void SourceChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
+            // a change that moves positions while the opening window is still being built: the fill stops first (the window is valid as it is;
+            // scrolling builds more); a message changed in place (Replace: an edit, a reaction) does not move anything
+            if (e.Action != NotifyCollectionChangedAction.Replace) fillTarget = -1;
             switch (e.Action)
             {
                 case NotifyCollectionChangedAction.Add:
