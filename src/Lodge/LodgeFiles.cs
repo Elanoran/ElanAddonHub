@@ -293,4 +293,34 @@ namespace ElansAddonHub.Lodge
             catch (Exception e) { Util.Log("files: could not save the saved record (" + e.GetType().Name + ")"); }
         }
     }
+
+    // 3.5.4: what a shared text is, read from the text itself (no server field: any Lodge works) - a macro, a WeakAura, an addon profile,
+    // a talent build or some other import string. Its group is where it sorts and filters on the Library page.
+    public static class ImportText
+    {
+        public static string Kind(string text)
+        {
+            var t = (text ?? "").TrimStart('\uFEFF', ' ', '\t', '\r', '\n');
+            if (t.Length == 0) return "import";
+            if (t.StartsWith("!WA:", StringComparison.Ordinal)) return "weakaura";
+            if (t.StartsWith("!PLATER", StringComparison.OrdinalIgnoreCase)) return "plater";
+            if (t.IndexOf("::profile", StringComparison.Ordinal) > 0 || t.IndexOf("::private", StringComparison.Ordinal) > 0) return "elvui";
+            if (t.StartsWith("ETB1-", StringComparison.Ordinal) || t.IndexOf("/talent-calc", StringComparison.OrdinalIgnoreCase) >= 0) return "talents";
+            if (t.StartsWith("#show", StringComparison.OrdinalIgnoreCase) || t.StartsWith("/", StringComparison.Ordinal)) return "macro";
+            return "import";
+        }
+
+        public static string Label(string kind) =>
+            kind == "macro" ? "Macro" : kind == "weakaura" ? "WeakAura" : kind == "plater" ? "Plater profile" : kind == "elvui" ? "ElvUI profile"
+            : kind == "talents" ? "Talent build" : "Import string";
+
+        // the Library's group: macros, WeakAuras and profiles, talent builds (with the files of that category), the rest as import strings
+        public static string Group(string kind) =>
+            kind == "macro" ? "macro" : kind == "weakaura" || kind == "plater" || kind == "elvui" ? "profile" : kind == "talents" ? "build" : "text";
+
+        // where it goes in the game, for the Copy note
+        public static string PasteHint(string kind) =>
+            kind == "macro" ? "paste it into a new macro (/macro)" : kind == "weakaura" ? "paste it into WeakAuras' Import (/wa)" : kind == "plater" ? "paste it into Plater's profile import (/plater)"
+            : kind == "elvui" ? "paste it into ElvUI's profile import (/ec)" : kind == "talents" ? "open it in the Outpost's talent calculator (Import)" : "paste it in the game";
+    }
 }

@@ -416,7 +416,7 @@
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-4" CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -472,7 +472,7 @@
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Chip}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark}" CornerRadius="{StaticResource Radius.Chip}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-4" CornerRadius="17" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="13" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <MultiTrigger>
@@ -516,7 +516,7 @@
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-4" CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -548,7 +548,7 @@
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark.Soft}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-3" CornerRadius="11" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -625,7 +625,7 @@
               <Ellipse.RenderTransform><TranslateTransform x:Name="tx" /></Ellipse.RenderTransform>
               <Ellipse.Effect><DropShadowEffect BlurRadius="4" ShadowDepth="1" Direction="270" Opacity="0.35" Color="Black" /></Ellipse.Effect>
             </Ellipse>
-            <Border x:Name="ring" Margin="-3" CornerRadius="15" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <!-- a label, when the switch has one (3.5.3): to its right, in the page's text colour, clicking it toggles too -->
           <ContentPresenter x:Name="label" Margin="8,0,0,0" VerticalAlignment="Center" TextElement.Foreground="{StaticResource Brush.Text.Primary}" RecognizesAccessKey="False" />
@@ -930,7 +930,7 @@
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark.Soft}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-4" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -971,7 +971,7 @@
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Overlay.Pressed}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -1039,7 +1039,7 @@
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="17" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="pr" Background="{StaticResource Brush.Overlay.Pressed}" CornerRadius="17" Opacity="0" IsHitTestVisible="False" />
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-            <Border x:Name="ring" Margin="-3" CornerRadius="20" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="17" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -1220,7 +1220,7 @@
             <Border x:Name="sel" Background="{StaticResource Brush.Surface3}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" />
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0" />
-            <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -1333,7 +1333,7 @@
             </ToggleButton>
             <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                               Margin="12,0,32,0" VerticalAlignment="Center" IsHitTestVisible="False" />
-            <Border x:Name="ring" Margin="-4" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
             <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" HorizontalOffset="-16" VerticalOffset="-12" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
               <Border Margin="16,16,16,24" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.ControlLg}"
                       Padding="4" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">

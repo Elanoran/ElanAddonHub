@@ -30,7 +30,7 @@
                 <ContentPresenter Grid.Column="1" VerticalAlignment="Center" />
                 <Ellipse x:Name="dot" Grid.Column="2" Width="8" Height="8" Fill="{StaticResource Brush.Warn}" VerticalAlignment="Center" Visibility="Collapsed" />
               </Grid>
-              <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+              <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="Tag" Value="&#xEA18;"><Setter TargetName="dot" Property="Visibility" Value="Visible" /></Trigger>

@@ -22,7 +22,7 @@ addons kept up to date, a game database built from your own client, a 3D world m
 
 Elan's Outpost is a small Windows app that sits next to World of Warcraft (WoW Forever). It installs and updates
 your addons, shows you what your own game files know about items, creatures, quests and the world, and gives you
-and your friends a private place to hang out: text chat, voice rooms, a calendar and shared files.
+and your friends a private place to hang out: text chat, voice rooms, a calendar and a shared library.
 
 It never touches the game itself: it reads the game's files, and the only things it writes are the addon folders
 it installs for you.
@@ -73,7 +73,7 @@ in the air. Flight paths that Forever changed are learned from your own flights.
 
 A small, private Discord for you and your friends, running on a server one of you hosts. Text channels with
 replies, reactions, pictures and item links; voice rooms with push-to-talk and an in-game overlay that shows who is
-talking; a raid and event calendar with sign-ups per role; shared files; a ladder with badges; and an armory of the
+talking; a raid and event calendar with sign-ups per role; a shared library of addons, macros and WeakAuras; a ladder with badges; and an armory of the
 characters members choose to share. Names show in class colours with level and zone, straight from the game.
 
 **Sharing what you see.** Members who turn it on share what they see in the world with their Lodge: which creatures drop
@@ -97,11 +97,11 @@ of contributing.
 
 <p align="center"><img src="docs/readme/calendar.png" width="860" alt="The Lodge calendar: a month with raid nights and dungeon runs"></p>
 
-**Shared files.** Officers share files with the Lodge: addons that members install into WoW with one click (and keep up
-to date if they like), import strings such as a WeakAura, a Plater profile or a talent code to copy, guides and maps.
-Files have a picture and notes, a kind, and who may see and update them by rank; kits put several files together.
+**The Library.** Officers share things with the Lodge: addons that members install into WoW with one click (and keep up
+to date if they like), macros, WeakAuras and profiles to copy, talent builds, guides and maps - grouped by type. Each
+has a picture and notes, and who may see and update it by rank; kits put several addons and files together.
 
-<p align="center"><img src="docs/readme/files.png" width="860" alt="The Lodge's Files page in its Details view: addons, import strings, guides and maps with their kind, version, size and date"></p>
+<p align="center"><img src="docs/readme/files.png" width="860" alt="The Lodge's Library, grouped by type: addons, WeakAuras, macros, guides and maps with their kind, version, size and date"></p>
 
 ### Characters
 

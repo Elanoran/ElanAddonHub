@@ -170,8 +170,11 @@ namespace ElansAddonHub
                 Check("note: the What's new tab gets a dot until it is opened", SettingsPage.NewsDotForTest);
                 if (note != null) SnapshotElement(note.CardForTest, P("about-note.png"));
                 Snapshot(P("about-note-window.png"));
+                var openClock = System.Diagnostics.Stopwatch.StartNew();
                 note?.OpenForTest();
+                long openSync = openClock.ElapsedMilliseconds;
                 await Settle();
+                notes.Add("note: See what's new took " + openSync + " ms on the click, " + openClock.ElapsedMilliseconds + " ms until laid out");
                 Check("note: 'See what's new' opens Settings > About > What's new and goes away", await Until(() => SettingsPage.IsVisible && SettingsPage.AboutNewsVisibleForTest) && SettingsPage.NoteForTest == null && !SettingsPage.NewsDotForTest);
 
                 // ============================================================================================ the log viewer

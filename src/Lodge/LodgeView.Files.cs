@@ -100,7 +100,7 @@ namespace ElansAddonHub.Lodge
             bool live = s != null && s.Newest != null;
             FilesBarAction.Visibility = live ? Visibility.Visible : Visibility.Collapsed;
             FilesBarAction.Content = !live ? "" : s.IsAddon ? s.InstallLabel : s.IsText ? "Copy" : "Save...";
-            FilesBarOpen.Content = live ? "Details" : "Open Files";
+            FilesBarOpen.Content = live ? "Details" : "Open Library";
             FilesBarSub.Text = live ? s.VersionLine : "";
             FilesBarSub.Visibility = live ? Visibility.Visible : Visibility.Collapsed;
             FilesBarGlyph.Text = live ? s.KindGlyph : "\uE8A5";

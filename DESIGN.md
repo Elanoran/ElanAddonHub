@@ -77,12 +77,12 @@ Segoe Fluent Icons (falls back to Segoe MDL2 Assets: `Font.Icons` / `Icons`), 16
 
 ## 8. Components
 - Buttons (radius 10, never outlined): Primary (accent fill, one per view), Secondary (8 % white veil), Ghost (text only), Danger (confirm of destructive dialogs). Heights 28 (`Button.S`), 32 (`Button.M`), 36 (`Button.L`). Hover veil 120 ms, pressed darkens, disabled = Tertiary text.
-- Focus ring: 2 px `Brush.Focus` (accent), rounded, 2 px outside the control, keyboard focus only.
+- Focus ring: 2 px `Brush.Focus` (accent), rounded, drawn just inside the control's edge (3.5.4: outside, it was clipped by scroll areas and covered close neighbours), keyboard focus only.
 - Pill / status chip (`StatusPill`, `Chip`): 24 high, full-round, tinted fill, regular 12 px text, status colour only for status. A pill that acts (Update, Install) is accent-filled.
 - Card (`Card.Raised`): inner 16, radius 12, title Section, subtitle Secondary, stats Caption. Header toggles details.
 - List row: 16,12 padding, 36 px leading tile, `Text.RowTitle` + `Text.Secondary`, chevron right (Tertiary).
 - Settings row (`Setting.Row`, a `HeaderedContentControl`): `Header` = label (Body), `Tag` = helper (Secondary, optional), content = the control, right-aligned and centred; 12 px above/below, hairline `Brush.Divider` between rows only. Rows live in a `Card.Rows` card (16 side padding, first hairline clipped); form bodies use `Card.Group` + a 16 padded panel (neither lifts on hover). A section = `Text.Section` header (+ `Note` helper) over its card, 24 between sections, page title `Text.Title` once.
-- Switch (`Switch` on a CheckBox, no content): 40 x 24, track Surface3 -> accent fade, 18 px light thumb slides 180 ms, hover veil, focus ring.
+- Switch (`Switch` on a CheckBox; Content, if any, is its label to the right): 40 x 24, track Surface3 -> accent fade, 18 px light thumb slides 180 ms, hover veil, focus ring.
 - Segment (`Segment` RadioButtons inside a `SegmentHost` Border): 32 high host (Surface2, radius 10, padding 2), 28 high segments (radius 8); the chosen one is a Surface3 tile (fade 120 ms), text Secondary -> Primary. Neutral, not accent.
 - Dropdown (`Dropdown` ComboBox): input look (32, Surface2, radius 8, no border), chevron Tertiary, hover veil, 1 px accent while open, focus ring; the list is an overlay (Surface3, hairline, radius 10, elevation 2, items radius 8).
 - Slider (implicit `Slider` style): 4 px track Surface3, accent fill, 16 px light thumb with a soft shadow, 24 px hit area, focus ring on the thumb.

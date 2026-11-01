@@ -203,6 +203,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "overlayTop")] public double? OverlayTop { get; set; }       // 0..1 of the screen height
         [DataMember(Name = "overlayAlways")] public bool OverlayAlways { get; set; }    // also when WoW isn't in front
         [DataMember(Name = "cfAutoCheck")] public bool CfAutoCheck { get; set; }        // off by default: let the CurseForge app refresh its update info (daily / when WoW starts)
+        [DataMember(Name = "filesGroup")] public bool? FilesGroup { get; set; }            // Lodge > Library: grouped by type (3.5.4; null = on)
         [DataMember(Name = "filesView")] public string FilesView { get; set; }             // Lodge > Files: "details" (the list, default) or "tiles" (the cards)
         [DataMember(Name = "cfDirectOff")] public bool CfDirectOff { get; set; }        // false = the Outpost installs CurseForge addon updates itself (forgecdn, hash checked); true = CurseForge's install link
         [DataMember(Name = "cfLetInstallOff")] public bool CfLetInstallOff { get; set; } // false = an addon with CurseForge's auto-update on is installed by CurseForge itself (no install link / window, 2.72.4)

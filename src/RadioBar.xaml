@@ -15,7 +15,7 @@
       <Setter Property="Control.Template">
         <Setter.Value>
           <ControlTemplate>
-            <Border x:Name="ring" Margin="-3" CornerRadius="99" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="99" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" IsHitTestVisible="False" />
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -24,7 +24,7 @@
       <Setter Property="Control.Template">
         <Setter.Value>
           <ControlTemplate>
-            <Border x:Name="ring" Margin="-3" CornerRadius="11" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="0" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" IsHitTestVisible="False" />
           </ControlTemplate>
         </Setter.Value>
       </Setter>

@@ -140,7 +140,7 @@ namespace ElansAddonHub
             stage.SizeChanged += (s, e) => { stage.Clip = new RectangleGeometry(new Rect(0, 0, stage.ActualWidth, stage.ActualHeight), 12, 12); OnStageResized(); };
             Grid.SetRow(stage, 1); root.Children.Add(stage);
             // keyboard focus ring (DESIGN.md: 2 px accent, 2 px outside, keyboard focus only)
-            focusRing.BorderThickness = new Thickness(2); focusRing.CornerRadius = new CornerRadius(14); focusRing.Margin = new Thickness(-4);
+            focusRing.BorderThickness = new Thickness(2); focusRing.CornerRadius = new CornerRadius(12); focusRing.Margin = new Thickness(0);
             focusRing.IsHitTestVisible = false; focusRing.Visibility = Visibility.Collapsed;
             focusRing.SetResourceReference(Border.BorderBrushProperty, "Brush.Focus");
             Grid.SetRow(focusRing, 1); root.Children.Add(focusRing);

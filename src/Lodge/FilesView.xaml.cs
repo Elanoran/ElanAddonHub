@@ -49,9 +49,11 @@ namespace ElansAddonHub.Lodge
             SlotRows.ItemsSource = S.Slots;
             BuildHeads();
             if (S.Settings?.FilesView == "tiles") ViewTiles.IsChecked = true; else ViewDetails.IsChecked = true;
+            GroupBox.IsChecked = S.Settings?.FilesGroup != false;
             KitList.ItemsSource = S.Kits;
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots);
             view.Filter = o => Matches(o as SlotVM);
+            ApplyView();
             S.FilesChanged += Refresh;
             Refresh();
         }
@@ -71,13 +73,14 @@ namespace ElansAddonHub.Lodge
             KitsEmpty.Visibility = S.Kits.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             SearchBox.Visibility = S.Slots.Count > 6 || SearchBox.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             BuildChips();
+            LearnKinds();
             System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Refresh();
             int shown = S.Slots.Count(Matches);
             EmptyState.Visibility = shown == 0 && S.FilesLoaded ? Visibility.Visible : Visibility.Collapsed;
-            EmptyTitle.Text = S.Slots.Count == 0 ? "No files shared yet" : "Nothing matches \"" + SearchBox.Text.Trim() + "\"";
-            EmptyHint.Text = S.Slots.Count > 0 ? "Try another word, or clear the search." : S.CanManageFiles ? "Press Share a file to share an addon, a UI pack, a guide or a build with everyone." : "Officers and the Guild Master share files here; you can save and install them.";
+            EmptyTitle.Text = S.Slots.Count == 0 ? "The library is empty" : "Nothing matches \"" + SearchBox.Text.Trim() + "\"";
+            EmptyHint.Text = S.Slots.Count > 0 ? "Try another word, or clear the search." : S.CanManageFiles ? "Press Add to share an addon, a macro, a WeakAura, a guide or a map with everyone." : "Officers and the Guild Master add things here; you can copy, save and install them.";
             UsageText.Text = S.FilesLoaded && S.Slots.Count > 0
-                ? LodgeFiles.Size(S.FilesUsedBytes) + " of " + S.FilesTotalMb + " MB used - the newest " + LodgeFiles.KeptVersions + " versions of each file are kept"
+                ? LodgeFiles.Size(S.FilesUsedBytes) + " of " + S.FilesTotalMb + " MB used - the newest " + LodgeFiles.KeptVersions + " versions of each are kept"
                 : "";
             if (versionsSlot != null && VersionsOverlay.Visibility == Visibility.Visible)
             {
@@ -132,14 +135,54 @@ namespace ElansAddonHub.Lodge
         {
             sortDown = key == sortKey ? !sortDown : key == nameof(SlotVM.UpdatedAt) || key == nameof(SlotVM.SizeBytes);     // newest / biggest first
             sortKey = key;
+            ApplyView();
+            BuildHeads();
+        }
+
+        // 3.5.4: grouped by type (in SlotVM.GroupOrder), the column's sort inside each group; a chip shows one kind, so no groups then
+        bool Grouped => GroupBox.IsChecked == true && catFilter.Length == 0;
+        void ApplyView()
+        {
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots);
             using (view.DeferRefresh())
             {
+                view.GroupDescriptions.Clear();
                 view.SortDescriptions.Clear();
-                view.SortDescriptions.Add(new System.ComponentModel.SortDescription(key, sortDown ? System.ComponentModel.ListSortDirection.Descending : System.ComponentModel.ListSortDirection.Ascending));
-                if (key != nameof(SlotVM.Name)) view.SortDescriptions.Add(new System.ComponentModel.SortDescription(nameof(SlotVM.Name), System.ComponentModel.ListSortDirection.Ascending));
+                if (Grouped)
+                {
+                    view.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(SlotVM.GroupLabel)));
+                    view.SortDescriptions.Add(new System.ComponentModel.SortDescription(nameof(SlotVM.GroupIndex), System.ComponentModel.ListSortDirection.Ascending));
+                }
+                view.SortDescriptions.Add(new System.ComponentModel.SortDescription(sortKey, sortDown ? System.ComponentModel.ListSortDirection.Descending : System.ComponentModel.ListSortDirection.Ascending));
+                if (sortKey != nameof(SlotVM.Name)) view.SortDescriptions.Add(new System.ComponentModel.SortDescription(nameof(SlotVM.Name), System.ComponentModel.ListSortDirection.Ascending));
             }
-            BuildHeads();
+        }
+
+        // a narrow header keeps the page's title: the search gives up width first, then the switch its word (its tooltip still says it)
+        void Head_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            SearchBox.Width = Math.Max(110, Math.Min(180, e.NewSize.Width - 420));
+            GroupBox.Content = e.NewSize.Width < 500 ? null : "Group";
+        }
+
+        void Group_Click(object sender, RoutedEventArgs e)
+        {
+            if (S == null) return;
+            bool on = GroupBox.IsChecked == true;
+            if (S.Settings != null && S.Settings.FilesGroup != on) { S.Settings.FilesGroup = on; try { SettingsStore.Save(S.Settings); } catch { } }
+            ApplyView();
+        }
+
+        // 3.5.4: a text's kind comes from the text, so the page reads each new text version once (kept on disk, like Copy does) and sorts it in
+        readonly System.Collections.Generic.HashSet<string> kindAsked = new System.Collections.Generic.HashSet<string>();
+        void LearnKinds()
+        {
+            foreach (var s in S.Slots.Where(x => x.NeedsTextKind && kindAsked.Add(x.Id + "|" + x.Newest.Sha256)).ToList()) _ = LearnKindAsync(s);
+        }
+        async System.Threading.Tasks.Task LearnKindAsync(SlotVM s)
+        {
+            await S.FetchTextAsync(s);
+            if (!s.NeedsTextKind) Refresh();
         }
 
         // click selects a row, double-click opens its details (the buttons inside a row handle their own clicks)
@@ -155,7 +198,7 @@ namespace ElansAddonHub.Lodge
         string catFilter = "";
         void BuildChips()
         {
-            var cats = S.Slots.Select(s => s.Filter).Where(f => f.Length > 0).Distinct().OrderBy(f => Array.IndexOf(new[] { "addon", "text", "ui", "guide", "map", "build", "other" }, f)).ToList();
+            var cats = S.Slots.Select(s => s.Filter).Where(f => f.Length > 0).Distinct().OrderBy(f => Array.IndexOf(SlotVM.GroupOrder, f)).ToList();
             if (catFilter.Length > 0 && !cats.Contains(catFilter)) catFilter = "";
             bool show = S.Slots.Count > 6 && cats.Count > 1;
             CatChips.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
@@ -166,7 +209,7 @@ namespace ElansAddonHub.Lodge
             foreach (var c in new[] { "" }.Concat(cats))
             {
                 var rb = new RadioButton { Style = (Style)FindResource("Segment"), GroupName = "files-cat", Content = c.Length == 0 ? "All" : SlotVM.CatLabel(c), Tag = c, IsChecked = c == catFilter, Margin = new Thickness(0, 0, 6, 6) };
-                rb.Checked += (s, e) => { catFilter = (string)((RadioButton)s).Tag; CatChips.Tag = null; Refresh(); };
+                rb.Checked += (s, e) => { catFilter = (string)((RadioButton)s).Tag; CatChips.Tag = null; ApplyView(); Refresh(); };
                 CatChips.Children.Add(rb);
             }
         }
@@ -534,7 +577,7 @@ namespace ElansAddonHub.Lodge
         public void OpenForm(SlotVM slot)
         {
             formSlot = slot; formPath = null; uploading = false;
-            FormHeading.Text = slot == null ? "Upload a file" : "New version of " + slot.Name;
+            FormHeading.Text = slot == null ? "Add to the library" : "New version of " + slot.Name;
             FormSub.Text = slot == null ? (S.SupportsFiles2 ? "Everyone in the lodge can see it until you choose who under Edit. " : "Everyone in the lodge can see it and save it. ") + "Programs and scripts are not allowed; up to " + S.FilesMaxMb + " MB."
                                         : "Replaces what everyone gets; the older version stays available under Versions.";
             FName.Text = slot?.Name ?? ""; FName.IsEnabled = slot == null;
@@ -669,6 +712,10 @@ namespace ElansAddonHub.Lodge
         public void PickForTest(string path) => SetFormFile(path);
         public bool KitsShownForTest => KitsSection.Visibility == Visibility.Visible;
         public bool DetailsViewForTest { get => Details; set { (value ? ViewDetails : ViewTiles).IsChecked = true; } }
+        public bool GroupedForTest { get => GroupBox.IsChecked == true; set { GroupBox.IsChecked = value; Group_Click(null, null); } }
+        public System.Collections.Generic.List<string> GroupsForTest => System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Groups?.Cast<System.Windows.Data.CollectionViewGroup>().Select(g => g.Name as string).ToList()
+            ?? new System.Collections.Generic.List<string>();
+        public string KindOfForTest(string name) => S.Slots.FirstOrDefault(s => s.Name == name)?.KindText;
         public System.Collections.Generic.List<string> ShownColumnsForTest(double width) { Cols.Fit(width); return FileColumns.Order.Where(o => Cols.Shown(o.Key)).Select(o => o.Key).ToList(); }
         public System.Collections.Generic.List<string> RowOrderForTest => System.Windows.Data.CollectionViewSource.GetDefaultView(S.Slots).Cast<SlotVM>().Where(Matches).Select(s => s.Name).ToList();
         public System.Collections.Generic.List<string> ChipsForTest => CatChips.Visibility == Visibility.Visible ? CatChips.Children.OfType<RadioButton>().Select(r => (string)r.Content).ToList() : new System.Collections.Generic.List<string>();

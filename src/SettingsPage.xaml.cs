@@ -287,7 +287,7 @@ namespace ElansAddonHub
 
             FolderText.Text = settings.WowRoot ?? "Not found - press Change";
             UpdateItemDataLine();
-            UpdateWorldMapLine();
+            if (NavGeneral.IsChecked == true) UpdateWorldMapLine();     // its rows are on General only
             CheckText.Text = host.CheckStatus;
             LodgeAddress.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "Not connected to a lodge" : settings.LodgeUrl;
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
@@ -408,15 +408,33 @@ namespace ElansAddonHub
 
         // "Item data: read from your WoW installation (N items, M revealed)" under the Game data switch
         // "World map pictures: 2 continents, 212 MB." under the Game data switch, and the button that deletes them (they are made again on the next visit)
+        // 3.5.4: the sizes come from walking the map caches on disk (tens of thousands of files, about a second each walk), so they are measured
+        // off the UI thread and filled in when ready - a switch to any Settings section, or "See what's new", no longer waits for them
+        int mapLineGen;
+        public System.Threading.Tasks.Task MapLineTaskForTest { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
         void UpdateWorldMapLine()
         {
             var busy = false;
             try { busy = ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(0)?.Running == true || ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(1)?.Running == true; } catch (Exception) { }
-            WorldMapCacheRow.Tag = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine() + " Made from your game files, read-only; nothing is uploaded.";
-            ClearWorldMapButton.IsEnabled = !busy && ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
-            UpdateBuildingsLine();
-            UpdateObjectsLine();
             UpdateLearnedFlightsLine();
+            int gen = ++mapLineGen;
+            MapLineTaskForTest = System.Threading.Tasks.Task.Run(() =>
+            {
+                var line = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine();
+                var any = ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
+                var bRows = ElansAddonHub.Services.WorldMap.BuildingsService.Rows(); var bLine = ElansAddonHub.Services.WorldMap.BuildingsService.StatusLine();
+                var oRows = ElansAddonHub.Services.WorldMap.ObjectsService.Rows(); var oLine = ElansAddonHub.Services.WorldMap.ObjectsService.StatusLine();
+                return (line, any, bRows, bLine, oRows, oLine);
+            }).ContinueWith(t =>
+            {
+                if (t.IsFaulted) { Util.Log("settings: world map sizes " + t.Exception?.GetBaseException().Message); return; }
+                if (gen != mapLineGen) return;           // a newer measure is on its way
+                var r = t.Result;
+                WorldMapCacheRow.Tag = r.line + " Made from your game files, read-only; nothing is uploaded.";
+                ClearWorldMapButton.IsEnabled = !busy && r.any;
+                FillBuildingsLine(r.bRows, r.bLine);
+                FillObjectsLine(r.oRows, r.oLine);
+            }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         // "Learned flight routes" (2.88): what the flights taught the map, and a button that forgets it
@@ -442,10 +460,10 @@ namespace ElansAddonHub
 
         // "3D buildings": what is on disk per continent, and a Remove button for each (the shapes are read from the game files again the next time the Buildings switch asks)
         public void UpdateBuildingsLineForTest() => UpdateBuildingsLine();
-        void UpdateBuildingsLine()
+        void UpdateBuildingsLine() => FillBuildingsLine(ElansAddonHub.Services.WorldMap.BuildingsService.Rows(), ElansAddonHub.Services.WorldMap.BuildingsService.StatusLine());
+        void FillBuildingsLine(List<ElansAddonHub.Services.WorldMap.BuildingsService.Row> rows, string line)
         {
-            var rows = ElansAddonHub.Services.WorldMap.BuildingsService.Rows();
-            WorldMapBuildingsRow.Tag = ElansAddonHub.Services.WorldMap.BuildingsService.StatusLine();
+            WorldMapBuildingsRow.Tag = line;
             WorldMapBuildingsButtons.Children.Clear();
             foreach (var r in rows)
             {
@@ -460,10 +478,10 @@ namespace ElansAddonHub
 
         // 3.2 "trees & objects": the same per continent (read from the game files again the next time the switch asks)
         public void UpdateObjectsLineForTest() => UpdateObjectsLine();
-        void UpdateObjectsLine()
+        void UpdateObjectsLine() => FillObjectsLine(ElansAddonHub.Services.WorldMap.ObjectsService.Rows(), ElansAddonHub.Services.WorldMap.ObjectsService.StatusLine());
+        void FillObjectsLine(List<ElansAddonHub.Services.WorldMap.ObjectsService.Row> rows, string line)
         {
-            var rows = ElansAddonHub.Services.WorldMap.ObjectsService.Rows();
-            WorldMapObjectsRow.Tag = ElansAddonHub.Services.WorldMap.ObjectsService.StatusLine();
+            WorldMapObjectsRow.Tag = line;
             WorldMapObjectsButtons.Children.Clear();
             foreach (var r in rows)
             {

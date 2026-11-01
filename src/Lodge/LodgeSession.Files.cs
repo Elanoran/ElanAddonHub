@@ -421,6 +421,7 @@ namespace ElansAddonHub.Lodge
         }
 
         public static string TextDir => Path.Combine(Util.DataDir, "files-text");
+        readonly Dictionary<string, Task<string>> textLoads = new Dictionary<string, Task<string>>();   // 3.5.4: one download per text version, whoever asks
         public async Task<(string text, string error)> FetchTextAsync(SlotVM slot)
         {
             var ver = slot?.Newest;
@@ -428,15 +429,26 @@ namespace ElansAddonHub.Lodge
             var file = Path.Combine(TextDir, slot.Id + "-" + ver.V + ".txt");
             if (!File.Exists(file) || !string.Equals(LodgeFiles.Sha256(file), ver.Sha256, StringComparison.OrdinalIgnoreCase))
             {
-                Directory.CreateDirectory(TextDir);
-                var err = await SaveVersionAsync(slot, ver, file);
+                if (!textLoads.TryGetValue(file, out var load)) textLoads[file] = load = LoadTextFileAsync(slot, ver, file);
+                string err;
+                try { err = await load; } finally { if (load.IsCompleted) textLoads.Remove(file); }
                 if (err != null) return (null, err);
-                foreach (var old in Directory.GetFiles(TextDir, slot.Id + "-*.txt")) if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch { }
             }
             var data = File.ReadAllBytes(file);
             var why = FileSlot.TextProblem(data);
             if (why != null) return (null, why);
-            return (new System.Text.UTF8Encoding(false, true).GetString(data), null);
+            var text = new System.Text.UTF8Encoding(false, true).GetString(data);
+            slot.SetText(text);
+            return (text, null);
+        }
+
+        async Task<string> LoadTextFileAsync(SlotVM slot, SlotVersionInfo ver, string file)
+        {
+            Directory.CreateDirectory(TextDir);
+            var err = await SaveVersionAsync(slot, ver, file);
+            if (err != null) return err;
+            foreach (var old in Directory.GetFiles(TextDir, slot.Id + "-*.txt")) if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch { }
+            return null;
         }
 
         // ---- 2.33: change a slot without uploading (the answer comes as files.result: an error lands on the slot), its cover picture

@@ -199,7 +199,7 @@
               <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Card}" Opacity="0" IsHitTestVisible="False" />
               <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
               <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark.Soft}" CornerRadius="{StaticResource Radius.Card}" Opacity="0" IsHitTestVisible="False" />
-              <Border x:Name="ring" Margin="-3" CornerRadius="15" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+              <Border x:Name="ring" Margin="0" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
@@ -442,13 +442,13 @@
               </ContentControl>
               <!-- shared files (server 2.14): a quiet row under the calendar; the page takes the chat's place -->
               <ContentControl x:Name="FilesRow" Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,2,0,0" Visibility="Collapsed"
-                              MouseLeftButtonUp="FilesRow_Click" ToolTip="Files the lodge shares" AutomationProperties.Name="Files">
+                              MouseLeftButtonUp="FilesRow_Click" ToolTip="What the lodge shares: addons, macros, WeakAuras and profiles, guides, maps" AutomationProperties.Name="Library">
                 <DockPanel>
-                  <Border x:Name="FilesBadge" DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="Files that are new or updated">
+                  <Border x:Name="FilesBadge" DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="New or updated in the library">
                     <TextBlock x:Name="FilesBadgeText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
-                  <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Files}" Width="16" VerticalAlignment="Center" />
-                  <TextBlock x:Name="FilesRowText" Text="Files" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                  <TextBlock Text="&#xE8F1;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Files}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock x:Name="FilesRowText" Text="Library" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
               </ContentControl>
               <!-- the ladder (server feature "badges"): a quiet row under Files; the page takes the chat's place -->
@@ -609,7 +609,7 @@
               <DockPanel>
                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="FilesBarClose_Click"
                         ToolTip="Dismiss" AutomationProperties.Name="Dismiss file notice" />
-                <Button x:Name="FilesBarOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Open Files" Click="FilesBarOpen_Click" Margin="8,0,0,0" VerticalAlignment="Center" />
+                <Button x:Name="FilesBarOpen" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Open Library" Click="FilesBarOpen_Click" Margin="8,0,0,0" VerticalAlignment="Center" />
                 <Button x:Name="FilesBarAction" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Visibility="Collapsed" Click="FilesBarAction_Click" Margin="8,0,0,0" VerticalAlignment="Center"
                         AutomationProperties.Name="Install, copy or save the changed file" />
                 <Grid Width="36" Height="36" Margin="0,0,10,0" VerticalAlignment="Center">

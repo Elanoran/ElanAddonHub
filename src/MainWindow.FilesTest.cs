@@ -823,7 +823,7 @@ namespace ElansAddonHub
                         terr == null && fake.Slots.Count == 1 && fake.Slots[0].Kind == "text" && System.Text.Encoding.UTF8.GetString(fake.Slots[0].Versions[0].Bytes) == wa1);
                     Session.FeedForTest(fake.DataJson());
                     var ts = Session.Slots.First();
-                    check("text: the card says Import and offers Copy (no Save on the card)", ts.IsText && ts.KindChip == "Import" && ts.CopyVisibility == System.Windows.Visibility.Visible && ts.SaveCardVisibility == System.Windows.Visibility.Collapsed);
+                    check("text: the card names the kind (" + ts.KindChip + ") and offers Copy (no Save on the card)", ts.IsText && (ts.KindChip == "Import string" || ts.KindChip == "WeakAura" || ts.KindChip == "Macro") && ts.CopyVisibility == System.Windows.Visibility.Visible && ts.SaveCardVisibility == System.Windows.Visibility.Collapsed);
                     string clip = null;
                     var hadClip = FilesView.SetClipboard;
                     FilesView.SetClipboard = t => clip = t;
@@ -957,7 +957,8 @@ namespace ElansAddonHub
                     }
                     var az = File.ReadAllBytes(MakeZip(Path.Combine(work, "boss.zip"), ("BossMods/BossMods.toc", "## Version: 3\n"), ("BossMods/a.lua", "x")));
                     var boss = R(1.ToString("x32"), "Boss mods", "addon", null, az, "boss.zip");
-                    R(2.ToString("x32"), "Nameplates", "addon"); R(3.ToString("x32"), "Raid WA", "text");
+                    R(2.ToString("x32"), "Nameplates", "addon"); R(3.ToString("x32"), "Raid WA", "text", null, System.Text.Encoding.UTF8.GetBytes("!WA:2!S3xwZTnsr1"));
+                    R(20.ToString("x32"), "Heal macro", "text", null, System.Text.Encoding.UTF8.GetBytes("#showtooltip\n/cast [@mouseover,help,nodead][] Lesser Heal"));
                     R(4.ToString("x32"), "Leveling guide", null, "guide"); R(5.ToString("x32"), "Dungeon guide", null, "guide");
                     R(6.ToString("x32"), "Molten Core map", null, "map"); var plain = R(7.ToString("x32"), "Loot list");
                     Session.Disconnect(); sent.Clear();
@@ -966,8 +967,18 @@ namespace ElansAddonHub
                     Session.FeedForTest(fake.DataJson());
                     LodgePage.ShowFilesForTest();
                     var fc = LodgePage.FilesForTest;
+                    check("kinds: a text says what it is - a macro (#showtooltip or a /command, after blank lines too), a WeakAura, a Plater or ElvUI profile, a talent build, else an import string",
+                        ImportText.Kind("#showtooltip\n/cast Lesser Heal") == "macro" && ImportText.Kind("\n  /targetenemy [noharm]") == "macro" && ImportText.Kind("!WA:2!abc") == "weakaura"
+                        && ImportText.Kind("!PLATER:2!abc") == "plater" && ImportText.Kind("abc::profile::Elan") == "elvui" && ImportText.Kind("ETB1-AAAB") == "talents" && ImportText.Kind("hello") == "import" && ImportText.Kind("") == "import"
+                        && ImportText.Group("weakaura") == "profile" && ImportText.Group("macro") == "macro" && ImportText.Group("talents") == "build" && ImportText.Group("import") == "text");
+                    check("kinds: the page reads the texts by itself and names them (Raid WA " + fc.KindOfForTest("Raid WA") + ", Heal macro " + fc.KindOfForTest("Heal macro") + ")",
+                        await Until(() => fc.KindOfForTest("Raid WA") == "WeakAura" && fc.KindOfForTest("Heal macro") == "Macro", 5000));
                     var chips = fc.ChipsForTest;
-                    check("cats: over 6 files the chips show All and every kind the list has (" + string.Join(", ", chips) + ")", chips.SequenceEqual(new[] { "All", "Addons", "Import strings", "Guides", "Maps" }));
+                    check("cats: over 6 files the chips show All and every kind the list has (" + string.Join(", ", chips) + ")", chips.SequenceEqual(new[] { "All", "Addons", "WeakAuras & profiles", "Macros", "Guides", "Maps" }));
+                    check("groups: the library is grouped by type by default, in its order, the files without a kind under Other (" + string.Join(", ", fc.GroupsForTest) + ")",
+                        fc.GroupedForTest && fc.GroupsForTest.SequenceEqual(new[] { "Addons", "WeakAuras & profiles", "Macros", "Guides", "Maps", "Other" }));
+                    fc.GroupedForTest = false;
+                    check("groups: turned off it is one list, and the choice is kept", fc.GroupsForTest.Count == 0 && settings.FilesGroup == false);
                     fc.ChipForTest("Guides");
                     check("cats: Guides shows the two guides", fc.CardsShownForTest == 2);
                     fc.ChipForTest("All");
@@ -980,11 +991,15 @@ namespace ElansAddonHub
                     fc.SortBy(nameof(SlotVM.SizeBytes));
                     check("details view: Size sorts biggest first", fc.RowOrderForTest.First() == "Boss mods");
                     fc.SortBy(nameof(SlotVM.Name)); fc.SortBy(nameof(SlotVM.Name));
+                    fc.GroupedForTest = true; fc.SortBy(nameof(SlotVM.Name));
+                    check("groups: inside a group the column's order holds (the guides A to Z: " + string.Join(",", fc.RowOrderForTest.Where(n => n.EndsWith("guide"))) + ")",
+                        fc.RowOrderForTest.Where(n => n.EndsWith("guide")).SequenceEqual(new[] { "Dungeon guide", "Leveling guide" }) && fc.RowOrderForTest.First() == "Boss mods");
+                    fc.SortBy(nameof(SlotVM.Name));
                     ShowTab("lodge"); await Task.Delay(400); Snapshot(Path.Combine(dir, "files-chips.png"));
                     if (ReadmeOn)
                     {
                         // the README picture lists sizes like real files have (the test's files are a few bytes)
-                        var shown = new Dictionary<string, long> { ["Raid WA"] = 4900, ["Nameplates"] = 1260000, ["Molten Core map"] = 2450000, ["Loot list"] = 3100, ["Leveling guide"] = 184000, ["Dungeon guide"] = 96500, ["Boss mods"] = 3240000 };
+                        var shown = new Dictionary<string, long> { ["Raid WA"] = 4900, ["Heal macro"] = 160, ["Nameplates"] = 1260000, ["Molten Core map"] = 2450000, ["Loot list"] = 3100, ["Leveling guide"] = 184000, ["Dungeon guide"] = 96500, ["Boss mods"] = 3240000 };
                         void Sizes(bool on) { foreach (var sr in fake.Slots) foreach (var v in sr.Versions) v.ShownSize = on && shown.TryGetValue(sr.Name, out var n) ? n : 0; Session.FeedForTest(fake.DataJson()); }
                         Sizes(true); await Task.Delay(300);
                         await ReadmeShot("files");

@@ -4,6 +4,12 @@
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              xmlns:app="clr-namespace:ElansAddonHub">
   <UserControl.Resources>
+    <DataTemplate x:Key="GroupHead">
+      <StackPanel Orientation="Horizontal" Margin="4,12,0,6">
+        <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" />
+        <TextBlock Text="{Binding ItemCount}" Style="{StaticResource Text.Caption}" Margin="8,0,0,0" VerticalAlignment="Center" />
+      </StackPanel>
+    </DataTemplate>
     <local:FileColumns x:Key="Cols" />
     <!-- one slot as a card in the grid (3.5): the cover picture (or the kind's icon), the badges over it, name, version, the first line of the
          description, what is installed in WoW, progress and errors, the main button and Details -->
@@ -171,11 +177,11 @@
       <Grid x:Name="Main">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
-        <!-- header: title, search, Share a file (officers and the owner) -->
+        <!-- header: title, search, Add (officers and the owner) -->
         <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
-          <DockPanel MinHeight="32">
-            <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Share a file" Click="New_Click" Margin="8,0,0,0"
-                    ToolTip="Share a file or an addon with the lodge" Visibility="Collapsed" />
+          <DockPanel MinHeight="32" SizeChanged="Head_SizeChanged">
+            <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Add" Click="New_Click" Margin="8,0,0,0"
+                    ToolTip="Add an addon, a file, or text to copy (a macro, a WeakAura, a profile) to the lodge's library" AutomationProperties.Name="Add to the library" Visibility="Collapsed" />
             <!-- the view switch, like Explorer's: Details (the list) and Tiles (the cards) -->
             <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}" Margin="8,0,0,0" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal">
@@ -187,10 +193,13 @@
                 </RadioButton>
               </StackPanel>
             </Border>
-            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="200" Tag="Search files" TextChanged="Search_Changed"
-                     AutomationProperties.Name="Search files" Visibility="Collapsed" />
-            <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <TextBlock Text="Files" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+            <!-- 3.5.4: grouped by type (Addons, WeakAuras & profiles, Macros, ...) like Explorer's Group by; remembered -->
+            <CheckBox x:Name="GroupBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" Content="Group" Margin="12,0,4,0" Click="Group_Click"
+                      ToolTip="Show the library in groups: addons, WeakAuras and profiles, macros, talent builds, guides, maps" AutomationProperties.Name="Group by type" />
+            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="180" Tag="Search the library" TextChanged="Search_Changed"
+                     AutomationProperties.Name="Search the library" Visibility="Collapsed" />
+            <TextBlock Text="&#xE8F1;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="Library" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
           </DockPanel>
         </Border>
 
@@ -205,8 +214,8 @@
               <ItemsControl x:Name="KitList" ItemTemplate="{StaticResource KitCard}">
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               </ItemsControl>
-              <TextBlock x:Name="KitsEmpty" Text="No kits yet. A kit puts several files together, so members install them with one click." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,12" />
-              <TextBlock Text="Files" Style="{StaticResource Text.RowTitle}" Margin="0,4,0,8" />
+              <TextBlock x:Name="KitsEmpty" Text="No kits yet. A kit puts several addons and files together, so members install them with one click." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,12" />
+              <TextBlock Text="Everything shared" Style="{StaticResource Text.RowTitle}" Margin="0,4,0,8" />
             </StackPanel>
             <WrapPanel x:Name="CatChips" Visibility="Collapsed" Margin="0,0,0,12" />
             <!-- Details: the header (click a column to sort) and the rows -->
@@ -219,10 +228,13 @@
                   <ColumnDefinition Width="{Binding By, Source={StaticResource Cols}}" /><ColumnDefinition Width="{Binding InWow, Source={StaticResource Cols}}" /><ColumnDefinition x:Name="ActionsCol" Width="210" />
                 </Grid.ColumnDefinitions>
               </Grid>
-              <ItemsControl x:Name="SlotRows" ItemTemplate="{StaticResource SlotRow}" />
+              <ItemsControl x:Name="SlotRows" ItemTemplate="{StaticResource SlotRow}">
+                <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
+              </ItemsControl>
             </StackPanel>
             <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}">
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.GroupStyle><GroupStyle HeaderTemplate="{StaticResource GroupHead}" /></ItemsControl.GroupStyle>
             </ItemsControl>
             <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
               <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
@@ -353,7 +365,7 @@
                   <TextBlock Text="What it is" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                   <ComboBox x:Name="ECat" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="What it is" />
                 </StackPanel>
-                <CheckBox x:Name="EAddon" Style="{StaticResource Switch}" HorizontalAlignment="Left" Content="This is a WoW addon" Margin="0,12,0,0" ToolTip="Members can install it in WoW Forever from the Files page (the newest version must be a zip of addon folders)" />
+                <CheckBox x:Name="EAddon" Style="{StaticResource Switch}" HorizontalAlignment="Left" Content="This is a WoW addon" Margin="0,12,0,0" ToolTip="Members can install it in WoW Forever from the Library (the newest version must be a zip of addon folders)" />
                 <TextBlock x:Name="EAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="48,2,0,0" Visibility="Collapsed" />
                 <TextBlock Text="Note on the newest version" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="ENote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed" AutomationProperties.Name="Note on the newest version" />
@@ -391,7 +403,7 @@
                 <TextBox x:Name="KDesc" Style="{StaticResource Input}" MaxLength="300" Margin="0,4,0,0" Tag="What it's for (optional)" AutomationProperties.Name="Kit description" />
                 <TextBlock Text="Who can see it" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <ComboBox x:Name="KSee" Style="{StaticResource Dropdown}" Margin="0,4,0,0" AutomationProperties.Name="Who can see the kit" />
-                <TextBlock Text="Files in the kit" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBlock Text="In the kit" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <StackPanel x:Name="KSlots" Margin="0,4,0,0" />
                 <TextBlock Text="Members only see the files of a kit that they may see themselves." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,4,0,0" />
                 <TextBlock x:Name="KError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />
@@ -413,14 +425,14 @@
             <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
               <StackPanel>
-                <TextBlock x:Name="FormHeading" Text="Upload a file" Style="{StaticResource Text.Section}" />
+                <TextBlock x:Name="FormHeading" Text="Add to the library" Style="{StaticResource Text.Section}" />
                 <TextBlock x:Name="FormSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
                 <TextBlock Text="Name" Style="{StaticResource Text.Caption}" />
                 <TextBox x:Name="FName" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" Tag="What people see in the list" KeyDown="Form_KeyDown" AutomationProperties.Name="Name" />
                 <Border x:Name="FModePanel" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,12,0,0" Visibility="Collapsed">
                   <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="FModeFile" Style="{StaticResource Segment}" Content="A file" GroupName="files-mode" IsChecked="True" Click="FMode_Click" AutomationProperties.Name="Share a file" />
-                    <RadioButton x:Name="FModeText" Style="{StaticResource Segment}" Content="Text to copy (WeakAura, Plater, macro...)" GroupName="files-mode" Click="FMode_Click" AutomationProperties.Name="Share text" />
+                    <RadioButton x:Name="FModeFile" Style="{StaticResource Segment}" Content="File" GroupName="files-mode" IsChecked="True" Click="FMode_Click" AutomationProperties.Name="Add a file" />
+                    <RadioButton x:Name="FModeText" Style="{StaticResource Segment}" Content="Text (macro, WeakAura, profile...)" GroupName="files-mode" Click="FMode_Click" AutomationProperties.Name="Add text to copy" />
                   </StackPanel>
                 </Border>
                 <StackPanel x:Name="FFilePanel">
@@ -436,7 +448,7 @@
                            FontFamily="Consolas" FontSize="12" Margin="0,4,0,0" Tag="Paste the import string here" AutomationProperties.Name="Text to share" />
                 </StackPanel>
                 <CheckBox x:Name="FAddon" Style="{StaticResource Switch}" HorizontalAlignment="Left" Content="This is a WoW addon" Margin="0,12,0,0" Visibility="Collapsed" Click="FAddon_Click" AutomationProperties.Name="This is a WoW addon"
-                          ToolTip="Members can install it in WoW Forever from the Files page, and keep it updated" />
+                          ToolTip="Members can install it in WoW Forever from the Library, and keep it updated" />
                 <TextBlock x:Name="FAddonWhy" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="48,2,0,0" />
                 <TextBlock Text="Note" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="FNote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed (optional)" KeyDown="Form_KeyDown" AutomationProperties.Name="Note" />

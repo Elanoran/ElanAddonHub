@@ -74,9 +74,27 @@ namespace ElansAddonHub.Lodge
         public string See { get; private set; }
         public string EditRank { get; private set; }
         public string Cat { get; private set; }
-        // the filter a card belongs to: addons and import strings by their kind, the rest by the category the Lodge says ("" = none)
-        public string Filter => IsAddon ? "addon" : IsText ? "text" : Cat ?? "";
-        public static string CatLabel(string c) => c == "addon" ? "Addons" : c == "text" ? "Import strings" : c == "ui" ? "UI packs" : c == "guide" ? "Guides" : c == "map" ? "Maps" : c == "build" ? "Talent builds" : c == "other" ? "Other" : "Files";
+        // the filter a card belongs to: addons by their kind, texts by what they are (3.5.4: a macro, a WeakAura or profile, a talent build, other
+        // import strings), the rest by the category the Lodge says ("" = none)
+        public string Filter => IsAddon ? "addon" : IsText ? ImportText.Group(TextKind) : Cat ?? "";
+        public static string CatLabel(string c) => c == "addon" ? "Addons" : c == "profile" ? "WeakAuras & profiles" : c == "macro" ? "Macros" : c == "text" ? "Import strings" : c == "ui" ? "UI packs"
+            : c == "guide" ? "Guides" : c == "map" ? "Maps" : c == "build" ? "Talent builds" : "Other";
+        // 3.5.4: the Library's groups, in this order (a slot without a category is Other)
+        public static readonly string[] GroupOrder = { "addon", "profile", "macro", "build", "text", "ui", "guide", "map", "other" };
+        public string GroupKey => Filter.Length == 0 ? "other" : Filter;
+        public int GroupIndex => Math.Max(0, Array.IndexOf(GroupOrder, GroupKey));
+        public string GroupLabel => CatLabel(GroupKey);
+
+        // 3.5.4: what the text is, once its newest version has been read (Copy, the preview, or the page's look-ahead); null until then
+        string kindOf, kindSha;
+        public string TextKind => IsText && Newest != null && kindSha == Newest.Sha256 ? kindOf : null;
+        public bool NeedsTextKind => IsText && Newest != null && TextKind == null;
+        public void SetText(string text)
+        {
+            if (Newest == null) return;
+            kindOf = ImportText.Kind(text); kindSha = Newest.Sha256;
+            RaiseAll();
+        }
         public int CoverV { get; private set; }
         System.Windows.Media.ImageSource cover;
         public System.Windows.Media.ImageSource CoverImage { get => cover; set { cover = value; Raise(nameof(CoverImage)); Raise(nameof(CoverVisibility)); Raise(nameof(PlaceholderVisibility)); Raise(nameof(CoverHeight)); } }
@@ -86,7 +104,7 @@ namespace ElansAddonHub.Lodge
         public bool IsText { get; private set; }
 
         // ---- the Details view's columns (3.5.2)
-        public string KindText => IsAddon ? "Addon" : IsText ? "Import string" : Cat != null ? CatLabel(Cat).TrimEnd('s') : Newest == null ? "" : (Elans.Shared.DangerousFiles.Extension(Newest.FileName).ToUpperInvariant() + " file").Trim();
+        public string KindText => IsAddon ? "Addon" : IsText ? ImportText.Label(TextKind) : Cat != null ? CatLabel(Cat).TrimEnd('s') : Newest == null ? "" : (Elans.Shared.DangerousFiles.Extension(Newest.FileName).ToUpperInvariant() + " file").Trim();
         public string VersionText => Newest == null ? "" : "v" + Newest.V;
         public string SizeText => Newest == null ? "" : LodgeFiles.Size(Newest.Size);
         public long SizeBytes => Newest?.Size ?? 0;
@@ -129,8 +147,8 @@ namespace ElansAddonHub.Lodge
             foreach (var n in new[] { nameof(AddonInfo), nameof(AddonWarn), nameof(AddonInfoVisibility), nameof(AddonWarnVisibility), nameof(HaveLine), nameof(HaveVisibility) }) Raise(n);
         }
         public string KindGlyph => IsAddon ? "\uE74C" : IsText ? "\uE8C8" : "\uE8A5";        // a puzzle piece for addons, copy for import text, a page for files
-        public string KindChip => IsAddon ? "Addon" : IsText ? "Import" : "";
-        public string KindChipTip => IsAddon ? "A WoW addon: it can be installed in WoW Forever from here" : "An import string (a WeakAura, a profile, a macro): Copy puts it on the clipboard";
+        public string KindChip => IsAddon ? "Addon" : IsText ? ImportText.Label(TextKind) : "";
+        public string KindChipTip => IsAddon ? "A WoW addon: it can be installed in WoW Forever from here" : "Text to copy: Copy puts it on the clipboard, then " + ImportText.PasteHint(TextKind);
         public Visibility KindChipVisibility => KindChip.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility CopyVisibility => IsText ? Visibility.Visible : Visibility.Collapsed;
         string preview = "";

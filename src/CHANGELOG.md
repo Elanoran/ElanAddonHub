@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.4
+- **Files is now the Library.** It holds more than files - addons, macros, WeakAuras and profiles, talent builds, guides and maps - so the Lodge's page is called Library, and Share a file is Add (a File or Text to copy).
+- **A text knows what it is.** The Library reads a shared text and names it: Macro, WeakAura, Plater profile, ElvUI profile, Talent build, or Import string - in the list, on the card and in the filter chips, and Copy says where to paste it.
+- **Grouped by type.** The Library shows Addons, WeakAuras & profiles, Macros, Talent builds, Guides, Maps and Other under their own headings, like Explorer's Group by; click a column to sort inside the groups. The Group switch turns it off; the Outpost remembers.
+- **Faster Settings.** Opening Settings or switching sections - and "See what's new" - no longer waits while the world map caches on disk are measured; the sizes are worked out in the background and only for General, where they show.
+- **Fixed: the keyboard focus outline** was cut off in scrolling lists and could cover the button next to it; it is now drawn just inside each control.
+
 ## 3.5.3
 - **Characters looks like the other pages.** The character list runs the full height on the left, like the Atlas and the Lodge menus, with My characters / Lodge on top of it; the character's name, summary and the search sit beside it.
 - **Fixed: dark, hard to read text in Files.** "This is a WoW addon", "Keep it updated" and "Keep all updated" are switches like everywhere else in the Outpost, and "A file / Text to copy" is a two-way button.
