@@ -1010,6 +1010,11 @@ namespace ElansAddonHub
                     await Task.Delay(200);
                     fc.DetailsViewForTest = false; await Task.Delay(300); Snapshot(Path.Combine(dir, "files-content.png"));
                     check("content view: the second view is Content and the choice is kept", !fc.DetailsViewForTest && settings.FilesView == "tiles");
+                    var wasW = Width; Width = 1400; await Task.Delay(300); UpdateLayout();
+                    bool wide = fc.ContentWideForTest; Snapshot(Path.Combine(dir, "files-content-wide.png"));
+                    Width = 900; await Task.Delay(300); UpdateLayout();
+                    check("content view: a wide list puts the buttons at the top right, a narrow one under the text", wide && !fc.ContentWideForTest);
+                    Width = wasW; await Task.Delay(200);
                     var raid = Session.Slots.First(x => x.Name == "Raid WA"); var heal = Session.Slots.First(x => x.Name == "Heal macro");
                     check("content view: a row says more than Details - kind, version, size, date and who in one line, a text's first line (" + raid.ContentMeta + " | " + heal.TextFirstLine + ")",
                         raid.ContentMeta.StartsWith("WeakAura · v1 · ") && raid.ContentMeta.EndsWith("by Wing") && heal.TextFirstLine == "#showtooltip" && raid.TextFirstLine == "!WA:2!S3xwZTnsr1");

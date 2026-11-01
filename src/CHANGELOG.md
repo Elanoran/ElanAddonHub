@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.7
+- **Library Content view:** in a wide window the buttons sit at the top right, beside the name, so each item takes less room; a narrow window keeps them under the text.
+
 ## 3.5.6
 - **Content view in the Library** instead of Tiles: a list with taller rows that tell more - the picture, kind, version, size, date and who shared it, the description or the first line of a macro or WeakAura, an addon's folders and game version, what you have in WoW, how many members have it, warnings and the newest version's note - with the buttons under each item. It stays quick with a big Library too.
 

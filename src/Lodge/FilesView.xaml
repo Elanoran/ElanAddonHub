@@ -18,8 +18,9 @@
       <Border Background="{Binding RowBackground}" CornerRadius="{StaticResource Radius.Card}" Padding="12" Margin="0,0,0,8"
               Tag="{Binding}" MouseLeftButtonDown="Row_Down" AutomationProperties.Name="{Binding Name}">
         <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-          <Grid Width="96" Height="64" VerticalAlignment="Top" Margin="0,0,14,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+          <Grid Grid.RowSpan="2" Width="96" Height="64" VerticalAlignment="Top" Margin="0,0,14,0">
             <Border Background="{StaticResource Brush.Surface3}" CornerRadius="{StaticResource Radius.Control}" />
             <TextBlock Text="{Binding KindGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="22" Foreground="{StaticResource Brush.Text.Tertiary}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PlaceholderVisibility}" />
@@ -52,7 +53,9 @@
               <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
             </StackPanel>
             <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,6,0,0" />
-          <WrapPanel Margin="0,10,0,0" IsEnabled="{Binding IdleEnabled}">
+          </StackPanel>
+          <!-- the buttons: under the text, or (a wide list) at the top right, beside the name -->
+          <WrapPanel x:Name="buttons" Grid.Column="1" Grid.Row="1" Margin="0,10,0,0" IsEnabled="{Binding IdleEnabled}">
             <Button Content="{Binding InstallLabel}" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Install_Click" Visibility="{Binding InstallVisibility}" Margin="0,0,6,0"
                     ToolTip="{Binding InstallTip}" AutomationProperties.Name="Install in WoW" />
             <Button Content="Copy" Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Copy_Click" Visibility="{Binding CopyVisibility}" Margin="0,0,6,0"
@@ -61,9 +64,16 @@
                     ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
             <Button Content="Details" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" ToolTip="Description, versions and settings" AutomationProperties.Name="Details" />
           </WrapPanel>
-          </StackPanel>
         </Grid>
       </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding ContentWide, Source={StaticResource Cols}}" Value="True">
+          <Setter TargetName="buttons" Property="Grid.Column" Value="2" />
+          <Setter TargetName="buttons" Property="Grid.Row" Value="0" />
+          <Setter TargetName="buttons" Property="Margin" Value="16,0,0,0" />
+          <Setter TargetName="buttons" Property="VerticalAlignment" Value="Top" />
+        </DataTrigger>
+      </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- one kit (2.36): a named set of files - its addons install and stay updated together -->
@@ -244,7 +254,7 @@
             </ItemsControl>
           </Grid>
           <!-- Content (3.5.6): taller rows with more to read; a list too, so only the rows on screen are built -->
-          <ItemsControl x:Name="SlotList" Grid.Row="1" Visibility="Collapsed" ItemTemplate="{StaticResource SlotContent}" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+          <ItemsControl x:Name="SlotList" Grid.Row="1" Visibility="Collapsed" SizeChanged="SlotList_SizeChanged" ItemTemplate="{StaticResource SlotContent}" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                         VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
             <ItemsControl.Template>
               <ControlTemplate TargetType="ItemsControl">

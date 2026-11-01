@@ -131,6 +131,8 @@ namespace ElansAddonHub.Lodge
 
         FileColumns Cols => (FileColumns)Resources["Cols"];
         void DetailsList_SizeChanged(object sender, SizeChangedEventArgs e) { Cols.Fit(e.NewSize.Width); BuildHeads(); }
+        void SlotList_SizeChanged(object sender, SizeChangedEventArgs e) => Cols.ContentWide = e.NewSize.Width >= FileColumns.ContentWideFrom;
+        public bool ContentWideForTest => Cols.ContentWide;
 
         public void SortBy(string key)
         {

@@ -297,6 +297,11 @@ namespace ElansAddonHub.Lodge
         public GridLength InWow => w["InWow"];
         public bool Shown(string key) => w[key].Value > 0;
 
+        // 3.5.6: the Content view's rows are wide enough to put the buttons at the top right, beside the name
+        public const double ContentWideFrom = 760;
+        bool contentWide;
+        public bool ContentWide { get => contentWide; set { if (contentWide != value) { contentWide = value; Raise(nameof(ContentWide)); } } }
+
         // the room the list has: keep columns in Order while the name keeps at least NameMin
         public const double NameMin = 200, Actions = 210;
         public void Fit(double width)
