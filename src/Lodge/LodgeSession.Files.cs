@@ -358,7 +358,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFilesKits || kit == null) return "That kit isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(new JsonObject { ["t"] = FilesKitMsg.DeleteType, ["id"] = kit.Id });
+            _ = Send(LodgeJson.Build(new FilesKitDeleteMsg { Id = kit.Id }.Write));
             return null;
         }
 

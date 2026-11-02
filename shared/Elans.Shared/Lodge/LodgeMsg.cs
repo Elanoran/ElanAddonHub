@@ -138,6 +138,10 @@ namespace Elans.Shared
         public const string FilesDelete = "files.delete";           // client -> server: delete a slot
         public const string FilesRollback = "files.rollback";       // client -> server: make an older version current
         public const string FilesResult = "files.result";           // server -> client: the answer to files.list/delete/rollback
+        public const string FilesEdit = "files.edit";               // client -> server: change a slot without uploading (2.33)
+        public const string FilesInstalled = "files.installed";     // client -> server: the addon version installed in WoW (2.35)
+        public const string FilesKit = "files.kit";                 // client -> server: create or change a kit (2.36)
+        public const string FilesKitDelete = "files.kit.delete";    // client -> server: remove a kit (2.36)
 
         // ---- hosted datasets (DatasetsModule.cs) ----
         public const string DatasetInfo = "dataset.info";           // client -> server: what the Lodge hosts (2.17)

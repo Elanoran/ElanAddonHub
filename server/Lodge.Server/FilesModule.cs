@@ -858,9 +858,9 @@ public sealed class FilesModule : IModule
                 if (ok) { hub.Log.LogInformation("{Name} saved a file kit", me.Name); await AnnounceKit(id, name, me.Name, req.See); }
                 return true;
             }
-            case FilesKitMsg.DeleteType:
+            case FilesKitDeleteMsg.Type:
             {
-                var id = new LodgeJsonFields(m).Str("id") ?? "";
+                var id = FilesKitDeleteMsg.Read(new LodgeJsonFields(m)).Id ?? "";
                 string see; lock (gate) see = kits.FirstOrDefault(x => x.Id == id)?.See;
                 var (ok, why, name) = DeleteKit(me, id);
                 await Result(me, "kit", ok, why, id);

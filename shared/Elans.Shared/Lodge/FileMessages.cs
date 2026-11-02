@@ -68,7 +68,7 @@ namespace Elans.Shared
     // The answer is files.result {op "edit"}; everybody who sees the slot gets files.changed {action "edit"}.
     public sealed class FilesEditMsg
     {
-        public const string Type = "files.edit";
+        public const string Type = LodgeMsg.FilesEdit;
         public string Slot, Name, Desc, See, Edit, Kind, Note, Cat;      // cat (2.37): one of FileSlot.Cats, "" = none
         public int NoteV;
         public bool? Cover;
@@ -235,7 +235,7 @@ namespace Elans.Shared
     // 2.36: create (id absent) or change a kit { t, id?, name, desc, see, slots ("id,id,...") } / remove one { t, id } - officers and the owner
     public sealed class FilesKitMsg
     {
-        public const string Type = "files.kit", DeleteType = "files.kit.delete";
+        public const string Type = LodgeMsg.FilesKit;
         public string Id, Name, Desc, See, Slots;
         public void Write(ILodgeWriter w)
         {
@@ -246,10 +246,19 @@ namespace Elans.Shared
         public static FilesKitMsg Read(ILodgeFields f) => new FilesKitMsg { Id = f.Str("id"), Name = f.Str("name"), Desc = f.Str("desc"), See = f.Str("see"), Slots = f.Str("slots") };
     }
 
+    // 2.36: remove a kit { t, id } - officers and the owner
+    public sealed class FilesKitDeleteMsg
+    {
+        public const string Type = LodgeMsg.FilesKitDelete;
+        public string Id;
+        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("id", Id ?? ""); }
+        public static FilesKitDeleteMsg Read(ILodgeFields f) => new FilesKitDeleteMsg { Id = f.Str("id") };
+    }
+
     // 2.35: this Outpost has version v of an addon slot installed in WoW (0 = not any more) - only counts go back out (FileSlot.HaveNewest / HaveOlder)
     public sealed class FilesInstalledMsg
     {
-        public const string Type = "files.installed";
+        public const string Type = LodgeMsg.FilesInstalled;
         public string Slot;
         public int V;
         public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("slot", Slot); w.Set("v", V); }

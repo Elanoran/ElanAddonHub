@@ -432,6 +432,9 @@ A slot is `{id, name (1-60), createdBy, versions: [{v, fileName, size, sha256, u
 
 - `files.list` `{}` -> `files.data` `{maxMb, totalMb, usedBytes, keep, canManage, slots: [...]}` (everybody; Page budget).
 - `files.delete` `{slot}` and `files.rollback` `{slot, v}` (officer and up; rolling back removes the versions newer than `v`) -> `files.result` `{op, ok, slot, why?}`, `why`: `forbidden`, `missing`, `disabled`, `already-newest`, `save`.
+- `files.edit` `{slot, name?, desc?, see?, edit?, cat?, addon?, note?}` (2.33, `files2`; who may update the slot - name and ranks need officer and up) changes a slot without uploading -> `files.result` `{op: "edit", ...}`.
+- `files.installed` `{slot, v}` (2.35, `filesinfo`; `v` 0 = not any more): this Outpost has version `v` of an addon slot in WoW; only the counts go back out (`haveNewest`, `haveOlder` on the slot).
+- `files.kit` `{id?, name, desc, see, slots: "id,id,..."}` creates (no `id`) or changes a kit, `files.kit.delete` `{id}` removes one (2.36, `fileskits`; officer and up) -> `files.result` `{op: "kit", ...}`; kits arrive with `files.data`.
 - Every change is announced to everyone: `files.changed` `{action: new|version|rollback|delete, slot, name, by, at, v?}`; clients refresh with `files.list`.
 - Upload (HTTP, same credential headers as `/files`, officer and up): `PUT /slots/new` (header `X-Slot-Name`) or `PUT /slots/{id}` (a new version) with headers `X-File-Name`, `X-Note` (URL-encoded), `X-Sha256` (hex of the whole body), a `Content-Length`, the raw body. Answer 200 with the slot JSON, or `{error, reason}` with 400 (`sha-mismatch`, `length`, `bad-sha`, `bad-name`, `empty`), 403 (`forbidden`, `disabled`), 404 (`missing`), 409 (`name-taken`), 411, 413 (`too-big`), 415 (`blocked-type`, `blocked-zip`), 429 (`rate`, `busy`), 507 (`full`, `too-many`).
 - Download: `GET /slots/{id}/{v}` (everybody, guests included) - the raw bytes as an attachment; the client checks size and SHA-256 against the list. 429 `rate` over the download budget (the same one as `GET /files/{id}`).
@@ -897,7 +900,7 @@ Not Lodge messages (never on this socket): the Atlas world-map page's own messag
 | The Atlas pool | `atlas.share` · `atlas.get` | `atlas.shared` · `atlas.data` | - |
 | The Cairn | `atlas.sharing` · `cairn.join.get` · `admin.cairn` · `cairn.notices.get` · `cairn.notice.seen` | `cairn.join` · `cairn.notices` | `cairn.status` |
 | The Armory | `armory.put` · `armory.delete` · `armory.list` · `armory.get` | `armory.saved` · `armory.deleted` · `armory.chars` · `armory.char` | `armory.crafters` · `armory.standing` |
-| Shared files | `files.list` · `files.delete` · `files.rollback` | `files.data` · `files.changed` · `files.result` | - |
+| Shared files | `files.list` · `files.delete` · `files.rollback` · `files.edit` · `files.installed` · `files.kit` · `files.kit.delete` | `files.data` · `files.changed` · `files.result` | - |
 | Hosted datasets | `dataset.info` · `dataset.delete` | `dataset.data` · `dataset.changed` · `dataset.result` | - |
 | Badges and the ladder | `badges.seen` · `badges.hide` · `ladder.get` · `admin.badges` | `badges.state` · `ladder.data` | `badges.mine` · `badges.member` |
 | Realm status | - | `realms.status` · `realms.back` | - |
