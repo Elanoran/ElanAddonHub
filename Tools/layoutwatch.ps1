@@ -13,10 +13,11 @@
   Exit code 1 when a table has a new layout, 2 when the definitions could not be read; 0 otherwise.
   The definitions are cached in %TEMP%\elans-wowdbdefs (CC BY-SA 4.0, wowdev/WoWDBDefs; read here, never shipped).
 #>
-param([string]$Build, [switch]$Offline, [string]$Wow = $env:ELANSHUB_WOW)
+param([string]$Build, [switch]$Offline, [string]$Wow = $env:ELANSHUB_WOW, [string]$Json)
+# -Json <file>: also write the result as JSON (for the scheduled check in the private ops repo): builds checked, new layouts with their fields
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$cache = Join-Path $env:TEMP 'elans-wowdbdefs'
+$cache = Join-Path ([IO.Path]::GetTempPath()) 'elans-wowdbdefs'   # %TEMP% on Windows, /tmp on a Linux runner
 $raw = 'https://raw.githubusercontent.com/wowdev/WoWDBDefs/master'
 New-Item -ItemType Directory -Force (Join-Path $cache 'definitions') | Out-Null
 
@@ -103,7 +104,9 @@ if ($installed -and $targets -notcontains $installed) { $targets += $installed }
 Write-Host ("layoutwatch: {0} tables of ours; WoWDBDefs' newest Forever build: {1}; installed here: {2}" -f $tables.Count, ($(if ($known.Count) { $known[-1] } else { 'none' })), ($(if ($installed) { $installed } else { 'not found' })))
 
 $new = 0
+$report = [ordered]@{ newest = $(if ($known.Count) { $known[-1] } else { $null }); installed = $installed; tables = $tables.Count; builds = @() }
 foreach ($b in $targets) {
+    $entry = [ordered]@{ build = $b; known = 0; newLayouts = @(); unlisted = @() }
     $ok = 0; $unlisted = @(); $hashOnly = @()
     Write-Host ""
     Write-Host "== $b"
@@ -119,11 +122,15 @@ foreach ($b in $targets) {
         Write-Host ("NEW LAYOUT  {0} ({1})  {2} -> {3}" -f $t.tableName, $t.db2FileDataID, ($(if ($mine) { $mine.Hashes -join ',' } else { '?' })), ($fresh[0].Hashes -join ','))
         if ($mine) { Write-Host '    the layout we know:'; FieldList $mine | Write-Host }
         Write-Host "    the layout of ${b}:"; FieldList $fresh[0] | Write-Host
+        $entry.newLayouts += [ordered]@{ table = $t.tableName; fileId = $t.db2FileDataID; from = ($mine.Hashes -join ','); to = ($fresh[0].Hashes -join ',');
+            known = @(FieldList $mine | ForEach-Object { $_.Trim() }); now = @(FieldList $fresh[0] | ForEach-Object { $_.Trim() }) }
     }
     Write-Host ("{0} tables in a layout we know" -f $ok)
     if ($hashOnly.Count) { Write-Host ("known by table hash only, no layout read ({0}): {1}" -f $hashOnly.Count, ($hashOnly -join ', ')) }
     if ($unlisted.Count) { Write-Host ("not listed for {0} yet ({1}): {2}" -f $b, $unlisted.Count, ($unlisted -join ', ')) }
+    $entry.known = $ok; $entry.unlisted = $unlisted; $report.builds += $entry
 }
+if ($Json) { $report | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $Json }
 Write-Host ""
 if ($new) { Write-Host "layoutwatch: $new table(s) with a new layout - add the layout (and check the field numbers) in src\Services\..."; exit 1 }
 Write-Host 'layoutwatch: OK'
