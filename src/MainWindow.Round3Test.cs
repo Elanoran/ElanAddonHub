@@ -46,6 +46,14 @@ namespace ElansAddonHub
                 string copied = null;
                 try { LodgePage.ServerNoticeCopyForTest(); copied = Clipboard.GetText(); } catch (Exception e) { copied = "clipboard: " + e.Message; }
                 Check("notice: Copy puts the command on the clipboard", copied == "sudo lodge-update", copied);
+                // 3.5.10: a Lodge in its Docker image says so in the welcome; the notice and Copy give the Docker command instead
+                Session.Disconnect();
+                Session.FeedForTest(Welcome("owner", "2.5.0", true).Replace("\"server\":\"2.5.0\",", "\"server\":\"2.5.0\",\"install\":\"docker\","));
+                await Task.Delay(300);
+                Check("notice (Docker Lodge): names the Docker update command", LodgePage.ServerNoticeVisibleForTest && LodgePage.ServerNoticeTextForTest.EndsWith("On the server run: docker compose pull && docker compose up -d"), LodgePage.ServerNoticeTextForTest);
+                try { LodgePage.ServerNoticeCopyForTest(); copied = Clipboard.GetText(); } catch (Exception e) { copied = "clipboard: " + e.Message; }
+                Check("notice (Docker Lodge): Copy puts the Docker command on the clipboard", copied == "docker compose pull && docker compose up -d", copied);
+                Session.Disconnect();
                 Session.FeedForTest(Welcome("member", "2.5.0", false));
                 await Task.Delay(200);
                 Check("notice: a normal member never sees it", !LodgePage.ServerNoticeVisibleForTest);

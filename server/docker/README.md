@@ -5,7 +5,7 @@ one you are comfortable with: the normal install updates itself with `sudo lodge
 the Docker one with a new image.
 
 What you need: a Linux machine with Docker and Docker Compose, and a web server with HTTPS in front of the Lodge (nginx,
-Caddy, Apache, Nginx Proxy Manager) exactly as for the normal install: [../deploy/reverse-proxy.md](../deploy/reverse-proxy.md).
+Caddy, Apache) exactly as for the normal install: [../deploy/reverse-proxy.md](../deploy/reverse-proxy.md).
 Voice and chat use the same web connection: there are no other ports to open.
 
 > Run it on a VM or a real machine. Docker inside a system container (LXC) works for trying it out, but can break after

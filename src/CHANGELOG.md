@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.10
+- **Lodges can run in Docker.** A Lodge can now also be hosted as a container image (see "Hosting a Lodge" in the README). When your Lodge server is behind, the notice above the chat shows the right command for it: `docker compose pull && docker compose up -d` for a Lodge in Docker, `sudo lodge-update` for a normal install.
+
 ## 3.5.9
 - **About this addon.** Each of Elan's addons now has its own page - what it does, its commands, what it needs and how to install it by hand - and the addon's card on the Addons page links to it (open the card's details).
 - **The addons without the Outpost.** Every addon can be downloaded on its own from a link that always gives the newest version, for friends who'd rather not run the Outpost.
