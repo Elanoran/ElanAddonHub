@@ -7,7 +7,8 @@ addons kept up to date, a game database built from your own client, a 3D world m
 
 <p align="center">
   <a href="https://github.com/Elanoran/ElanAddonHub/releases/latest"><b>⬇ Download the latest version</b></a>
-  &nbsp;·&nbsp; Windows 10 / 11 &nbsp;·&nbsp; one exe, no installer
+  &nbsp;·&nbsp; Windows 10 / 11 &nbsp;·&nbsp; one exe, no installer<br>
+  <sub>Only want the addons? <a href="addons/README.md">Download them on their own</a>.</sub>
 </p>
 
 <p align="center">
@@ -27,6 +28,13 @@ and your friends a private place to hang out: text chat, voice rooms, a calendar
 It never touches the game itself: it reads the game's files, and the only things it writes are the addon folders
 it installs for you.
 
+| | |
+|---|---|
+| **Get started** | [Install](#install) · [Privacy and safety](#privacy-and-safety) · [FAQ](#faq) |
+| **What's in it** | [Addons](#addons) · [The Atlas](#the-atlas) · [The world map](#the-world-map) · [The Lodge](#the-lodge) (and [the Cairn](#the-cairn)) · [Characters](#characters) · [Small things](#and-a-few-small-things) |
+| **Good to know** | [Where the data comes from](#where-the-data-comes-from) · [Hosting a Lodge](#hosting-a-lodge) · [How we look at it](#how-we-look-at-it) · [A little history](#a-little-history) |
+| **The rest** | [Credits](#credits) · [License](#license) · [For developers](#for-developers) |
+
 ## A short tour
 
 ### Addons
@@ -36,16 +44,16 @@ and a backup to roll back to. Your other addons are listed too: link them to Git
 the same way, addons managed by the CurseForge app update from CurseForge's own downloads, and addons without a source get a
 suggested match you can accept or ignore.
 
-The addons that come with it:
+The addons that come with it (each has its own page, and can be [downloaded without the Outpost](addons/README.md)):
 
 | Addon | What it does |
 |---|---|
-| **Elan's Hub** (required) | A tiny companion that tells the Outpost (and your Lodge, if you join one) which character you play, where you are and what you carry. |
-| **Elan's Toolkit** | For every class: a movable HUD with cast bar, threat bar and flight timer, trainer pins for your professions, gathering pins and a waypoint arrow. |
-| **Elan's Hunter Helper** | Where it all started: pet abilities and where to tame them, Beast Finder, Auto Shot timer, range and dead zone, feeding, stable and more. |
-| **Elan's Paladin Helper** | Seal, aura and blessing reminders, a Seal and Judgement bar, party blessing timers. |
-| **Elan's Priest Helper** | Heal frames with click-casting, Renew and shield timers, a buff manager, the five-second rule and a healer coach. |
-| **Elan's Bags** | One tidy bag window with search, categories and a junk seller. |
+| **[Elan's Hub](addons/ElansHub.md)** (required) | A tiny companion that tells the Outpost (and your Lodge, if you join one) which character you play, where you are and what you carry. |
+| **[Elan's Toolkit](addons/ElansToolkit.md)** | For every class: a movable HUD with cast bar, threat bar and flight timer, trainer pins for your professions, gathering pins and a waypoint arrow. |
+| **[Elan's Hunter Helper](addons/ElansHunterHelper.md)** | Where it all started: pet abilities and where to tame them, Beast Finder, Auto Shot timer, range and dead zone, feeding, stable and more. |
+| **[Elan's Paladin Helper](addons/ElansPaladinHelper.md)** | Seal, aura and blessing reminders, a Seal and Judgement bar, party blessing timers. |
+| **[Elan's Priest Helper](addons/ElansPriestHelper.md)** | Heal frames with click-casting, Renew and shield timers, a buff manager, the five-second rule and a healer coach. |
+| **[Elan's Bags](addons/ElansBags.md)** | One tidy bag window with search, categories and a junk seller. |
 
 ### The Atlas
 
@@ -80,7 +88,7 @@ characters members choose to share. Names show in class colours with level and z
 what, vendors, spawn points, gathering nodes, flight times and learned flight routes. Only ids and counts, never character
 names. Everyone's Atlas gets better from it.
 
-**The Cairn.** Lodges can also pool their numbers in the Cairn, a shared commons of many Lodges, so every Lodge's Atlas
+<a id="the-cairn"></a>**The Cairn.** Lodges can also pool their numbers in the Cairn, a shared commons of many Lodges, so every Lodge's Atlas
 learns from the others. It works as give to get: a Lodge only receives the Cairn's numbers while it contributes, and inside
 a Lodge only members who share get them. The Cairn only ever sees Lodge totals (no members, no names), publishes an
 observation only once enough independent Lodges agree on it, and drops outliers.
@@ -88,8 +96,9 @@ observation only once enough independent Lodges agree on it, and drops outliers.
 **Joining the Cairn.** A Lodge's Guild Master turns it on in the Outpost (Settings > Guild Master > Join the Cairn) - no
 keys to pass around, nothing to edit on the server. The Lodge makes its own key pair and keeps the private half to itself,
 asks the Cairn to join with its name and public address, and the Cairn calls that address back once to check it really is
-that Lodge. During the beta, Lodges join with an invite code from the Cairn's operator; later anyone can ask to join and
-is admitted automatically from a waiting list (a few Lodges a day, first come first served). A new Lodge receives the
+that Lodge. For now the Cairn is **invite only**: a Lodge joins with an invite code from the Cairn's operator, and a code
+works once. Later anyone can ask to join and is admitted from a waiting list (a few Lodges a day, first come first
+served). A new Lodge receives the
 Cairn's numbers right after its first contribution, but its own numbers only count toward the agreement rule after a week
 of contributing.
 
@@ -223,8 +232,8 @@ So please use it at your own risk. It is a free fan project, given as it is, and
 A Lodge is one small .NET 10 service on a Linux server (Ubuntu with systemd; the .NET 10 SDK comes from Ubuntu's own
 archive), behind a web server you already have (nginx, Caddy, Apache) on HTTPS. One install script sets it up, with
 daily backups, a one-command update and a locked-down service; the first start prints a one-time owner link that makes
-you the Guild Master. Joining the Cairn is off by default; the Guild Master turns it on in the Outpost (during the beta
-with an invite code from the Cairn's operator). A Lodge that was set up with a Cairn key in its settings file
+you the Guild Master. Joining the Cairn is off by default; the Guild Master turns it on in the Outpost (for now the Cairn
+is invite only: it needs an invite code from the Cairn's operator). A Lodge that was set up with a Cairn key in its settings file
 (`LODGE_CAIRN_*`) keeps working and moves to its own key pair by itself. See
 [server/deploy/README.md](server/deploy/README.md) to get started, and [server/SECURITY.md](server/SECURITY.md)
 and [server/PROTOCOL.md](server/PROTOCOL.md) for the details.
@@ -300,6 +309,7 @@ If you are one of these authors and want something credited differently or remov
 
 <sub>World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard.</sub>
 
+<a id="for-developers"></a>
 <details>
 <summary><b>For developers</b></summary>
 

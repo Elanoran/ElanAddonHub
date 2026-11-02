@@ -330,7 +330,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.Activity(Test)?|Services/Activity)\.cs$|^src/MainWindow\.xaml$", "activity");   // 2.96: the background activity ring and the close guard
             R(@"^src/Services/(StripSelfTest|PixelStrip)\.cs$", "strip");
             // ---- not exercised by the self-test
-            R(@"^(docs/|README\.md$|DESIGN\.md$|ARCHITECTURE\.md$|\.gitignore$|\.gitattributes$|Tools/)");
+            R(@"^(docs/|addons/|README\.md$|DESIGN\.md$|ARCHITECTURE\.md$|\.gitignore$|\.gitattributes$|Tools/)");   // addons/: the addons' public pages
             R(@"_wpftmp\.csproj$");   // the temporary project WPF makes during a build (an interrupted build leaves it behind): not a change
             // the release bumps: a project file whose only change is <Version>, and the newest Lodge server constant (it only feeds the owner's update notice)
             R(@"^src/ElansAddonHub\.csproj#version$");
@@ -596,7 +596,7 @@ namespace ElansAddonHub.Services
             Ck("a new source file no rule knows runs the sections its header comment names ('--selftest \"x\"', '(sections a, b, c)'); without such a header it is ALL",
                 Same(MapH("src/MainWindow.NewThingTest.cs"), "atlaspage") && Same(MapH("src/MainWindow.TreeData.cs"), "characters", "talents", "art")
                 && MapH("src/Services/Quiet.cs").Count == All.Length && MapH("src/Services/Gone.cs").Count == All.Length);
-            Ck("docs only -> nothing", Map("README.md", "docs/design/x.png", "ARCHITECTURE.md").Count == 0);
+            Ck("docs only -> nothing (the addons' pages too)", Map("README.md", "docs/design/x.png", "ARCHITECTURE.md", "addons/ElansBags.md").Count == 0);
             Ck("a build's leftover temporary project (ElansAddonHub_xxxx_wpftmp.csproj) -> nothing, not ALL", Map("src/ElansAddonHub_pkl4xpg5_wpftmp.csproj").Count == 0);
             Ck("the changelog is shown in Settings > About (inside the exe) -> its privacy scan runs: about", Same(Map("src/CHANGELOG.md"), "about") && Same(Map("addon/ElansHub/CHANGELOG.txt"), "addons", "about"));
             Ck("a release bump (project <Version> only) -> nothing; the newest Lodge server constant -> the Lodge sections only; any other project change -> the start-up smoke sections; any other Brand change -> ALL",
