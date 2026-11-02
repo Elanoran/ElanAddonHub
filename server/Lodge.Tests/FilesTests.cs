@@ -73,6 +73,36 @@ public class FilesTests
         Assert.NotNull(FileRules.CheckZip(new MemoryStream(Bytes(500))));          // not a zip at all
     }
 
+    static byte[] ZipBytes(params (string name, byte[] data)[] entries)
+    {
+        using var ms = new MemoryStream();
+        using (var z = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            foreach (var (name, data) in entries)
+                using (var s = z.CreateEntry(name).Open()) s.Write(data);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Zip_check_looks_one_zip_deep_and_refuses_deeper()
+    {
+        var clean = Zip(("Foo/Foo.lua", "x"));
+        var evil = Zip(("readme.txt", "x"), ("tools/run.exe", "MZ"));
+        Assert.Null(FileRules.CheckZip(new MemoryStream(ZipBytes(("addon.zip", clean), ("notes.txt", Bytes(10))))));
+        Assert.Contains("program", FileRules.CheckZip(new MemoryStream(ZipBytes(("inner.zip", evil)))));
+        Assert.Contains("program", FileRules.CheckZip(new MemoryStream(ZipBytes(("a/INNER.ZIP. ", evil)))));
+        Assert.Contains("unsafe path", FileRules.CheckZip(new MemoryStream(ZipBytes(("inner.zip", Zip(("../x.txt", "x"))))))!);
+        Assert.Contains("zips inside zips", FileRules.CheckZip(new MemoryStream(ZipBytes(("inner.zip", ZipBytes(("deeper.zip", clean)))))));
+        Assert.Contains("not valid", FileRules.CheckZip(new MemoryStream(ZipBytes(("inner.zip", Bytes(500))))));
+    }
+
+    [Fact]
+    public void Zip_check_refuses_a_nested_zip_too_large_to_check()
+    {
+        // highly compressible: small on the wire, over the limit unpacked (the header's size is not trusted either)
+        var big = ZipBytes(("inner.zip", new byte[Elans.Shared.ZipCheck.MaxNestedBytes + 1]));
+        Assert.Contains("too large", FileRules.CheckZip(new MemoryStream(big)));
+    }
+
     // ---------------------------------------------------------------- permissions
 
     [Fact]

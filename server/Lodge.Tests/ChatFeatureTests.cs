@@ -382,4 +382,27 @@ public class ChatFeatureTests
         Assert.Single(new PinStore(d.Path, T.Log).For("general"));   // only the tmp existed: used
         Assert.False(File.Exists(path + ".tmp"));
     }
+    // same race as the LFG one fixed in 2.22: edit / delete / react read the message's JSON while another request was writing it
+    [Fact]
+    public async Task Concurrent_edits_reactions_and_deletes_never_throw()
+    {
+        using var r = new Rig();
+        var elan = r.Join("Elan", "owner"); var bob = r.Join("Bob", "officer");
+        var people = Enumerable.Range(0, 12).Select(i => r.Join("Q" + i, "member")).ToList();
+        var emoji = new[] { "ready", "love" };
+        for (int round = 0; round < 200; round++)
+        {
+            var id = await r.Say(elan, "round " + round);
+            r.Clock.Advance(TimeSpan.FromSeconds(30));
+            var go = new TaskCompletionSource();
+            var tasks = people.Select((p, i) => Task.Run(async () => { await go.Task; await r.Do(p, new { t = "react", id, emoji = emoji[i % 2] }); }))
+                .Append(Task.Run(async () => { await go.Task; await r.Do(elan, new { t = "edit", id, text = "edited " + round }); }))
+                .Append(Task.Run(async () => { await go.Task; await r.Do(bob, new { t = "delete", id }); }))
+                .Append(Task.Run(async () => { await go.Task; await r.Do(elan, new { t = "delete", id }); }))
+                .ToList();
+            go.SetResult();
+            await Task.WhenAll(tasks);   // an exception in any handler fails the test here
+            Assert.Equal(round + 1, r.Sock("Elan").Of("deleted").Count);   // two deletes at once: announced once
+        }
+    }
 }

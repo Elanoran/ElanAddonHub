@@ -64,7 +64,7 @@ public static class FileRules
     // the blocked types: the one shared list (Elans.Shared.DangerousFiles) that the Outpost warns about and refuses too
     public static IReadOnlyCollection<string> Blocked => Elans.Shared.DangerousFiles.Extensions;
 
-    public const int MaxZipEntries = 20000;
+    public const int MaxZipEntries = Elans.Shared.ZipCheck.MaxEntries;
 
     // the last extension, ignoring trailing dots/spaces ("setup.exe. " is still setup.exe on Windows); "" when none
     public static string Extension(string name) => Elans.Shared.DangerousFiles.Extension(name);
@@ -74,38 +74,11 @@ public static class FileRules
     public static bool IsZip(string name) => Extension(name) == "zip";
 
     // an entry path that would escape the folder it is unpacked into (or write to an alternate stream / another drive)
-    public static bool UnsafeEntryPath(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return true;
-        if (path.Contains('\0') || path.Contains(':')) return true;
-        var p = path.Replace('\\', '/');
-        if (p.StartsWith('/')) return true;
-        if (p.Length >= 2 && char.IsLetter(p[0]) && p[1] == ':') return true;
-        foreach (var seg in p.Split('/'))
-            if (seg == "..") return true;
-        return false;
-    }
+    public static bool UnsafeEntryPath(string path) => Elans.Shared.ZipCheck.UnsafeEntryPath(path);
 
-    // null = fine, otherwise why the zip is refused. Lists the entries only - nothing is extracted.
-    public static string CheckZip(Stream seekable)
-    {
-        try
-        {
-            using var zip = new ZipArchive(seekable, ZipArchiveMode.Read, leaveOpen: true);
-            if (zip.Entries.Count > MaxZipEntries) return "The zip has too many entries";
-            foreach (var e in zip.Entries)
-            {
-                if (UnsafeEntryPath(e.FullName)) return "The zip contains an unsafe path";
-                if (e.FullName.EndsWith('/') || e.FullName.EndsWith('\\')) continue; // folder entry
-                if (IsBlockedName(e.Name)) return "The zip contains a program or script file (." + Extension(e.Name) + ")";
-            }
-            return null;
-        }
-        catch (Exception e) when (e is InvalidDataException or NotSupportedException or IOException)
-        {
-            return "That is not a valid zip file";
-        }
-    }
+    // null = fine, otherwise why the zip is refused. Lists the entries only - nothing is extracted. A zip inside it is listed too
+    // (one level; deeper nesting is refused): Elans.Shared.ZipCheck.
+    public static string CheckZip(Stream seekable) => Elans.Shared.ZipCheck.Check(seekable);
 }
 
 // Shared files (2.14, feature "files"). Named slots; each holds up to KeptVersions newest versions on disk.

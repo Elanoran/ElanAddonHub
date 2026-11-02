@@ -257,17 +257,20 @@ public partial class ChatModule : IModule
         var (ch, s, msg) = FindMessage(req.Id);
         if (msg == null) return;
         if (!ch.VisibleTo(me.Role)) return; // a channel you can't see doesn't exist for you
-        if (!IsAuthor(me, msg)) { await hub.Error(me, "You can only edit your own messages"); return; }
-        if (Lfg.Is(msg)) { await hub.Error(me, "A sign-up card can't be edited - close it and make a new one", "lfg"); return; }
-        if ((string)msg["kind"] == Cal.Kind) { await hub.Error(me, "An event card follows the event - change it in the Calendar", "cal"); return; }
+        // every read of the message's JSON happens under the store lock (JsonObject is not safe to read while another request writes it)
+        bool author, card, cal; string id;
+        lock (s) { author = IsAuthor(me, msg); card = Lfg.Is(msg); cal = (string)msg["kind"] == Cal.Kind; id = (string)msg["id"]; }
+        if (!author) { await hub.Error(me, "You can only edit your own messages"); return; }
+        if (card) { await hub.Error(me, "A sign-up card can't be edited - close it and make a new one", "lfg"); return; }
+        if (cal) { await hub.Error(me, "An event card follows the event - change it in the Calendar", "cal"); return; }
         var text = Names.MessageText(req.Text);
         if (text.Length == 0) return;
         if (text.Length > 2000) text = Names.Cut(text, 2000);
         if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text);
-        lock (s) { msg["text"] = text; msg["edited"] = true; s.MarkDirty(); }
+        lock (s) { if (!s.Messages.Contains(msg)) return; msg["text"] = text; msg["edited"] = true; s.MarkDirty(); }
         QueueFlush(s);
-        await hub.Broadcast(LodgeJson.Build(new EditedMsg { Channel = ch.Id, Id = (string)msg["id"], Text = text }.Write), Viewers(ch));
-        var pinned = Pins.UpdateText(ch.Id, (string)msg["id"], text);
+        await hub.Broadcast(LodgeJson.Build(new EditedMsg { Channel = ch.Id, Id = id, Text = text }.Write), Viewers(ch));
+        var pinned = Pins.UpdateText(ch.Id, id, text);
         if (pinned != null) await hub.Broadcast(LodgeJson.Build(new PinnedMsg { Channel = ch.Id, Pin = ChatPin.Read(new LodgeJsonFields(pinned)) }.Write), Viewers(ch));
     }
 
@@ -276,17 +279,19 @@ public partial class ChatModule : IModule
         var (ch, s, msg) = FindMessage(DeleteMsg.Read(new LodgeJsonFields(m)).Id);
         if (msg == null) return;
         if (!ch.VisibleTo(me.Role)) return;
-        if (!IsAuthor(me, msg) && !Roles.Can(me.Role, Perm.Moderate))
+        bool author; string id, from;
+        lock (s) { author = IsAuthor(me, msg); id = (string)msg["id"]; from = (string)msg["from"]; }
+        if (!author && !Roles.Can(me.Role, Perm.Moderate))
         {
             await hub.Error(me, "Only officers can delete other people's messages");
             return;
         }
-        lock (s) { s.Messages.Remove(msg); s.MarkDirty(); }
+        lock (s) { if (!s.Messages.Remove(msg)) return; s.MarkDirty(); } // already gone (two deletes at once): announce it once
         QueueFlush(s);
-        hub.Log.LogInformation("{Name} deleted a message from {From} in {Channel}", me.Name, Names.ForLog((string)msg["from"]), ch.Id);
-        await hub.Broadcast(LodgeJson.Build(new DeletedMsg { Channel = ch.Id, Id = (string)msg["id"] }.Write), Viewers(ch));
-        if (Pins.Unpin(ch.Id, (string)msg["id"], out _))
-            await hub.Broadcast(LodgeJson.Build(new UnpinnedMsg { Channel = ch.Id, Id = (string)msg["id"] }.Write), Viewers(ch));
+        hub.Log.LogInformation("{Name} deleted a message from {From} in {Channel}", me.Name, Names.ForLog(from), ch.Id);
+        await hub.Broadcast(LodgeJson.Build(new DeletedMsg { Channel = ch.Id, Id = id }.Write), Viewers(ch));
+        if (Pins.Unpin(ch.Id, id, out _))
+            await hub.Broadcast(LodgeJson.Build(new UnpinnedMsg { Channel = ch.Id, Id = id }.Write), Viewers(ch));
     }
 
     // toggles the sender's reaction; the whole list for that reaction is broadcast (idempotent for clients)
@@ -298,9 +303,11 @@ public partial class ChatModule : IModule
         var (ch, s, msg) = FindMessage(req.Id);
         if (msg == null || !ch.VisibleTo(me.Role)) return;
         bool on, full = false;
-        List<string> users;
+        List<string> users; string id;
         lock (s)
         {
+            if (!s.Messages.Contains(msg)) return; // deleted meanwhile
+            id = (string)msg["id"];
             var all = msg["reactions"] as JsonObject ?? new JsonObject();
             var list = all[emoji] as JsonArray ?? new JsonArray();
             var mine = list.FirstOrDefault(x => Names.Same((string)x, me.Name));
@@ -318,7 +325,7 @@ public partial class ChatModule : IModule
         }
         if (full) { await hub.Error(me, "That reaction is full"); return; }
         QueueFlush(s);
-        await hub.Broadcast(LodgeJson.Build(new ReactionMsg { Channel = ch.Id, Id = (string)msg["id"], Reaction = emoji, Emoji = EmojiOf(emoji), Users = users, By = me.Name, On = on }.Write), Viewers(ch));
+        await hub.Broadcast(LodgeJson.Build(new ReactionMsg { Channel = ch.Id, Id = id, Reaction = emoji, Emoji = EmojiOf(emoji), Users = users, By = me.Name, On = on }.Write), Viewers(ch));
     }
 
     async Task Pin(Member me, JsonObject m, bool pin)

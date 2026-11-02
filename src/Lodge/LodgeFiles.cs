@@ -97,32 +97,20 @@ namespace ElansAddonHub.Lodge
             catch (Exception) { return false; }
         }
 
-        public static bool UnsafeEntryPath(string path)
-        {
-            if (string.IsNullOrEmpty(path) || path.IndexOf('\0') >= 0 || path.IndexOf(':') >= 0) return true;
-            var p = path.Replace('\\', '/');
-            if (p.StartsWith("/")) return true;
-            return p.Split('/').Any(seg => seg == "..");
-        }
+        public static bool UnsafeEntryPath(string path) => Elans.Shared.ZipCheck.UnsafeEntryPath(path);
 
-        // null = fine. Lists a zip's entries, never extracts.
+        // null = fine. Lists a zip's entries (and those of a zip inside it), never extracts: the server's check (Elans.Shared.ZipCheck).
         public static string CheckZip(string path)
         {
             try
             {
-                using (var zip = ZipFile.OpenRead(path))
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    if (zip.Entries.Count > 20000) return "The zip has too many entries";
-                    foreach (var e in zip.Entries)
-                    {
-                        if (UnsafeEntryPath(e.FullName)) return "The zip contains an unsafe path";
-                        if (e.FullName.EndsWith("/") || e.FullName.EndsWith("\\")) continue;
-                        if (IsBlockedName(e.Name)) return "The zip contains a program or script file (." + Extension(e.Name) + ") - those can't be shared here";
-                    }
+                    var why = Elans.Shared.ZipCheck.Check(fs);
+                    return why != null && why.StartsWith("The zip contains a program") ? why + " - those can't be shared here" : why;
                 }
-                return null;
             }
-            catch (Exception e) when (e is InvalidDataException || e is IOException || e is NotSupportedException) { return "That is not a valid zip file"; }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { return "Couldn't read that file"; }
         }
 
         // why this file can't be uploaded (null = go ahead): the same refusals the server would give, in friendly words
