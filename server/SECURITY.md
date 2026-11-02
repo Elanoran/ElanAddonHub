@@ -222,7 +222,7 @@ longer lets a backslash into a name.
 - Who: `Perm.FilesRead` (everybody, guests included) lists and downloads; `Perm.FilesManage` (officer and owner) uploads a new slot, a new version, rolls back and deletes. The check is made server side in `FilesModule` for every upload, delete and roll back (not only in the client). `Perm.ShareFiles` (chat attachments) is unrelated.
 - Transport: authenticated HTTP like `/files` (device token or code header, same wrong-credential lockout): `PUT /slots/new`, `PUT /slots/{id}`, `GET /slots/{id}/{v}`. Content-Length is required and checked against the maximum before anything is read; the body is streamed to `<id>.part` while a SHA-256 is computed (never held in memory), and must match the announced length and `X-Sha256` exactly. Only then is it renamed to its server-generated name (32 random hex characters + `.bin`) and the index (`index.json`, written tmp + atomic rename) updated; any failure deletes the partial file and changes nothing.
 - File names are display-only: sanitised (`Names.FileName`: no path parts, drive letters, `: * ? " < > |`, control/format characters, device names) and never used as a path. Slot names and notes are cleaned text. Downloads are `application/octet-stream`, `Content-Disposition: attachment`, `nosniff`, `Cache-Control: private, no-store`.
-- Refused: executable/script extensions (`exe dll com bat cmd ps1 psm1 vbs vbe js jse wsf wsh msi msp scr cpl jar lnk reg hta sys drv pif application appref-ms`, trailing dots/spaces ignored); a `.zip` is listed (System.IO.Compression, nothing extracted) and refused when any entry has such an extension, an absolute path, a drive letter, `:` or a `..` segment, has more than 20000 entries or isn't a valid zip. Nested archives are not looked into.
+- Refused: executable/script extensions (`exe dll com bat cmd ps1 psm1 vbs vbe js jse wsf wsh msi msp scr cpl jar lnk reg hta sys drv pif application appref-ms`, trailing dots/spaces ignored); a `.zip` is listed (System.IO.Compression, nothing extracted) and refused when any entry has such an extension, an absolute path, a drive letter, `:` or a `..` segment, has more than 20000 entries or isn't a valid zip.
 - Limits: `LODGE_FILES_MAX_MB` per file, `LODGE_FILES_TOTAL_MB` for all kept versions (space is reserved for running uploads and checked again at commit; the version that a new one pushes out counts as free), 200 slots, one running upload per person, 3 at once, `LODGE_FILES_UPLOADS_PER_10MIN` per person. The Kestrel body limit is raised to the larger of the two file limits only.
 - `LODGE_FILES_ENABLED=0` makes the server stop advertising `files` and answer 403; nothing is deleted.
 - Logs: who shared / deleted / rolled back and the size - never a file name, slot name, note or hash.
@@ -279,8 +279,8 @@ From the sharing and security review. What changed, and the choices made:
 - **Times are clamped to now + 5 minutes** (was a day) for vendors, quests and finds, on the server and in the Outpost's parser (`AtlasObs`): a time far in the future could pin a vendor or quest against every real update. Nodes and fishing spots carry no time on the server.
 - **The Atlas does not grow past its file limit.** `atlas.json` is only loaded up to 64 MB. A share is refused with `why: "full"` (logged, once per fill) once the file on disk is within 2 MB of that; a save that would exceed the limit is not written (the last good file stays). Revert a member to make room.
 - **Guests get a coarser Atlas.** In `atlas.data`, finds show `by: "a member"` and the day only (`at` rounded down to 00:00 UTC). Members see what they saw before.
-- **Chat uploads block programs and scripts** like the Files module (`exe dll bat cmd ps1 ... lnk jar`, checked on the real last extension, trailing dots and spaces ignored): HTTP 415 "Programs and scripts (.exe) can't be shared here". A zip is accepted (its content is not looked at in chat).
-- **The flaky test**: `LfgTests.Many_simultaneous_joins_never_exceed_the_slots_or_double_up_a_person` failed about one run in six with "Collection was modified". A real race, not a test problem: the LFG join / leave / close handlers read the card's JSON (`Lfg.Is`, `IsAuthor`, the id for the broadcast) outside the store lock while another request was setting the card's text. All reads are under the lock now, and `Concurrent_joins_leaves_and_closes_never_throw` hammers it (it failed 1 run in 3 before the fix). Edit / delete / react still read a message outside the lock (not seen failing; same fix if they ever do).
+- **Chat uploads block programs and scripts** like the Files module (`exe dll bat cmd ps1 ... lnk jar`, checked on the real last extension, trailing dots and spaces ignored): HTTP 415 "Programs and scripts (.exe) can't be shared here". A zip is checked like a shared file's (since 2.31.1).
+- **The flaky test**: `LfgTests.Many_simultaneous_joins_never_exceed_the_slots_or_double_up_a_person` failed about one run in six with "Collection was modified". A real race, not a test problem: the LFG join / leave / close handlers read the card's JSON (`Lfg.Is`, `IsAuthor`, the id for the broadcast) outside the store lock while another request was setting the card's text. All reads are under the lock now, and `Concurrent_joins_leaves_and_closes_never_throw` hammers it (it failed 1 run in 3 before the fix).
 
 The Outpost side (same release train): manifest folders, ids and game versions must be plain names that resolve inside AddOns / the backup folder, updates only from https GitHub hosts and the self-update needs a SHA-256, downloaded chat files open only by a picture / text / PDF extension, SavedVariables parsing is depth- and size-limited, and an `http://` lodge address (other than localhost / 127.0.0.1) is refused. See `src/CHANGELOG.md`.
 
@@ -293,7 +293,7 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 
 ## Contribute to the Cairn (opt-in, feature `cairn`)
 
-- Off by default. On only with `LODGE_CAIRN_ENABLED=1`, an https URL (plain http only to this machine; no user, query or fragment in it) and a key that looks like a Cairn key; otherwise it stays off and the log says why (the host only, never the key).
+- The pre-2.28 way (still works; the Guild Master switch below replaced it): off by default, on only with `LODGE_CAIRN_ENABLED=1`, an https URL (plain http only to this machine; no user, query or fragment in it) and a key that looks like a Cairn key; otherwise it stays off and the log says why (the host only, never the key).
 - What leaves the server is built from the Atlas pool's guest view and an allow-list of fields (`CairnRules.Records`): ids, counts, prices and map fractions. No names (member, character, display or login), no finds, notes, quests, seen tables or revealed items, no member counts; flight legs keyed by a node name are dropped (game text).
 - The key travels only in the `Authorization` header over https, is never logged (tests check the log lines and `data/cairn-sent.json`), and can be kept in a separate file (`LODGE_CAIRN_KEY_FILE`).
 - Members are told: the welcome lists `cairn` while the server contributes, and the Outpost shows it in Settings > Privacy. Members who switched Atlas sharing off contribute nothing (their data never reaches the pool); a purge lowers the totals, and the next contribution takes the difference back out of the Cairn.
@@ -380,7 +380,8 @@ The Outpost treats every Lodge as possibly hostile:
   names cleaned, dangerous types and zips containing them refused.
 - Privacy: invisible members, position and profile visibility decided only by the server; nothing secret logged; the admin endpoint only on
   loopback.
-- The host: a locked-down systemd service, private file modes, atomic writes, backups that hold the codes kept `0600`.
+- The host: a locked-down systemd service or the hardened container (`server/docker`), private file modes, atomic writes, backups that
+  hold the codes kept `0600`.
 
 ## What the operator takes care of
 
@@ -392,6 +393,11 @@ The Outpost treats every Lodge as possibly hostile:
 - Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`)
   once a person's PCs have their own keys.
 - Backups contain the invite codes and the Lodge's Cairn key: keep them as private as the server.
+- **Docker install** (`server/docker`): the container runs as a non-root user with `cap_drop: [ALL]`, `no-new-privileges`, a read-only
+  root file system and memory / process limits; it publishes only `127.0.0.1:5280`, because Docker's port rules bypass the host
+  firewall. The compose file uses a fixed network so `LODGE_TRUSTED_PROXIES` can name its gateway. Anyone in the host's `docker` group
+  is effectively root. The image has no daily backup timer: run `docker compose exec lodge lodge-backup` by hand or from the host's cron; backups live in the
+  `lodge-backups` volume.
 
 ## Tests
 

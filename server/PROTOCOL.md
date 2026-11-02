@@ -650,7 +650,7 @@ works). **Give to get**: the dataset is not public - it is for the Lodges that c
 through them, for their members who share. The Cairn serves it only to a Lodge in good standing (an accepted contribution within the
 Cairn's grace period, 14 days by default); the Lodge hands it on only to its own members whose Atlas sharing is on, never to guests. An Outpost
 never talks to the Cairn and has no Cairn address. Paths in "Lodge <-> Cairn" are relative to the Cairn's base URL. The Lodge server knows
-the public Cairn's base URL (`https://nasferatu.dk/cairn`) as its default; `LODGE_CAIRN_URL` points it at another (self-hosted) Cairn.
+the public Cairn's base URL as its default (`CairnLink.DefaultCairnUrl`); `LODGE_CAIRN_URL` points it at another (self-hosted) Cairn.
 
 **Members are told**: a Lodge that contributes lists `cairn` in the welcome `features` (while it contributes - the Guild Master's switch with
 the Cairn's admission, or `LODGE_CAIRN_ENABLED=1` with a valid https URL and key - and the Atlas is on) and `cairn2` next to it (it receives
@@ -695,10 +695,10 @@ contribution and no data; the key pair and the admission stay, so switching on a
 - `GET /v1/join/status` (signed) -> `{state: "waiting", place, of, asked, estDay?, admitPerDay?}` / `{state: "admitted", id, admitted, standing,
   lastContribution, receiveUntil, probationDays, probationUntil, settled, lastPost}` / `{state: "refused"}` / `{state: "revoked"}`; 404 `unknown`.
   The Lodge polls it hourly while waiting, every 6 hours once admitted.
-- Beta (the Cairn's default): a code admits at once (after the check), up to the beta's cap; there is no waiting list. Open: a verified request
+- Invite only (mode `beta`, the Cairn's mode for now): a code admits at once (after the check), up to a cap; there is no waiting list. Open: a verified request
   waits; a few are admitted automatically per UTC day, oldest first; a code is a fast lane past the list.
 - Probation: an admitted Lodge receives right after its first accepted contribution (give to get as before), but its numbers count toward the
-  Cairn's agreement rule and its "active Lodges" only after `probationDays` (7) of contributing (`probationUntil` = first contribution + 7 days).
+  Cairn's agreement rule and its "active Lodges" only after `probationDays` of contributing (`probationUntil` = first contribution + `probationDays`).
 
 **The bearer-key Lodge moves over** (`LODGE_CAIRN_*`, nothing to change in lodge.env): when `/v1/status` lists `"keys"` in `features`, the Lodge
 sends `POST /v1/keys {publicKey}` with its bearer key AND signed by the new key, once. From then on it signs; the Cairn answers the old key with
@@ -752,8 +752,8 @@ env-path Lodge the Cairn does not know (401 `key`) falls back to the bearer key 
 - Signature: `sig` = ECDSA P-256 / SHA-256 (IEEE P1363, base64) over `"elans-cairn/1\n<day>\n<seq>\n<contentSha256>"`, by the Cairn's key
   (`GET /v1/key`: `{alg: "ES256", crv: "P-256", kid, x, y}`, public). The Lodge passes it on unchanged, so an Outpost that pins the key can
   tell that its Lodge did not change the numbers.
-- Merging on the Cairn: a record and every item / vendor item / spot / leg in it needs `minLodges` independent Lodges (2 by default);
-  outliers (drop rates far from the median across Lodges, flight times > 40 % off) are left out; no Lodge weighs more than all others
+- Merging on the Cairn: a record and every item / vendor item / spot / leg in it needs `minLodges` independent Lodges;
+  outliers (values far from the median across Lodges) are left out; no Lodge weighs more than all others
   together; records are kept per game build and old builds age out.
 
 ### Outpost <- its own Lodge (feature `cairn2`; `src/Lodge/LodgeSession.Cairn.cs`, `src/Services/Atlas/CairnData.cs`)
