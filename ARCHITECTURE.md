@@ -1086,22 +1086,19 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 
 | Layer | Where | Status |
 |---|---|---|
-| A. Items | Outpost `Services\Db2`, `ItemData` | built (Outpost 2.48.0, unreleased) |
-| A2. Spells, skills, professions | Outpost `Services\Db2`, `SpellData` | built (unreleased) |
-| A3. What the client has seen | Outpost `Services\Db2` (WDB reader) | built (unreleased) |
-| A4. Factions & reputation | Outpost `Services\Db2` | built (unreleased) |
-| B. Maps & instances | Outpost `Services\Maps` | built (unreleased) |
-| C. Classic baseline | Outpost `Services\Atlas\Classic` | built (unreleased) |
-| D. Observations | Toolkit → Hub module `atlas.obs` (account) | built (Toolkit, unreleased) |
-| E. Lodge pool | server `AtlasModule` + `LodgeSession.Atlas` | built (server 2.15.0, unreleased) |
-| G. Talent calculator & builds | Outpost Talents page (`TalentsPage`, Ctrl+6), build codes, hand-off hook for Hunter Helper | built (unreleased) |
-| H. Professions & camping | Outpost Professions page (per profession: recipes, colours, reagents with sources, what you can craft from all characters' items, a skill-up plan, camping items and buffs); later: Lodge "who can craft this" | building |
-| G. Talent calculator & builds | Outpost Talents page, build links, hand-off to Hunter Helper's planner | building |
-| H. Professions & camping | Outpost Professions page (per profession: recipes, colours, reagents with sources, what you can craft from all characters' items, a skill-up plan, camping items and buffs); later: Lodge "who can craft this" | built (unreleased) |
-| F. Atlas page | Outpost UI | next |
-| F. Atlas page | Outpost UI (`AtlasPage`, `Services\Atlas\AtlasQuery*`) | built (unreleased) |
+| A. Items | Outpost `Services\Db2`, `ItemData` | built (Outpost 2.48.0) |
+| A2. Spells, skills, professions | Outpost `Services\Db2`, `SpellData` | built |
+| A3. What the client has seen | Outpost `Services\Db2` (WDB reader) | built |
+| A4. Factions & reputation | Outpost `Services\Db2` | built |
+| B. Maps & instances | Outpost `Services\Maps` | built |
+| C. Classic baseline | Outpost `Services\Atlas\Classic` | built |
+| D. Observations | Toolkit → Hub module `atlas.obs` (account) | built (Toolkit) |
+| E. Lodge pool | server `AtlasModule` + `LodgeSession.Atlas` | built (server 2.15.0) |
+| G. Talent calculator & builds | Outpost Talents page (`TalentsPage`, Ctrl+6), build codes and links, hand-off to Hunter Helper's planner | built |
+| H. Professions & camping | Outpost Professions page (per profession: recipes, colours, reagents with sources, what you can craft from all characters' items, a skill-up plan, camping items and buffs); later: Lodge "who can craft this" | built |
+| F. Atlas page | Outpost UI (`AtlasPage`, `Services\Atlas\AtlasQuery*`) | built |
 
-Sources per layer (both G rows, both H rows and both F rows have the same source):
+Sources per layer:
 
 - **A. Items**: client `ItemSparse`/`Item` DB2 from CASC + revealed items in `Cache\ADB\enUS\DBCache.bin`.
 - **A2. Spells, skills, professions**: client `SpellName`, `Spell`, `SpellEffect`, `SpellMisc`, `SkillLine`,
