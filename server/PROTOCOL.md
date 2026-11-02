@@ -2,12 +2,19 @@
 
 This describes the Lodge server as of 2.31.2; the sections below say which server version added what.
 
+**Contents:** [HTTP](#http) · [WebSocket](#websocket-get-wsnamedisplay-nameclienthub200visinvisible--header-x-lodge-code) · [Ranks](#ranks) · [Voice](#voice-binary-frames) · [The Cairn](#the-cairn-atlas-commons-lodge-features-cairn-and-cairn2-opt-in-outpost-286-give-to-get-287) · [Operator stats](#operator-stats-read-only-get-adminstats-sudo-lodge-admin-stats) · [Typed messages](#typed-messages) · [How to add a message](#how-to-add-a-message) · [Every message type (index)](#every-message-type-index)<br>
+**Added by version:** [2.3](#23-additions-and-compatibility) · [2.4](#24-additions-and-compatibility) · [2.5](#25-additions-and-compatibility) · [2.6 profiles](#26-additions-and-compatibility-avatars-and-profiles) · [2.7 display names](#27-additions-and-compatibility-display-names) · [2.8](#28-additions-all-optional-for-clients-older-clients-ignore-them) · [2.9 sign-up cards, search](#29-additions-sign-up-cards-older-messages-search-features-lfg-history2-search-optional-for-clients) · [2.10 invites, devices](#210-additions-one-time-invites-device-tokens-all-optional-for-clients) · [2.31.2 device links](#2312-additions-device-links-for-existing-members-feature-devicenotice-optional-for-clients) · [2.11 calendar](#211-additions-raid--event-calendar-all-optional-for-clients) · [2.12 starting a lodge](#212-additions-starting-a-lodge-inviting-from-the-app-leaving) · [2.13 flight times](#213-additions-shared-flight-times-optional-for-clients) · [2.14 shared files](#214-additions-shared-files-optional-for-clients) · [2.15 Atlas pool](#215-additions-the-atlas-pool-optional-for-clients) · [2.16 Armory](#216-additions-the-armory-optional-for-clients) · [2.17 Classic baseline](#217-additions-hosted-datasets-the-classic-baseline-optional-for-clients) · [Realm status](#realm-status-feature-realms-the-server-version-is-set-at-merge-2200-here-optional-for-clients) · [Badges and the ladder](#badges-and-the-ladder-feature-badges-the-server-version-is-set-at-merge-optional-for-clients) · [2.22 forgetting members](#222-additions-forgetting-members-optional-for-clients) · [2.23 field notes](#223-additions-hunter-field-notes-feature-atlas5) · [2.24 entrances](#224-additions-instance-entrances-feature-atlas6) · [2.25 seen details](#225-additions-seen-details-with-the-game-build-feature-atlas7) · [2.26 npc positions](#226-additions-where-npcs-really-stand-feature-atlas8-counter-extras-feature-atlas9-below) · [Reputations](#reputations-in-the-armory-feature-reputations-the-server-version-is-set-at-merge-optional-for-clients) · [2.30 live positions](#230-additions-live-map-positions-between-members-feature-liveposition-optional-for-clients)
+
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
 `Name:code:role` in `<data>/codes`, managed from the hub's Guild Master panel or `lodge-admin`) or the optional
-shared `LODGE_CODE` (rank: guest). Send codes in the `X-Lodge-Code` header, never in a URL (query strings end
-up in proxy logs); the header wins when both are present. `?code=` is refused by default
-(2.8; `LODGE_ALLOW_QUERY_CODE=true` accepts it for 1.x hubs) - a request carrying `?code=` gets 401 "use the header" (not a strike).
+shared `LODGE_CODE` (rank: guest).
+
+> [!IMPORTANT]
+> Send codes in the `X-Lodge-Code` header, never in a URL (query strings end up in proxy logs); the header wins when both are
+> present. `?code=` is refused by default (2.8; `LODGE_ALLOW_QUERY_CODE=true` accepts it for 1.x hubs) - a request carrying
+> `?code=` gets 401 "use the header" (not a strike).
+
 Every credential check - `/health` with a code, `/ws`, `/files` - shares one wrong-code counter per client address
 (an IPv4 address, or an IPv6 /64: 2.31.1): the 10th wrong code within 15 minutes is still 401, then the address gets 429
 for 15 minutes even with a valid code. At most `LODGE_MAX_TRACKED_IPS` addresses are tracked; beyond that unknown addresses
@@ -837,8 +844,9 @@ and address per 10 minutes, then a sum per minute and a summary per day (`securi
 
 ## Typed messages
 
-Every message is a class in `shared/Elans.Shared/Lodge/<Group>Messages.cs`, used by the Lodge server and the Outpost alike; the
-"Typed (stage 2)" notes in the sections above name them. Neither side builds or reads a frame by field name anywhere else.
+> [!IMPORTANT]
+> Every message is a class in `shared/Elans.Shared/Lodge/<Group>Messages.cs`, used by the Lodge server and the Outpost alike; the
+> "Typed (stage 2)" notes in the sections above name them. Neither side builds or reads a frame by field name anywhere else.
 
 One JSON engine and one adapter for both sides (`shared/Elans.Shared/Lodge/LodgeJson.cs`): System.Text.Json nodes. `LodgeJson.Parse` turns
 a received frame into its `JsonObject`, `LodgeJson.Serialize` / `SerializeUtf8` writes one, `LodgeJson.Build(new XMsg { .. }.Write)` builds

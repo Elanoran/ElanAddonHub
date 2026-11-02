@@ -34,8 +34,10 @@ of the top-level `.cs` files (not `Lodge/`, which it doesn't speak), each with a
     python shared/sync_cairn.py --ops <path to the Cairn's repo>           copy the files into the Cairn
     python shared/sync_cairn.py --check --ops <path to the Cairn's repo>   change nothing; fail if the copy is missing, differs or has extra files
 
-`--ops` can be replaced by the `ELANS_OPS_REPO` environment variable; `--check` ignores line ends. Never edit the copy inside the Cairn:
-change the file here, run the sync, and commit both sides.
+`--ops` can be replaced by the `ELANS_OPS_REPO` environment variable; `--check` ignores line ends.
+
+> [!IMPORTANT]
+> Never edit the copy inside the Cairn: change the file here, run the sync, and commit both sides.
 
 ## Tests
 

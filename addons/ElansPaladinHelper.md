@@ -3,8 +3,9 @@
 For **paladins** on WoW Forever: never run without a Seal, Aura or Blessing again, keep your party blessed, and heal or
 cleanse from party frames with a click.
 
-**[Download ElansPaladinHelper.zip](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansPaladinHelper.zip)**
-· works on its own · or get it with [Elan's Outpost](../README.md)
+[![Download ElansPaladinHelper.zip](https://img.shields.io/badge/Download-ElansPaladinHelper.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansPaladinHelper.zip)
+
+Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to date.
 
 ## What it does
 

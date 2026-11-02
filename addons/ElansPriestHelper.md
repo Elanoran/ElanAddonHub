@@ -3,8 +3,9 @@
 For **priests** on WoW Forever: heal frames with click-casting, your Renew and shield timers, a buff manager that keeps the
 raid buffed, and a coach that shows how you spent your mana.
 
-**[Download ElansPriestHelper.zip](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansPriestHelper.zip)**
-· works on its own · or get it with [Elan's Outpost](../README.md)
+[![Download ElansPriestHelper.zip](https://img.shields.io/badge/Download-ElansPriestHelper.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansPriestHelper.zip)
+
+Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to date.
 
 ## What it does
 

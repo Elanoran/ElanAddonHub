@@ -7,7 +7,10 @@
 - © Unicode, Inc., under the Unicode License v3: `LICENSE-unicode.txt` (from https://www.unicode.org/license.txt)
 
 `make_confusables.py` turns it into `shared/Elans.Shared/Confusables.Data.cs`, the table behind `Elans.Shared.Confusables`
-(`Skeleton`, and `NameKey`, which the Lodge makes display names unique by). The generated file is never edited by hand.
+(`Skeleton`, and `NameKey`, which the Lodge makes display names unique by).
+
+> [!IMPORTANT]
+> The generated file is never edited by hand.
 
 ## Refresh
 

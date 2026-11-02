@@ -2,6 +2,21 @@
 
 *Prefer Docker? The same server as a container image: [../docker/README.md](../docker/README.md).*
 
+**Contents:** [One-time install](#one-time-install-also-updates-the-tools-below) · [The owner link](#starting-a-lodge-the-owner-link-212) · [Invites, devices and codes](#invites-devices-and-codes-210-lodge-admin) · [Forgetting a person's data](#forgetting-a-persons-data-222-lodge-admin-purge) · [Updating](#updating-lodge-update) · [Backups](#backups-lodge-backup) · [Shared files](#shared-files-214-the-files-page) · [Realm status](#realm-status-220-the-battlenet-api-client) · [Tests](#tests) · [The Classic baseline](#the-classic-baseline-hosted-once-217) · [The Armory](#the-armory-216) · [The Atlas pool and settings](#the-atlas-pool-215)
+
+```mermaid
+flowchart LR
+    O["Elan's Outpost or a browser"]:::outpost -->|"HTTPS and WebSocket"| P["Your web server (reverse proxy)"]:::proxy
+    P -->|"127.0.0.1:5280"| L["Lodge server"]:::lodge
+    L <-.->|"opt-in"| C["The Cairn"]:::cairn
+    classDef outpost fill:#0969da,stroke:#0550ae,color:#fff
+    classDef proxy fill:#6e7781,stroke:#57606a,color:#fff
+    classDef lodge fill:#d4761a,stroke:#a35a12,color:#fff
+    classDef cairn fill:#8250df,stroke:#6639ba,color:#fff
+```
+
+<sub>Only your web server faces the internet; the Lodge listens on this machine only. Dotted: the link to the Cairn, opt-in.</sub>
+
 Layout: source checkout `/opt/lodge-src`, build `/opt/lodge`, data `/var/lib/lodge`, config `/etc/lodge/lodge.env`,
 backups `/var/backups/lodge`, build folder `/var/cache/lodge-build`.
 
@@ -86,6 +101,7 @@ sudo lodge-admin remove Bob               # removes the codes AND queues the ful
 ```
 
 The command writes a small request file into `purge.d/` next to the codes file (`/var/lib/lodge/purge.d`); the running server picks it up within 15 seconds, does the same as the Guild Master page (Settings > Guild Master > Members > Revert Atlas) or `member.leave`, and deletes the file. The server must be running; a request waits there until it is. `purge Bob` without `--atlas-only` is refused while Bob still has a code. What goes and what stays (messages stay, shown as "(former member)"; uploaded files stay without a name; events stay) is listed in `SECURITY.md` under 2.22.0. Backups keep the old data until they rotate out (`LODGE_BACKUP_KEEP`, 14 by default).
+
 ## Updating: `lodge-update`
 
 ```bash
@@ -117,12 +133,15 @@ Each archive `/var/backups/lodge/lodge-YYYYmmdd-HHMM.tar.gz` holds the whole dat
 history, uploaded files) except `*.part` / `*.tmp`. The codes file is archived while holding the `codes.lock` flock, so a
 `lodge-admin` or Guild Master change is never captured half-written. The newest `LODGE_BACKUP_KEEP` (14) are kept.
 `LODGE_BACKUP_FILES=0` leaves out the uploaded `files/` folder (they expire after `LODGE_FILE_DAYS` anyway).
-The backup folder is `root:root 0700` and archives are `0600`: **they contain the invite codes**. Copy them off the box
-only to somewhere equally private.
 
-`restore` asks for confirmation, stops the service, moves the current data to `/var/lib/lodge.before-restore-<time>`
-(kept until you delete it - it also contains codes), extracts the archive, sets owner `lodge:lodge`, folders `0750`,
-files `0640` (`codes.lock` `0660`), starts the service and checks `/health`.
+> [!CAUTION]
+> The backup folder is `root:root 0700` and archives are `0600`: **they contain the invite codes**. Copy them off the box
+> only to somewhere equally private.
+
+> [!WARNING]
+> `restore` asks for confirmation, stops the service, moves the current data to `/var/lib/lodge.before-restore-<time>`
+> (kept until you delete it - it also contains codes), extracts the archive, sets owner `lodge:lodge`, folders `0750`,
+> files `0640` (`codes.lock` `0660`), starts the service and checks `/health`.
 
 ## Shared files (2.14): the Files page
 
@@ -156,6 +175,7 @@ The Outpost can show small dots at the top, one per WoW Forever realm, green whe
 3. Look at the journal: `journalctl -u lodge | grep "Realm status"`. The first poll prints, per namespace, how many connected realms exist and how many look like Forever realms (names only). If none is found the feature stays quiet (`available: false`, "Forever realms not found in the Blizzard API"), is polled every 15 minutes, and the Outpost shows nothing; the namespace to use can then be forced with `LODGE_REALMS_NAMESPACES`, and the realms to show chosen with `LODGE_REALMS_MATCH` (the journal then lists every realm name Blizzard returned). Beta realms are usually not in the public API; they appear after launch.
 
 The feature is advertised only when both the id and the secret are set. The secret is never logged, sent to a client or put in an error text. One poll per interval (`LODGE_REALMS_POLL_SECONDS`, 60-900, default 120) for the whole lodge, with a backoff on errors and on HTTP 429.
+
 ## Tests
 
 ```bash
@@ -165,6 +185,7 @@ sudo bash server/tests/lodge_ops_test.sh      # backup, rotation, restore, updat
 ## The Classic baseline, hosted once (2.17)
 
 The Outpost's Atlas can show where things drop, who sells them and what quests give them from the public cMaNGOS classic-db (GPL-3.0). Instead of every member downloading it from GitHub, the lodge can host it once: an officer or the owner clicks **Share my Classic data with the Lodge** (Outpost > Settings > Lodge > Classic data; or answers "Yes" to the quiet offer after their own download), the server stores the original upstream files unchanged in one bundle, and every member's Outpost fetches it from the lodge automatically (a setting lets them opt out). Guests download it from the public source as before. The bundle is about 15 MB and lives in `data/datasets/` (inside `data/`, so `lodge-backup` includes it); the server never opens or runs it. After `sudo lodge-update` nothing else needs to be done; the settings are below. Allow request bodies of `LODGE_CLASSIC_MAX_MB` in the reverse proxy (the default of 40 MB is below the 50 MB the shared files already need).
+
 Badges and the ladder: the Outpost's Lodge tab has a Ladder page and every profile a strip of badges, earned just by sharing (Atlas observations, flight times, files, calendar events, characters, time in the lodge...). It is worked out from data the lodge already holds plus a few small tallies in `data/badges.json` (included in `lodge-backup`); nothing new is collected from the game, guests have no badges, and members can hide themselves from the ladder. The Guild Master can switch it off in Outpost > Settings > Guild Master, and `LODGE_BADGES_ENABLED=0` turns it off for good (see the settings below).
 
 ## The Armory (2.16)

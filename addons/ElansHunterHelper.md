@@ -3,8 +3,9 @@
 The hunter toolkit for **WoW Forever**: your pet, where to tame the next one, the Auto Shot rhythm and the range you
 shoot from, all in one place.
 
-**[Download ElansHunterHelper.zip](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansHunterHelper.zip)**
-· needs **[Elan's Toolkit](ElansToolkit.md)** · or get both with [Elan's Outpost](../README.md)
+[![Download ElansHunterHelper.zip](https://img.shields.io/badge/Download-ElansHunterHelper.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansHunterHelper.zip)
+
+Needs [Elan's Toolkit](ElansToolkit.md); get both with [Elan's Outpost](../README.md) to keep them up to date.
 
 ## What it does
 
@@ -67,7 +68,9 @@ Shot HUD, feeding, alerts, what the addon learns and records, the HUD, sharing, 
 - **Install it together with Elan's Toolkit.** The HUD it adds its pieces to (cast bar, threat bar, flight timer) lives
   in the Toolkit. Folder names: `ElansHunterHelper` and `ElansToolkit`.
 - A **Quick setup** window appears once after the first login. Open **Beast Training** once so the addon knows your pet's ranks.
-- After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
 - With Elan's Outpost, your pets also show on the Outpost's Characters page.
+
+> [!WARNING]
+> After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
 
 [All of Elan's addons](README.md) · [How to install by hand](README.md#installing-by-hand)

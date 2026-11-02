@@ -8,6 +8,7 @@ What you need: a Linux machine with Docker and Docker Compose, and a web server 
 Caddy, Apache) exactly as for the normal install: [../deploy/reverse-proxy.md](../deploy/reverse-proxy.md).
 Voice and chat use the same web connection: there are no other ports to open.
 
+> [!WARNING]
 > Run it on a VM or a real machine. Docker inside a system container (LXC) works for trying it out, but can break after
 > updates of the host.
 
@@ -35,8 +36,7 @@ Voice and chat use the same web connection: there are no other ports to open.
 
 The Compose file is set up so the Lodge exposes nothing but what your web server forwards:
 
-- **Only this machine can reach it** (`127.0.0.1:5280`). Docker opens published ports past the host's firewall (ufw), so
-  never change that to `5280:8080` or `0.0.0.0` - put your web server in front instead.
+- **Only this machine can reach it** (`127.0.0.1:5280`).
 - **It knows who your visitors are.** Only the Docker network's gateway (your host, where the web server runs) may pass on
   the visitor's address (`LODGE_TRUSTED_PROXIES`); without it every member would share one address for the Lodge's
   lockouts and rate limits. If your web server runs in another container on the Lodge's network, trust that subnet instead.
@@ -44,9 +44,12 @@ The Compose file is set up so the Lodge exposes nothing but what your web server
   and a small `/tmp` are writable), and limits on memory and processes.
 - **No secrets in the image.** Your codes, keys and tokens live only in `lodge.env` and the `lodge-data` volume on your
   machine. Keep `lodge.env` readable by you only (`chmod 600 lodge.env`): it can hold the admin token and Battle.net secret.
-- Anyone who may run `docker` on the machine can read the Lodge's settings and data (`docker inspect`, `docker exec`):
-  give the `docker` group only to people you would give root.
 - The image is rebuilt every week on a fresh base, so security fixes arrive with `docker compose pull`.
+
+> [!CAUTION]
+> Docker opens published ports past the host's firewall (ufw), so never change `127.0.0.1:5280` to `5280:8080` or
+> `0.0.0.0` - put your web server in front instead. Anyone who may run `docker` on the machine can read the Lodge's
+> settings and data (`docker inspect`, `docker exec`): give the `docker` group only to people you would give root.
 
 ## Every day
 
@@ -65,7 +68,7 @@ docker compose pull && docker compose up -d
 ```
 
 The Outpost knows a Lodge runs in Docker and shows this command when your server is behind. To go back, put the previous
-version in `docker-compose.yml` (`image: ghcr.io/elanoran/lodge:2.37.1` instead of `:latest`) and `docker compose up -d`.
+version in `docker-compose.yml` (`image: ghcr.io/elanoran/lodge:2.37.2` instead of `:latest`) and `docker compose up -d`.
 
 ## Backups
 

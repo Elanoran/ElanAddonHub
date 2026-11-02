@@ -3,8 +3,9 @@
 **One tidy bag window** for every class on WoW Forever: search, categories, a free-space counter, a junk seller, and on
 every item what your other characters carry.
 
-**[Download ElansBags.zip](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansBags.zip)**
-· works on its own · or get it with [Elan's Outpost](../README.md)
+[![Download ElansBags.zip](https://img.shields.io/badge/Download-ElansBags.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansBags.zip)
+
+Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to date.
 
 ## What it does
 
@@ -48,6 +49,8 @@ characters).
 ## Good to know
 
 - Folder name: `ElansBags`. It works without any other addon; Elan's Hub adds the other characters on tooltips.
-- After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
+
+> [!WARNING]
+> After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
 
 [All of Elan's addons](README.md) · [How to install by hand](README.md#installing-by-hand)

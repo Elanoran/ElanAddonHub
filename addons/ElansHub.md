@@ -4,8 +4,9 @@ The small **companion addon** of [Elan's Outpost](../README.md). It tells the Ou
 which character you play, where you are and what you carry. Without the Outpost you don't need it; Elan's Bags uses it
 for your other characters' items, and Elan's Toolkit for the Outpost's profession guides.
 
-**[Download ElansHub.zip](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansHub.zip)**
-· works on its own · comes with [Elan's Outpost](../README.md)
+[![Download ElansHub.zip](https://img.shields.io/badge/Download-ElansHub.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansHub.zip)
+
+Works on its own, and comes with [Elan's Outpost](../README.md).
 
 ## What it does
 
@@ -45,6 +46,8 @@ reads it. Your Lodge only gets what the Outpost shares, and each kind of sharing
 ## Good to know
 
 - Folder name: `ElansHub`.
-- After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
+
+> [!WARNING]
+> After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
 
 [All of Elan's addons](README.md) · [How to install by hand](README.md#installing-by-hand)

@@ -11,10 +11,6 @@ addons kept up to date, a game database built from your own client, a 3D world m
   <sub>Only want the addons? <a href="addons/README.md">Download them on their own</a>.</sub>
 </p>
 
-<p align="center">
-  <a href="https://github.com/Elanoran/ElanAddonHub/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Elanoran/ElanAddonHub?label=latest&color=7fb04a"></a>
-</p>
-
 <p align="center"><img src="docs/readme/addons.png" width="860" alt="The Addons page: Elan's addons with install buttons, and the other addons in your AddOns folder with their sources (CurseForge, GitHub, WoWInterface, Wago)"></p>
 
 ---
@@ -27,6 +23,21 @@ and your friends a private place to hang out: text chat, voice rooms, a calendar
 
 It never touches the game itself: it reads the game's files, and the only things it writes are the addon folders
 it installs for you.
+
+```mermaid
+flowchart LR
+    A["Elan's addons<br>in the game"]:::addon <--> H["Elan's Hub<br>companion addon"]:::hub
+    H <--> O["Elan's Outpost<br>on your PC"]:::outpost
+    O <-.->|if you join one| L["Your Lodge<br>a server one of you hosts"]:::lodge
+    L <-.->|if its Guild Master turns it on| C["The Cairn<br>many Lodges"]:::cairn
+    classDef addon fill:#2da44e,stroke:#1a7f37,color:#fff
+    classDef hub fill:#1b998b,stroke:#137a6f,color:#fff
+    classDef outpost fill:#0969da,stroke:#0550ae,color:#fff
+    classDef lodge fill:#d4761a,stroke:#a35a12,color:#fff
+    classDef cairn fill:#8250df,stroke:#6639ba,color:#fff
+```
+
+<sub>Solid arrow: always there. Dotted arrow: only if you (or your Lodge) choose it.</sub>
 
 | | |
 |---|---|
@@ -98,9 +109,8 @@ keys to pass around, nothing to edit on the server. The Lodge makes its own key 
 asks the Cairn to join with its name and public address, and the Cairn calls that address back once to check it really is
 that Lodge. For now the Cairn is **invite only**: a Lodge joins with an invite code from the Cairn's operator, and a code
 works once. Later anyone can ask to join and is admitted from a waiting list (a few Lodges a day, first come first
-served). A new Lodge receives the
-Cairn's numbers right after its first contribution, but its own numbers only count toward the agreement rule after a week
-of contributing.
+served). A new Lodge receives the Cairn's numbers right after its first contribution, but its own numbers only count
+toward the agreement rule after a week of contributing.
 
 <p align="center"><img src="docs/readme/lodge-chat.png" width="860" alt="Lodge chat: a channel with a few messages and a reply, and who is online and in game beside it"></p>
 
@@ -172,11 +182,13 @@ Every change since is in the [changelog](src/CHANGELOG.md), also readable inside
 4. **In game**, type `/reload` (or restart WoW if it was running when a new addon was installed).
 5. **Join a Lodge** (optional): click the invite link a friend sent you. Each link works once and signs in only this PC.
 
-**Requirements:** Windows 10 or 11 (64-bit) and Microsoft's free **.NET Desktop Runtime 10**, installed once per PC. If it is
-missing, Windows says so with a download link when the Outpost starts: install it, then start the Outpost again
-(or install it beforehand with `winget install Microsoft.DotNet.DesktopRuntime.10`). The browser,
-the world map and video previews use Microsoft Edge WebView2, which is part of Windows 11 and of an up-to-date
-Windows 10; without it the Atlas falls back to its flat maps.
+> [!IMPORTANT]
+> **Requirements:** Windows 10 or 11 (64-bit) and Microsoft's free **.NET Desktop Runtime 10**, installed once per PC.
+> If it is missing, Windows says so with a download link when the Outpost starts: install it, then start the Outpost
+> again (or install it beforehand with `winget install Microsoft.DotNet.DesktopRuntime.10`).
+
+The browser, the world map and video previews use Microsoft Edge WebView2, which is part of Windows 11 and of an
+up-to-date Windows 10; without it the Atlas falls back to its flat maps.
 
 **Updates.** The Outpost checks for new versions of itself and of your addons every 30 minutes, shows what is new,
 and updates itself with one click (every download is checked against its checksum first). You can also let it update
@@ -365,7 +377,10 @@ prints the FAIL lines and the per-section timing, and exits non-zero on new fail
     Tools\selftest.ps1 -WhatIf -Paths src/Theme/Theme.xaml   ...as if only that file had changed
     Tools\selftest.ps1 -List                    section names
 
-**During development use the default (`--changed`); run `-Full` before every release.** A scoped run is the ~1 s of
+> [!IMPORTANT]
+> During development use the default (`--changed`); run `-Full` before every release.
+
+A scoped run is the ~1 s of
 setup plus the sections that test the changed files: a decoder or an Atlas page edit is about a minute, a theme token
 half a minute, an art picture a few seconds, a Lodge feature file (calendar, badges, invites ...) its own sections; only
 the Lodge core (session, models, page) runs every Lodge section (about 2 minutes). Only App, Brand, Util,

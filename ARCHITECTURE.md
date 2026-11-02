@@ -202,6 +202,8 @@ Short field names are used where a table repeats many times (items, slots, nodes
 
 *Hub, per character.*
 
+<details><summary>Fields and shared shapes</summary>
+
 `name, realm, class, classFile, race, raceFile, sex, faction, level, xp, xpMax, rested, money, guild,
 zone, subzone, updated`
 
@@ -212,6 +214,8 @@ are not repeated per slot; each module has one `links = { [itemId] = itemLink }`
 
 **Container**: `{ n = slots, k = kind, id = bag itemId or nil, ic = icon, s = { [slot] = Item } }`.
 `k` is `"backpack" | "bag" | "reagent" | "bank" | "bankbag" | "tab"`.
+
+</details>
 
 ### `bags` v1
 
@@ -231,6 +235,8 @@ combat after `BAG_UPDATE_DELAYED`, throttled to once per 2 s.
 
 *Hub, account.*
 
+<details><summary>Shape and scanning</summary>
+
 ```
 { guilds = { ["Realm-Guild"] = { name, realm, money, at,
                                  tabs = { [tab] = { name, ic, at, s = { [slot] = Item } } } } },
@@ -240,9 +246,13 @@ combat after `BAG_UPDATE_DELAYED`, throttled to once per 2 s.
 Tabs are scanned only when the player views them; tabs not viewed keep their older data. The Hub merges
 into its own stored table, so one guild's update never drops another guild.
 
+</details>
+
 ### `gear` v1
 
 *Hub, per character. `stats` added in Hub 1.13.0 (additive, stays v1).*
+
+<details><summary>Shape and the <code>stats</code> fields</summary>
 
 ```
 { at, ilvl = average item level or nil,
@@ -269,9 +279,13 @@ every field optional, secret values dropped:
   same throttled scheduler.
 - Only maximum health and power are read, never live values.
 
+</details>
+
 ### `reps` v1
 
 *Hub 1.16.0, per character.*
+
+<details><summary>Shape, reading and limits</summary>
 
 ```
 { at, partial = true | nil,
@@ -288,9 +302,13 @@ every field optional, secret values dropped:
   ("Your characters", `AtlasQuery.Reputation.cs`).
 - **Lodge**: sent only through the Armory's opt-in `reputations` feature, without names.
 
+</details>
+
 ### `talents` v1
 
 *Hub, per character.*
+
+<details><summary>Shape</summary>
 
 ```
 { at, api = "traits" | "classic", spent, unspent,
@@ -300,9 +318,13 @@ every field optional, secret values dropped:
 
 Raw positions; the Outpost groups them into trees for display. `api` says which client API it came from.
 
+</details>
+
 ### `professions` v1
 
 *Hub, per character. `line` and `known` added in Hub 1.14.0 (additive, schema stays v1).*
+
+<details><summary>Shape, when recipes are read, APIs, merging</summary>
 
 ```
 { at,
@@ -354,18 +376,26 @@ The spell id is parsed from the `enchant:` / `spell:` link.
 The Outpost reads it with `HubModules.ProfessionsOf` (`HubProfessionsModule.Known`, `HubKnownScan`) and
 `ProfChar.Known / ScanOf / Knows`. A profession without a scan is *unknown*, never "not learned".
 
+</details>
+
 ### `flight` v1
 
 *Elan's Toolkit, account.*
+
+<details><summary>Shape and owner</summary>
 
 `{ legs = { ["<Horde|Alliance>|<nodeIdA>><nodeIdB>"] = { t = seconds, n = samples (max 5), at } }, names = { [nodeId] = name } }`
 
 Same format as Hunter Helper's old `flightLegs` / `flightNodeNames`. Published by Elan's Toolkit, which owns
 the flight timer from Toolkit 0.2.0, with `by = "ElansToolkit"`. The Outpost shares it with the Lodge.
 
+</details>
+
 ### `hunter.fieldnotes` v1
 
 *Hunter Helper 1.26.11, account scope.*
+
+<details><summary>Shape, reading, sharing and writing back</summary>
 
 ```
 { at, notes = { ["<npcId>"] = { name, min, max, n, first, last, hist, map, x, y,
@@ -387,9 +417,13 @@ fieldNotes = { v = 1, at, npcs = { [id] = { name, min, max, n, m, last, class, f
                                             pts = { [uiMapId] = { { x, y } } } } } }
 ```
 
+</details>
+
 ### `hunter.pets` v1
 
 *Hunter Helper, per character. Published since Hunter Helper 1.26.5; shown since Outpost 2.46.0.*
+
+<details><summary>Shape, keys and publishing</summary>
 
 ```
 { at,
@@ -415,9 +449,13 @@ fieldNotes = { v = 1, at, npcs = { [id] = { name, min, max, n, m, last, class, f
 - **Outpost**: caps what it reads (40 pets, 40 abilities per pet, 100 known), skips odd values, and shows the Pet
   tab on the Characters page for hunters only (Outpost 2.46.0).
 
+</details>
+
 ### `health` v1
 
 *Elan's Toolkit's Bug Trap host, account.*
+
+<details><summary>Shape, source, publishing and reading</summary>
 
 ```
 { addons = { [addonFolder] = {                  -- every addon registered with the Bug Trap (Toolkit, Hunter Helper, Paladin Helper, Priest Helper, Bags)
@@ -441,6 +479,8 @@ fieldNotes = { v = 1, at, npcs = { [id] = { name, min, max, n, m, last, class, f
     saved variables.
   - `other.bugs` are counted as "other addons" on the host and never listed or reported.
 - Character and guild names for the anonymous report also come from `core` (and `guildbank`).
+
+</details>
 
 ### The HUD
 
@@ -616,11 +656,11 @@ Existing flows keep working while data moves to the Hub:
 
 | Today | Moves to | Status |
 |---|---|---|
-| Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | done (Hub 1.11.0, Outpost 2.43.0 reads it) |
-| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | done (Hub 1.12.0 collects; Outpost 2.44.0 Characters page reads it, Elan's Bags data as fallback) |
-| Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), published by Elan's Toolkit, which takes over the flight timer and the HUD | done (Toolkit 0.2.0 publishes, Hunter Helper 1.26.0 plugs in, Outpost 2.45.0 reads Hub + old file) |
-| Hunter Helper `cdb.pets` / `cdb.known` (pets, stable, abilities; the Outpost never read it) | Hub `hunter.pets` (per character), published by Hunter Helper | done (Hunter Helper 1.26.5 publishes, Outpost 2.46.0 shows it as the Pet tab; `cdb` stays Hunter Helper's own) |
-| Health (`bugs`, `diag` in each addon's file) | Hub `health` (account), published by the Toolkit's Bug Trap host | done, dual: Hub first, per-addon fallback (see below) |
+| Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | ✅ done (Hub 1.11.0, Outpost 2.43.0 reads it) |
+| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | ✅ done (Hub 1.12.0 collects; Outpost 2.44.0 Characters page reads it, Elan's Bags data as fallback) |
+| Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), published by Elan's Toolkit, which takes over the flight timer and the HUD | ✅ done (Toolkit 0.2.0 publishes, Hunter Helper 1.26.0 plugs in, Outpost 2.45.0 reads Hub + old file) |
+| Hunter Helper `cdb.pets` / `cdb.known` (pets, stable, abilities; the Outpost never read it) | Hub `hunter.pets` (per character), published by Hunter Helper | ✅ done (Hunter Helper 1.26.5 publishes, Outpost 2.46.0 shows it as the Pet tab; `cdb` stays Hunter Helper's own) |
+| Health (`bugs`, `diag` in each addon's file) | Hub `health` (account), published by the Toolkit's Bug Trap host | ✅ done, dual: Hub first, per-addon fallback (see below) |
 
 Health details: Toolkit 0.3.1 / Hunter Helper 1.26.6 / Paladin 0.6.9 / Bags 0.4.15 with ElansLib BugTrap 4 publish;
 Outpost 2.46.0 reads Hub first, then each addon's own file; the per-addon tables are still written.
@@ -634,6 +674,22 @@ only after the addon versions that wrote the old keys are no longer offered by t
 
 *Where the Atlas's facts come from: the game's files, what the client has seen, maps, drops and sources.*
 
+```mermaid
+flowchart LR
+    G["Your game files: DB2 tables, DBCache.bin, WDB caches, combat log"]:::data --> A["The Atlas in Elan's Outpost"]:::outpost
+    B["Classic baseline, downloaded on your click"]:::data --> A
+    T["Elan's Toolkit observations"]:::addon -->|atlas.obs| H["Elan's Hub"]:::hub
+    H --> A
+    A <-->|what members share| L["Lodge pool"]:::lodge
+    L <-->|opt-in, give to get| C["The Cairn"]:::cairn
+    classDef data fill:#6e7781,stroke:#57606a,color:#fff
+    classDef addon fill:#2da44e,stroke:#1a7f37,color:#fff
+    classDef hub fill:#1b998b,stroke:#137a6f,color:#fff
+    classDef outpost fill:#0969da,stroke:#0550ae,color:#fff
+    classDef lodge fill:#d4761a,stroke:#a35a12,color:#fff
+    classDef cairn fill:#8250df,stroke:#6639ba,color:#fff
+```
+
 ### Atlas: the game's own data
 
 *Since Outpost 2.48.0.*
@@ -641,11 +697,14 @@ only after the addon versions that wrote the old keys are no longer offered by t
 Atlas is the Outpost's reference layer about the game itself: items, and where things drop, who sells them and which
 quest gives them. One principle decides everything about it:
 
-- **Local, read-only, at runtime**: the Outpost reads the user's own game files, locally, read-only, at runtime.
-  - The installer ships no game or third-party data.
-  - Data the user's install does not hold is downloaded only on the user's click: the Classic baseline (`ClassicSetup`)
-    or the user's own Lodge (feature `classic`).
-  - Every fact keeps its source label ("Your game data", "Classic baseline", "Seen by the Lodge", "Seen on Forever").
+> [!IMPORTANT]
+> **Local, read-only, at runtime**: the Outpost reads the user's own game files, locally, read-only, at runtime.
+>
+> - The installer ships no game or third-party data.
+> - Data the user's install does not hold is downloaded only on the user's click: the Classic baseline (`ClassicSetup`)
+>   or the user's own Lodge (feature `classic`).
+> - Every fact keeps its source label ("Your game data", "Classic baseline", "Seen by the Lodge", "Seen on Forever").
+
 - **Read-only, shared**: every file is opened `FileShare.ReadWrite | Delete` (the game rewrites some of them while it
   runs) and nothing is written to the WoW folder.
   - The only thing Atlas writes is its own compact index in the Outpost's data folder (`cache\itemdata.bin`).
@@ -671,6 +730,8 @@ quest gives them. One principle decides everything about it:
 | `Cache\ADB\<locale>\DBCache.bin` (XFTH v9) | the item rows the server pushed to this client, among them items that were hidden until somebody found them ("revealed") |
 | the same `DBCache.bin`, other tables | the server's hotfix rows for `SpellName`, `Spell`, `SpellMisc`, `SpellEffect`, `QuestV2`, `Lock`, `FactionTemplate` |
 
+<details><summary>How each source is read</summary>
+
 How each source is read:
 
 - **`ItemSparse.db2`**: `Casc.cs` (read-only CASC reader; key-locked blocks read as zeros) + `Services/Db2/Wdc5.cs`.
@@ -690,6 +751,8 @@ How each source is read:
     row.
   - Atlas facts from them are labelled "Server hotfix".
   - Not shared through the Lodge: these are pushed hotfixes every client gets at login.
+
+</details>
 
 #### `ItemData` and its use
 
@@ -730,6 +793,8 @@ switch).
   group keeps what the other tables give).
   - The reason goes to the log and the Settings "Game data" line ("..., spell data unavailable (...)").
 
+<details><summary>Layouts known (WoWDBDefs, build 1.60.1.70338)</summary>
+
 Layouts known (WoWDBDefs, build 1.60.1.70338):
 
 | Table | Layout |
@@ -757,6 +822,8 @@ Layouts known (WoWDBDefs, build 1.60.1.70338):
 | ItemXItemEffect | 96F083AD |
 | ItemSet | F79068A4 |
 | ItemSetSpell | 2666A73F |
+
+</details>
 
 - **Reader additions (`Wdc5`)**:
   - relationship data (the foreign key of a column that is not stored in the record: SpellMisc / SpellEffect -> spell,
@@ -837,7 +904,7 @@ Ids (they go through `Open(id)`, the history and `NormalizeId` like every other 
 
 #### Professions list
 
-*Since 2.85.*
+*Since Outpost 2.85.*
 
 - **Hosted AND listed**: the Professions category has `AtlasCategory.Listed`, `HasList`. `browse:professions` is a
   normal browse page (`AtlasBrowse.BuildProfessions` in `AtlasBrowse.Classes.cs`).
@@ -909,7 +976,7 @@ browse:items/weapons/one-handed-swords?name=..&minlvl=20&maxlvl=30&q=3&slot=Head
 
 #### Object kinds
 
-*`Services/Atlas/ObjectKinds.cs`, pure, since 2.77.*
+*`Services/Atlas/ObjectKinds.cs`, pure, since Outpost 2.77.*
 
 - **Kinds**: herbs | ore | chests | fishing | other, for the Objects lists, the world map's node layers, the gathering
   guide and an item's "Gathered / Container" source.
@@ -928,7 +995,7 @@ browse:items/weapons/one-handed-swords?name=..&minlvl=20&maxlvl=30&q=3&slot=Head
 
 #### Quest chains
 
-*`Services/Atlas/QuestChains.cs`, pure, since 2.77.*
+*`Services/Atlas/QuestChains.cs`, pure, since Outpost 2.77.*
 
 - **Links**: from the Classic baseline's `quest_template` (`PrevQuestId`, `NextQuestId`, `ExclusiveGroup`,
   `NextQuestInChain`, `BreadcrumbForQuestId`, kept since index format 2).
@@ -1019,6 +1086,8 @@ switch).
   - The render version, `MapRender.RenderVersion`, is bumped when the picture itself changes, so older pictures are
     made again and removed.
 
+<details><summary>Tables read, map art and overlays</summary>
+
 | Table (CASC FileDataID) | Layout (1.60.1.70338) | Gives |
 |---|---|---|
 | `UiMap` (1957206) | `DB51D55F` | the map tree: id, name, parent, type (cosmic / world / continent / zone / dungeon / micro / orphan), flags, system. **Required**: without it the layer is unavailable. |
@@ -1039,6 +1108,8 @@ switch).
    - Layouts checked against the build's real files (1,081 overlays, 1,739 tiles, 84 of 144 arts have overlays).
    - Optional: a missing or unknown overlay table leaves the base art alone and keeps the reason
      (`MapSet.OverlayProblem`).
+
+</details>
 
 #### Ids and coordinates
 
@@ -1097,18 +1168,18 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 
 | Layer | Where | Status |
 |---|---|---|
-| A. Items | Outpost `Services\Db2`, `ItemData` | built (Outpost 2.48.0) |
-| A2. Spells, skills, professions | Outpost `Services\Db2`, `SpellData` | built |
-| A3. What the client has seen | Outpost `Services\Db2` (WDB reader) | built |
-| A4. Factions & reputation | Outpost `Services\Db2` | built |
-| A5. Combat log | Outpost `Services\Atlas\CombatLogData` (the game's `WoWCombatLog-*.txt`, read-only) | built (Outpost 2.95) |
-| B. Maps & instances | Outpost `Services\Maps` | built |
-| C. Classic baseline | Outpost `Services\Atlas\Classic` | built |
-| D. Observations | Toolkit → Hub module `atlas.obs` (account) | built (Toolkit) |
-| E. Lodge pool | server `AtlasModule` + `LodgeSession.Atlas` | built (server 2.15.0) |
-| G. Talent calculator & builds | Outpost Talents page (`TalentsPage`, Ctrl+6), build codes and links; hand-off to Hunter Helper's planner planned, not wired | built |
-| H. Professions & camping | Outpost Professions page (per profession: recipes, colours, reagents with sources, what you can craft from all characters' items, a skill-up plan, camping items and buffs); Lodge "who can craft this" (the Armory, `Crafters`) | built |
-| F. Atlas page | Outpost UI (`AtlasPage`, `Services\Atlas\AtlasQuery*`) | built |
+| A. Items | Outpost `Services\Db2`, `ItemData` | ✅ built (Outpost 2.48.0) |
+| A2. Spells, skills, professions | Outpost `Services\Db2`, `SpellData` | ✅ built |
+| A3. What the client has seen | Outpost `Services\Db2` (WDB reader) | ✅ built |
+| A4. Factions & reputation | Outpost `Services\Db2` | ✅ built |
+| A5. Combat log | Outpost `Services\Atlas\CombatLogData` (the game's `WoWCombatLog-*.txt`, read-only) | ✅ built (Outpost 2.95) |
+| B. Maps & instances | Outpost `Services\Maps` | ✅ built |
+| C. Classic baseline | Outpost `Services\Atlas\Classic` | ✅ built |
+| D. Observations | Toolkit → Hub module `atlas.obs` (account) | ✅ built (Toolkit) |
+| E. Lodge pool | server `AtlasModule` + `LodgeSession.Atlas` | ✅ built (server 2.15.0) |
+| G. Talent calculator & builds | Outpost Talents page (`TalentsPage`, Ctrl+6), build codes and links; hand-off to Hunter Helper's planner planned, not wired | ✅ built |
+| H. Professions & camping | Outpost Professions page (per profession: recipes, colours, reagents with sources, what you can craft from all characters' items, a skill-up plan, camping items and buffs); Lodge "who can craft this" (the Armory, `Crafters`) | ✅ built |
+| F. Atlas page | Outpost UI (`AtlasPage`, `Services\Atlas\AtlasQuery*`) | ✅ built |
 
 Sources per layer:
 
@@ -1147,6 +1218,8 @@ Sources per layer:
 
 *Elan's Toolkit, account; cumulative since first record.*
 
+<details><summary>Full shape</summary>
+
 ```lua
 { since = time,
   kills   = { [npcId]  = { n = lootedKills, items = { [itemId] = { n = timesDropped, c = totalCount } }, z = { [uiMapId] = kills } } },
@@ -1167,6 +1240,8 @@ Sources per layer:
   -- "game 1.60.1" (the build you run), "build N (older game version)" or "unknown version" (FindVersions)
 }
 ```
+
+</details>
 
 #### Loot accuracy
 
@@ -1301,6 +1376,8 @@ Code:
 - `Services/Talents/` (model, rules, build code, builds).
 - `TalentsPage`.
 
+<details><summary>Tables: CASC FileDataID and layout</summary>
+
 | Tables: CASC FileDataID and layout (1.60.1.70338) | Gives |
 |---|---|
 | `ChrClasses` (1361031) `AFC9B0C2`, `SkillLineXTraitTree` (4505477) `853B88D6`, `SkillLine` / `SkillLineAbility` (spell layer) | tree -> class: the class bit of the tree's skill line abilities; the three tree names of a class = the class skill line most of a column band's talents belong to |
@@ -1309,6 +1386,8 @@ Code:
 | `TraitNodeGroup` (4420300) `ECA626BE`, `...XTraitNode` (4420302) `B9288EB8`, `TraitCond` (4543085) `BFDD1994`, `...GroupXTraitCond` (4543090) `3F06B639`, `TraitNodeXTraitCond` (4543092) `E2160AA8` | the gates: a condition "N points spent in group G" on the group of the gated row; G = the rows above it |
 | `TraitTreeXTraitCurrency` (4524218) `E093CD62`, `TraitTreeXTraitCost` (4420306) `19EEFE95`, `TraitCost` (4420295) `70C65F17`, `TraitCurrency` (4524216) `A8B0874B`, `TraitCurrencySource` (4539393) `4C49B6AA` | point currency of a tree (3820), cost per rank (1), the cap (51), the level sources |
 | `TraitDefinitionEffectPoints` (4536895) `7E18C372`, `CurvePoint` (892586) `7D4954A1` | rank curves: rank n of a talent = the curve's value for spell effect i (so descriptions can be rank-aware, `SpellData.Spell(id, effectPoints)`) |
+
+</details>
 
 Required tables unknown / missing = layer unavailable ("game updated", logged, Settings line). The optional ones
 (currency, curves, node conditions) only take their feature.
@@ -1413,6 +1492,8 @@ Code:
 - `AtlasQuery.Classes.cs` (pages, search), `AtlasBrowse.Classes.cs` (lists), `AtlasPage.Classes.cs` (the
   Spells-by-level card).
 
+<details><summary>Tables and what each gives</summary>
+
 | Table (CASC FileDataID) | Table hash / layout (1.60.1.70338) | Need |
 |---|---|---|
 | `ChrClasses` (1361031), shared with the talent layer | `F5889D8C` / `AFC9B0C2` | **Required** |
@@ -1466,6 +1547,8 @@ Pages:
 - `SpellView` carries `CostText` / `CooldownMs` for the game-style tooltips: the cost on the left of the range line,
   the cooldown on the right of the cast line.
 
+</details>
+
 #### Spells by level
 
 `ClassSpellBook.Build(classId)` -> `Groups(filter)`: the spells of the class' tabs (SkillLineAbility of each tab line)
@@ -1500,7 +1583,7 @@ that have a SpellLevels row, grouped by level.
 
 #### About card and fixed top
 
-*Since 2.81; checked against Forever in 2.83.*
+*Since Outpost 2.81; checked against Forever in 2.83.*
 
 `AtlasQuery.AddClassLore / AddRaceLore` (`AtlasQuery.ClassLore.cs`) put a `ClassLorePage` on the model:
 
@@ -1620,6 +1703,8 @@ The Outpost only claims what the Hub read:
 - There is **no Camping skill line**: camp objects are ordinary recipes of their profession (so the profession's skill
   gates them).
 
+<details><summary>Findings against the public guides, and the camp objects</summary>
+
 Findings for build 1.60.1.70338 against the public guides:
 
 | Topic | Tables say | Guides |
@@ -1647,6 +1732,8 @@ Camp objects: 36 camp objects, 12 professions x up to 3 tiers (Tier 1 from skill
 | Camp Chair | +2 % crit |
 | Camp Tent | rested XP |
 | Reagent Bot / Cookie's Feast ... | |
+
+</details>
 
 - Several buffs are mutually exclusive with the class buff: Strength of Earth Totem, Power Word: Fortitude, Blessing of
   Kings / Might / Wisdom, Mark of the Wild, Arcane Intellect, Divine Spirit, Moonkin Aura.
@@ -1836,6 +1923,8 @@ section.
 
 `Services/Atlas/AtlasNav.cs`, pure.
 
+<details><summary>Members</summary>
+
 | Member | What it does |
 |---|---|
 | `Entries()` | the rows, group by group; the Lodge's "Finds" = `browse:items?src=lodge&how=drop` when the Lodge pool has data |
@@ -1844,6 +1933,8 @@ section.
 | `CategoryCrumb(kind[, id])`, `EntityCategory(kind, id)` | |
 | `Upgrade(id)` | sends old ids to where the page is now (see the spells / skills rule below) |
 | `AllPages()` / `PageHits(text)` | the pages of the Atlas itself for the palette |
+
+</details>
 
 - **Spells / skills rule** (2.77, one rule, `Services/Atlas/AtlasSkillModel.cs`):
   - Spells = what you cast: class lines, racial lines, the professions' spells and spells of no line.
@@ -1967,6 +2058,8 @@ Ctrl+K while the web page has the keyboard:
 
 #### Tests
 
+<details><summary>Sections and the <code>atlasmenu</code> checks</summary>
+
 | Section | File | Covers |
 |---|---|---|
 | `atlaspage` | `MainWindow.AtlasShellTest.cs` | nav groups and rows, the highlighted row for every kind of page, shared-row members, recents, pins, persistence, breadcrumbs and their clicks, Home, palette keyboard / scopes / prefixes / preview / tolerant search / cancellation / 24,000 items, the narrow nav |
@@ -1984,6 +2077,8 @@ Ctrl+K while the web page has the keyboard:
   widths;
 - the spells / skills rule: nothing in both, weapon skills reachable, old ids, the pages' rows and crumbs, the one-line
   explanations.
+
+</details>
 
 ### Atlas entity template and global search
 
@@ -2219,6 +2314,8 @@ page fact), self-test section `upgrades`.
 
 `UpgradeExtras.BuildConsumables` walks the items of the game data usable at the level:
 
+<details><summary>Item classes and rules</summary>
+
 | Item class | Subclass / rule | Kind |
 |---|---|---|
 | 0 | 5 | food and drink |
@@ -2229,6 +2326,8 @@ page fact), self-test section `upgrades`.
 | 0 | 7 | bandages |
 | 6 | arrows 2 / bullets 3 by the worn ranged weapon, ranked by the ItemDamageAmmo table; hunters only | ammo |
 | - | Use spells with effect 54 whose enchant (SpellItemEnchantment, with its duration) may go on the worn main hand (SpellEquippedItems), scored like permanent enchants; poisons only for rogues | temporary enhancements |
+
+</details>
 
 - **Stat buffs** come from the Use spell and the spells it triggers (depth 2).
 - **Restores** come from the spell's own text ("Restores N to M health / mana", "Heals N damage"; a range counts as its
@@ -2408,6 +2507,8 @@ game build) and shown in a sandboxed WebView2 page with Leaflet.
 All verified on the real files of 1.60.1.70338; nothing guessed, an unknown layout hash = that part unavailable, like
 `MapTables`.
 
+<details><summary>Sources and their fields</summary>
+
 | Source | FileDataID | Table hash / layout |
 |---|---|---|
 | `Map.db2` (already read) | 1349477 | `BD84CD62` / `D43AFAC3` |
@@ -2455,6 +2556,8 @@ Where the facts come from: FileDataIDs from the community listfile; layout block
 - **Test leftovers**: Kalimdor's WDT lists a 3 x 3 block of tiles in the far top-left corner of the grid.
   `WdtFile.WithoutStrays` leaves out small groups (< 12 tiles) that are also more than 6 tiles from the main land
   (small islands near it stay).
+
+</details>
 
 #### Coordinates
 
@@ -2536,6 +2639,8 @@ JSON, validated in C# (`WorldMapProtocol.Parse`):
 - Layer ids from a fixed list.
 - A refused message is logged and counted, nothing else happens.
 
+<details><summary>Messages</summary>
+
 | Direction | Message | Meaning |
 |---|---|---|
 | page -> app | `hello`, `inited` | |
@@ -2549,6 +2654,8 @@ JSON, validated in C# (`WorldMapProtocol.Parse`):
 | app -> page | `goto`, `fit` | |
 | app -> page | `layer` | one message per layer: `points` as flat arrays + string tables, `labels`, `markers`, `lines` |
 | app -> page | `layerinfo`, `toast` | |
+
+</details>
 
 #### Layers
 
@@ -2603,6 +2710,8 @@ JSON, validated in C# (`WorldMapProtocol.Parse`):
 Verified on the real files of 1.60.1.70338 (`AdtFile`; wowdev.wiki/ADT/v18 for the layout, every claim checked on the
 files).
 
+<details><summary>Chunks, orientation and checks</summary>
+
 - **File**: a chunk list with the tags reversed on disk (`REVM`, `RDHM`, `O2HM` = MH2O water on tiles that have any,
   then 256 x `KNCM` = MCNK; read either way round).
 - In this client the root file alone carries the terrain shape. The ground textures live in the `tex0` file, read
@@ -2628,9 +2737,13 @@ files).
 - Heights are -754 .. 1,970 yd on Kalimdor, -1,030 .. 896 on the Eastern Kingdoms.
 - Not read: holes (MCNK holes), the inner vertices, vertex colours. MH2O, the liquids, is read: see **Liquids** below.
 
+</details>
+
 #### Terrain cache
 
 `WorldMapTerrain`.
+
+<details><summary>Layout, file format, build and measurements</summary>
 
 - **Layout**: `<data>\atlas\worldmap\<build key>\<mapId>\terrain\{col}_{row}.wmt` + `manifest.json` (written LAST) +
   `borders.json`.
@@ -2665,10 +2778,16 @@ files).
 
   - The ADTs come out of CASC at about 300 per second; the managed heap is back to where it was afterwards.
 
+</details>
+
 #### Liquids (MH2O)
 
-*Outpost 2.53.x.* `AdtFile.ReadLiquids`, `WorldMapWater.cs`; wowdev.wiki/ADT/v18 for the layout, every claim below
+*Outpost 2.53.x.*
+
+`AdtFile.ReadLiquids`, `WorldMapWater.cs`; wowdev.wiki/ADT/v18 for the layout, every claim below
 checked on the real files of 1.60.1.70338 (the root ADT is the only file read).
+
+<details><summary>MH2O layout, liquid kinds and what was found</summary>
 
 - **`O2HM` (MH2O)**: one chunk per tile, before the MCNKs, present on the ocean tiles and on every tile with inland
   water.
@@ -2734,9 +2853,13 @@ checked on the real files of 1.60.1.70338 (the root ADT is the only file read).
     about z -3) and not one liquid cell;
   - the tile south of it has 97 cells of lake-type water (a pond / canal) and nothing lies over the city.
 
+</details>
+
 #### Water file
 
 `WaterTile`: `<terrain>\{col}_{row}.wmw` next to the `.wmt`.
+
+<details><summary>File layout, sizes and measurements</summary>
 
 - **Header**: `WMW1`, col, row, layer count.
 - **Per layer** a 16-byte record:
@@ -2761,6 +2884,8 @@ checked on the real files of 1.60.1.70338 (the root ADT is the only file read).
     2.1 - 2.4 s for the Eastern Kingdoms.
   - Parsing all of a continent's MH2O in memory: 0.5 - 0.65 s. The 30-tile Durotar region is 111 KB.
   - The whole terrain folder is 12.7 MB (Kalimdor) / 10.3 MB (Eastern Kingdoms) with heights, water and borders.
+
+</details>
 
 #### Zone borders
 
@@ -3056,6 +3181,8 @@ Unchanged rules, one new page.
 This PC: RTX 4060 Ti, hardware WebGL through ANGLE / Direct3D 11, Medium detail, 1.5x height (the old 1x - 3x scale), a 1,500 x 950 window. An
 old measurement, before Trees & objects.
 
+<details><summary>Frame rate, scene size, memory and first open</summary>
+
 - **Frame rate**: a 6-second orbit with continuous camera movement over Thousand Needles holds **59.9 fps with the
   longest frame 17 ms (0 of 359 frames over 33 ms)**.
 - **Scene size**:
@@ -3072,6 +3199,8 @@ old measurement, before Trees & objects.
   built (see above); later the page shows its first meshes within about 2 s.
 - Software WebGL (SwiftShader) was not available in the test environment to measure: the page switches itself to Low detail and
   pixel ratio 1 there, and the self-test accepts any frame rate above 5 for it.
+
+</details>
 
 ### Drawn dungeon plans
 
@@ -3152,7 +3281,9 @@ plans from the player's own files, read-only, on first view (`AtlasMap.ShowInsta
 
 #### Game minimap pictures
 
-*Outpost 2.84.* `DungeonMinimap`: the client's own interior minimap blocks, laid over the drawn floors.
+*Outpost 2.84.*
+
+`DungeonMinimap`: the client's own interior minimap blocks, laid over the drawn floors.
 
 - **Table** `WMOMinimapTexture` (FileDataID 1323241, layout `01230A50`): GroupNum, BlockX, BlockY (stored + 0x100:
   use the low byte), FileDataID, and the WMO id as the relationship.
@@ -3249,6 +3380,8 @@ plans from the player's own files, read-only, on first view (`AtlasMap.ShowInsta
 
 `MobWarnings.Of`:
 
+<details><summary>Warnings and their sources</summary>
+
 | Warning | Source |
 |---|---|
 | fear | aura 7, mechanic 5 / 24 |
@@ -3264,6 +3397,8 @@ plans from the player's own files, read-only, on first view (`AtlasMap.ShowInsta
 | enrage | by name |
 | flee / call for help | EventAI |
 | immunities | from the masks |
+
+</details>
 
 - Effects only on the caster (implicit target 1, no B) never count as hostile (a druid's Serpent Form is no silence).
 
@@ -3305,16 +3440,19 @@ more: the player's position on the zone map, and only while **both** switches ar
 - In game: "Share my map position with Elan's Outpost" (`/ehub position on|off`, `ElansHubDB.position`, nil = off).
 - In the Outpost Settings > General: "Show my live position on the world map" (`Settings.WorldMapLivePos`).
 
-It is display only:
-
-- Nothing reads the game's memory, nothing presses keys, nothing is automated.
-- Nothing leaves the PC unless a third, separate switch is on: the Outpost's **Share my map position with the Lodge**
-  (2.97, below).
-- The Lodge presence message (`game`) is built field by field in `LodgeSession` and never includes it.
+> [!IMPORTANT]
+> It is display only:
+>
+> - Nothing reads the game's memory, nothing presses keys, nothing is automated.
+> - Nothing leaves the PC unless a third, separate switch is on: the Outpost's **Share my map position with the Lodge**
+>   (2.97, below).
+> - The Lodge presence message (`game`) is built field by field in `LodgeSession` and never includes it.
 
 #### Strip row 1, version 3
 
 The version byte goes 2 -> 3. Old Outposts only check `>= 2` and never read the reserved bytes, so they are unaffected.
+
+<details><summary>Byte layout and posFlags</summary>
 
 | byte (0-based) | meaning |
 |---|---|
@@ -3343,6 +3481,8 @@ Older Outposts mask the byte with 3.
 - The decoder (`StripCodec`) trusts "valid" only together with "on", and x / y only when valid.
 - Version 2 = an Elan's Hub that is too old to send positions (the map says so).
 - A row 1 that fails its checksum gives no position (v1 fields kept).
+
+</details>
 
 #### Reading in the addon
 
@@ -3433,6 +3573,8 @@ While "Share my map position" and the strip are on, the Hub registers a few *pla
 
 No combat-log event, no hook, every value through `issecretvalue`, string matching in `pcall`, nothing saved.
 
+<details><summary>Bytes 15-21 of row 1 (version 4)</summary>
+
 Bytes 15-21 of row 1 (version 4):
 
 | field | content |
@@ -3442,6 +3584,8 @@ Bytes 15-21 of row 1 (version 4):
 | **id** | 3 bytes: creature / item / quest id, the new level, or for an area a 24-bit hash of its name, `(h*31 + byte) mod 16777213`, because the client has no id for a discovered area |
 | **extra** | loot: quality, 15 = unknown, +16 for a quest item |
 | **age** | seconds it waited in the queue |
+
+</details>
 
 **Queue**: each event stays on the strip for 3 s (a 1 Hz reader sees it two or three times), then the next of at most
 8 queued.
@@ -3860,6 +4004,8 @@ Verified on the real files of build 1.60.1.70338. Chunk tags are stored reversed
 "DHOM" for MOHD, "PGOM" for MOGP). Written from wowdev.wiki/ADT/v18 and /WMO and checked read-only on the beta
 client's files (`_classic_beta_`, build 1.60.1.x).
 
+<details><summary>WDT, obj0 ADT, rotation, WMO root and group, flags, capitals, textures, bridges</summary>
+
 **WDT**:
 
 - The MAID entry (8 x uint32 per tile) has the obj0 ADT's FileDataID at index 1 (`WdtTile.Obj0Fdid`).
@@ -3984,6 +4130,8 @@ exterior lit (0x2040). Build 1.60.1.70450:
     (Ironforge's foot bridge) is not.
 - The class comment of `WorldMapBuildings` has the rule; the numbers are in the self-test output.
 
+</details>
+
 #### Simplified models
 
 `WmoModel`, one `.wmb` per distinct building. All exterior groups are welded into one mesh (vertices with the same place
@@ -4028,6 +4176,8 @@ The card's numbers come from it:
 | time | the sum over the shapes still to make of 0.005 s + 0.012 s per group (replaced by the measured values of an earlier build in the same game version: `manifest.json` has them) |
 | size | 500 bytes + 26,000 per group |
 
+<details><summary>Measured in the test environment, and runtime</summary>
+
 **Measured in the test environment** (SSD, other programs running):
 
 | continent | buildings | shapes | groups | scan | build | size | bridges alone |
@@ -4048,6 +4198,8 @@ The card's numbers come from it:
 
 The numbers repeat in the self-test notes. The work is I/O and the weld / cluster passes, one thread at below-normal
 priority, so a slower disk or CPU only makes the card's "less than a minute" longer.
+
+</details>
 
 #### Rendering
 
@@ -4266,6 +4418,8 @@ panel under the map.
 
 `SharedData.lua` is now ONE composed file with one writer:
 
+<details><summary><code>SharedData.lua</code> shape and caps</summary>
+
 ```lua
 ElansHubShared = {
   flights = { ... unchanged ... },
@@ -4290,6 +4444,8 @@ ElansHubShared = {
 | Route points per zone | 120 |
 | Nodes per object and zone | 300 |
 | File size | under 400 KB (nodes are cut first, then routes, then guides) |
+
+</details>
 
 **Safety**:
 
@@ -4694,6 +4850,17 @@ file is not public.
 - That Lodge hands it on only to its own members whose Atlas sharing is on.
 - The Outpost shows it as the "Cairn" layer: below the user's own Lodge (tier 0), above the Classic baseline (tier 2).
 
+```mermaid
+flowchart LR
+    M["Members with Atlas sharing on"]:::outpost -->|atlas.share| L["Their Lodge server"]:::lodge
+    L -->|pooled totals, no names, signed| C["The Cairn"]:::cairn
+    C -->|daily file, only to Lodges in good standing| L
+    L -->|handed on to sharing members only| M
+    classDef outpost fill:#0969da,stroke:#0550ae,color:#fff
+    classDef lodge fill:#d4761a,stroke:#a35a12,color:#fff
+    classDef cairn fill:#8250df,stroke:#6639ba,color:#fff
+```
+
 **Design**:
 
 - Not peer-to-peer (NAT, poisoning, IP exposure).
@@ -4852,7 +5019,9 @@ figure as its second line.
 
 #### On the maps
 
-*Since 2.93. `AtlasQuery.Cairn.cs`: `CairnSpawns`, `CairnNodes`, `CairnNodeMaps`, `CairnObjectsOnMap`, `CairnFlight`,
+*Since Outpost 2.93.*
+
+*`AtlasQuery.Cairn.cs`: `CairnSpawns`, `CairnNodes`, `CairnNodeMaps`, `CairnObjectsOnMap`, `CairnFlight`,
 `CairnSpotTip`; `CairnSet.AllSpawns` / `AllNodes` / `VendorNpcIds`.*
 
 **Where it shows**:
@@ -4874,7 +5043,7 @@ figure as its second line.
 
 #### The way into sharing
 
-*Since 2.87.*
+*Since Outpost 2.87.*
 
 **Welcome guide**: the Sharing step (`WelcomeGuide.cs`, step 4 of 5): what / with whom / why, the switch, Share and Not
 now of equal weight.
@@ -4891,7 +5060,7 @@ with a Turn on sharing link to Settings > Lodge.
 
 #### Where the data comes from
 
-*Since 2.91 (`Services/Atlas/DataHonesty.cs`, `AtlasPage.DataHonesty.cs`).*
+*Since Outpost 2.91 (`Services/Atlas/DataHonesty.cs`, `AtlasPage.DataHonesty.cs`).*
 
 **One definition**: every text that says where Atlas data comes from is defined once in `DataHonesty`. Three kinds:
 
@@ -4922,7 +5091,7 @@ with a Turn on sharing link to Settings > Lodge.
 
 #### Test and placeholder entries
 
-*Since 2.93 (`Services/Atlas/AtlasHidden.cs`).*
+*Since Outpost 2.93 (`Services/Atlas/AtlasHidden.cs`).*
 
 **One rule** for what the Atlas does not list:
 
@@ -4940,7 +5109,7 @@ with a Turn on sharing link to Settings > Lodge.
 
 #### Nameless creatures and coverage
 
-*Since 2.93.*
+*Since Outpost 2.93.*
 
 **Names**: `AtlasQuery.NamelessNpc` - "Not named yet" while `Context.WowRunning` (the app's `WowWatch`), else
 "NPC <id>".
@@ -4973,8 +5142,9 @@ nothing at all, as the empty section's line).
 
 #### Guard
 
-The public repo must never name the maintainers' own hosting: `Services/InfraGuard.cs` scans the tracked files in every
-self-test run.
+> [!CAUTION]
+> The public repo must never name the maintainers' own hosting: `Services/InfraGuard.cs` scans the tracked files in every
+> self-test run.
 
 ---
 
