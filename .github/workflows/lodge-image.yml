@@ -1,0 +1,57 @@
+# The Lodge's container image (server/docker): built when the Lodge server changes on main, every Monday (fresh base image), or by hand.
+# Published as ghcr.io/elanoran/lodge:<version> (Hub.Version in server/Lodge.Server/Hub.cs) and :latest.
+name: Lodge image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/Lodge.Server/**"
+      - "shared/Elans.Shared/**"
+      - "server/deploy/lodge-admin"
+      - "server/deploy/lodge-backup"
+      - "server/docker/Dockerfile"
+      - "global.json"
+  workflow_dispatch:
+  # weekly: the same Lodge on a fresh base image, so security fixes of Debian and .NET reach it without a Lodge change
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The Lodge version
+        id: v
+        run: |
+          v=$(grep -oE 'public const string Version = "[0-9]+\.[0-9]+\.[0-9]+"' server/Lodge.Server/Hub.cs | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          test -n "$v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/elanoran/lodge:${{ steps.v.outputs.version }}
+            ghcr.io/elanoran/lodge:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.title=Elan's Lodge
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later

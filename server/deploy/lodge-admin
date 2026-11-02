@@ -60,7 +60,8 @@ DEV="$DIR/devices"
 ENVF="${LODGE_ENV_FILE:-/etc/lodge/lodge.env}"
 INV_HEADER="# Lodge invites: id, sha256(secret), kind, name, role, created by, created, expires, max uses, uses, revoked (the secrets are not stored)"
 
-if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
+# in the Docker image (LODGE_INSTALL=docker) it runs as the Lodge's own user, who owns /data: no root there
+if [ "$(id -u)" -ne 0 ] && [ "${LODGE_INSTALL:-}" != "docker" ]; then echo "Run with sudo"; exit 1; fi
 mkdir -p "$DIR"
 
 cmd="${1:-list}"
@@ -144,7 +145,8 @@ code_field() {
 now() { date +%s; }
 fmt_time() { date -u -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
 sha() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
-envval() { if [ -r "$ENVF" ]; then grep -E "^$1=" "$ENVF" | tail -1 | cut -d= -f2- | sed -E "s/^[\"']//; s/[\"']\$//" || true; fi; }
+# a setting: the environment first (a container passes them this way, like lodge-backup), else the env file
+envval() { if [ -n "${!1:-}" ]; then echo "${!1}"; elif [ -r "$ENVF" ]; then grep -E "^$1=" "$ENVF" | tail -1 | cut -d= -f2- | sed -E "s/^[\"']//; s/[\"']\$//" || true; fi; }
 
 # a codes line's role field, normalised the way the server does (gm / guildmaster = owner)
 role_of() { awk -F: -v n="$1" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { r=tolower($3); if (r=="gm"||r=="guildmaster") r="owner"; print (r==""?"member":r); exit }' "$FILE"; }

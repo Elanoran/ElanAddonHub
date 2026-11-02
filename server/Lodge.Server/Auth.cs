@@ -44,7 +44,8 @@ public partial class Auth
         ReloadIfChanged();
         ReloadDevicesIfChanged();
         if (sharedHash == null && snap.Personal.Count == 0)
-            log.LogWarning("No members yet - make the owner link with: sudo lodge-admin claim-owner");
+            log.LogWarning(cfg.Docker ? "No members yet - make the owner link with: docker compose exec lodge lodge-admin claim-owner"
+                                      : "No members yet - make the owner link with: sudo lodge-admin claim-owner");
     }
 
     static byte[] Hash(string s) => SHA256.HashData(Encoding.UTF8.GetBytes(s.Trim()));

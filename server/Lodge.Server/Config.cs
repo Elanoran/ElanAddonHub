@@ -60,6 +60,8 @@ public class LodgeConfig
     public string[] RealmsMatch { get; set; } = new[] { "forever" };          // words / realm names / slugs that mark a WoW Forever realm (LODGE_REALMS_MATCH)
     public bool RealmsConfigured => BnetClientId.Length > 0 && BnetClientSecret.Length > 0;
     // ---- contribute to the Cairn (opt-in, off by default; Cairn.cs): the Lodge's pooled Atlas numbers (ids and counts only) go to an open commons
+    public string Install { get; set; } = "";               // LODGE_INSTALL: "docker" in the container image (the Outpost shows the Docker update command)
+    public bool Docker => Install == "docker";
     public bool CairnEnabled { get; set; }                  // LODGE_CAIRN_ENABLED=1, and only with a valid URL and key
     public string CairnUrl { get; set; } = "";              // the Cairn's base URL (https), e.g. https://example.org/cairn - nothing is built in
     public string CairnKey { get; set; } = "";              // this Lodge's Cairn key (LODGE_CAIRN_KEY, or a file named by LODGE_CAIRN_KEY_FILE); never logged
@@ -148,6 +150,7 @@ public class LodgeConfig
             CairnGameBuild = Int("LODGE_CAIRN_GAME_BUILD", 0, 0, 9_999_999),
             CairnFetchHours = Int("LODGE_CAIRN_FETCH_HOURS", 6, 2, 48),
             PublicUrl = Env("LODGE_PUBLIC_URL", ""),
+            Install = Env("LODGE_INSTALL", "").Trim().ToLowerInvariant() == "docker" ? "docker" : "",
             AdminToken = Env("LODGE_ADMIN_TOKEN", ""),
             RealmsMatch = Env("LODGE_REALMS_MATCH", "forever").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: > 0 } rm ? rm : new[] { "forever" },
         };

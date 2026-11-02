@@ -34,13 +34,16 @@ CODES="${LODGE_CODES_NAME:-codes}"
 log() { echo "lodge-backup: $*"; }
 die() { echo "lodge-backup: ERROR: $*" >&2; exit 1; }
 
-[ "$(id -u)" -eq 0 ] || die "run with sudo"
+# container mode (the Docker image sets LODGE_INSTALL=docker): runs as the Lodge's own user, archives are that user's, and a
+# restore needs the Lodge stopped (the data folder is a volume: its contents are replaced, the previous ones archived first)
+CONTAINER=0; [ "${LODGE_INSTALL:-}" = "docker" ] && CONTAINER=1
+[ "$(id -u)" -eq 0 ] || [ "$CONTAINER" -eq 1 ] || die "run with sudo"
 [[ "$KEEP" =~ ^[0-9]+$ ]] && [ "$KEEP" -ge 1 ] || die "LODGE_BACKUP_KEEP must be a number >= 1 (got '$KEEP')"
 [ -d "$DATA_DIR" ] || die "data folder $DATA_DIR not found"
 
 ensure_dir() {
   mkdir -p "$BACKUP_DIR"
-  chown root:root "$BACKUP_DIR"
+  [ "$CONTAINER" -eq 1 ] || chown root:root "$BACKUP_DIR"
   chmod 700 "$BACKUP_DIR"
 }
 
@@ -77,7 +80,7 @@ do_backup() {
   [ "$rc" -eq 0 ] || log "warning: some files changed while being archived (normal for live chat history)"
 
   tar -tzf "$part" >/dev/null || die "the new archive does not verify"
-  chown root:root "$part"; chmod 600 "$part"
+  [ "$CONTAINER" -eq 1 ] || chown root:root "$part"; chmod 600 "$part"
   mv "$part" "$out"
   trap - EXIT
   log "created $out ($(du -h "$out" | cut -f1)$( [ "$WITH_FILES" = "0" ] && echo ', without files/'))"
@@ -97,12 +100,54 @@ health_url() {
   echo "http://127.0.0.1:${port:-5280}${base}/health"
 }
 
+# container mode: the Lodge must be stopped (docker compose stop lodge), then this runs in a one-off container:
+#   docker compose run --rm --entrypoint lodge-backup lodge restore <archive>
+# The current data is archived to $BACKUP_DIR/lodge-before-restore-<time>.tar.gz first. An archive from a normal install
+# (its folder is lodge/) works too, so moving a Lodge into Docker is one restore.
+do_restore_container() {
+  local arc="$1" yes="$2" top tmp stamp before
+  top="$(tar -tzf "$arc" | sed -E 's#^\./##; s#/.*##' | LC_ALL=C sort -u)"
+  [ "$(printf '%s\n' "$top" | grep -c .)" -eq 1 ] || die "$arc does not look like a Lodge backup (more than one top folder) - refusing"
+  if tar -tzf "$arc" | grep -E '(^|/)\.\.(/|$)' >/dev/null || tar -tzf "$arc" | grep -E '^/' >/dev/null; then
+    die "$arc does not look like a Lodge backup (unexpected paths) - refusing"
+  fi
+  if "$CURL" -fs "$(health_url)" 2>/dev/null | grep '"ok"' >/dev/null; then
+    die "the Lodge is running - stop it first: docker compose stop lodge, then: docker compose run --rm --entrypoint lodge-backup lodge restore $(basename "$arc")"
+  fi
+  echo "This will replace everything in $DATA_DIR with"
+  echo "  $arc"
+  if [ "$yes" -ne 1 ]; then
+    read -r -p "Type 'yes' to continue: " ans || ans=""
+    [ "$ans" = "yes" ] || die "cancelled"
+  fi
+  ensure_dir
+  tmp="$(mktemp -d "$BACKUP_DIR/.restore.XXXXXX")"
+  trap 'rm -rf "$tmp"' EXIT
+  tar -C "$tmp" --no-same-owner --no-same-permissions -xzf "$arc" || die "extracting failed - nothing was changed"
+  [ -d "$tmp/$top" ] || die "archive has no $top/ folder - nothing was changed"
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  before="$BACKUP_DIR/lodge-before-restore-$stamp.tar.gz"
+  tar -C "$DATA_DIR" -czf "$before" . || die "could not archive the current data - nothing was changed"
+  chmod 600 "$before"
+  find "$DATA_DIR" -mindepth 1 -delete
+  cp -a "$tmp/$top/." "$DATA_DIR/"
+  rm -rf "$tmp"; trap - EXIT
+  find "$DATA_DIR" -type d -exec chmod 750 {} +
+  find "$DATA_DIR" -type f -exec chmod 640 {} +
+  [ -f "$DATA_DIR/$CODES.lock" ] || touch "$DATA_DIR/$CODES.lock"
+  chmod 660 "$DATA_DIR/$CODES.lock"
+  [ -f "$DATA_DIR/$CODES" ] || { : > "$DATA_DIR/$CODES"; chmod 640 "$DATA_DIR/$CODES"; }
+  log "restored; the previous data is in $before (delete it when you are happy - it contains invite codes)"
+  log "start the Lodge again: docker compose up -d"
+}
+
 do_restore() {
   local arc="${1:-}"; shift || true
   local yes=0; [ "${1:-}" = "--yes" ] && yes=1
   [ -n "$arc" ] || die "usage: lodge-backup restore <archive> [--yes]"
   [ -f "$arc" ] || { [ -f "$BACKUP_DIR/$arc" ] && arc="$BACKUP_DIR/$arc"; } || true
   [ -f "$arc" ] || die "archive not found: $arc"
+  if [ "$CONTAINER" -eq 1 ]; then do_restore_container "$arc" "$yes"; return; fi
 
   local base parent stamp aside tmp
   base="$(basename "$DATA_DIR")"; parent="$(dirname "$DATA_DIR")"

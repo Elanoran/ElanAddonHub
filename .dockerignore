@@ -1,0 +1,9 @@
+# the Lodge image (server/docker/Dockerfile) only needs global.json, shared/ and server/
+*
+!global.json
+!shared/Elans.Shared/
+!server/Lodge.Server/
+!server/deploy/lodge-admin
+!server/deploy/lodge-backup
+**/bin/
+**/obj/

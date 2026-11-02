@@ -238,6 +238,10 @@ is invite only: it needs an invite code from the Cairn's operator). A Lodge that
 [server/deploy/README.md](server/deploy/README.md) to get started, and [server/SECURITY.md](server/SECURITY.md)
 and [server/PROTOCOL.md](server/PROTOCOL.md) for the details.
 
+**Prefer Docker?** The same Lodge comes as a container image with a Compose file: `docker compose up -d`, the owner link
+with `docker compose exec lodge lodge-admin claim-owner`, updates with `docker compose pull`. See
+[server/docker/README.md](server/docker/README.md).
+
 ## FAQ
 
 **Is this allowed? Can it get me banned?**

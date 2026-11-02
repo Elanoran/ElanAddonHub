@@ -330,7 +330,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.Activity(Test)?|Services/Activity)\.cs$|^src/MainWindow\.xaml$", "activity");   // 2.96: the background activity ring and the close guard
             R(@"^src/Services/(StripSelfTest|PixelStrip)\.cs$", "strip");
             // ---- not exercised by the self-test
-            R(@"^(docs/|addons/|README\.md$|DESIGN\.md$|ARCHITECTURE\.md$|\.gitignore$|\.gitattributes$|Tools/)");   // addons/: the addons' public pages
+            R(@"^(docs/|addons/|README\.md$|DESIGN\.md$|ARCHITECTURE\.md$|\.gitignore$|\.gitattributes$|\.dockerignore$|\.github/|server/docker/|Tools/)");   // addons/: the addons' public pages; the Lodge's Docker files
             R(@"_wpftmp\.csproj$");   // the temporary project WPF makes during a build (an interrupted build leaves it behind): not a change
             // the release bumps: a project file whose only change is <Version>, and the newest Lodge server constant (it only feeds the owner's update notice)
             R(@"^src/ElansAddonHub\.csproj#version$");

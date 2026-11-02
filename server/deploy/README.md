@@ -1,5 +1,7 @@
 # Deploying and operating the Lodge server (Ubuntu, systemd)
 
+*Prefer Docker? The same server as a container image: [../docker/README.md](../docker/README.md).*
+
 Layout: source checkout `/opt/lodge-src`, build `/opt/lodge`, data `/var/lib/lodge`, config `/etc/lodge/lodge.env`,
 backups `/var/backups/lodge`, build folder `/var/cache/lodge-build`.
 

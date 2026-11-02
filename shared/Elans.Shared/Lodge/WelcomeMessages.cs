@@ -20,6 +20,7 @@ namespace Elans.Shared
         public const string Type = LodgeMsg.Welcome;
         public int You;                                // the connection's member id (users[].id)
         public string Name, Role, Server;              // Server: the Lodge server's version
+        public string Install;                         // 2.37.1: "docker" when the Lodge runs in its container image; null = a normal install (not sent)
         public int MaxFileMb, FilesMaxMb;              // 0 = not sent (the Outpost's defaults apply)
         public bool CanShareFiles = true;              // read: true when missing (servers before 2.14 let everyone attach)
         public bool CanModerate, CanManage, CanPin, CanManageFiles, CanShareClassic, CanInvite, CanRetire, CanPurge;
@@ -40,6 +41,7 @@ namespace Elans.Shared
         public void Write(ILodgeWriter w)
         {
             w.Set("t", Type); w.Set("you", You); w.Set("name", Name); w.Set("role", Role); w.Set("server", Server);
+            if (!string.IsNullOrEmpty(Install)) w.Set("install", Install);
             w.Set("maxFileMb", MaxFileMb);
             w.Set("canShareFiles", CanShareFiles); w.Set("canModerate", CanModerate); w.Set("canManage", CanManage); w.Set("canPin", CanPin);
             var fl = w.List("features");
@@ -68,7 +70,7 @@ namespace Elans.Shared
             var profile = f.Child("profile");
             var m = new WelcomeMsg
             {
-                You = f.Int("you"), Name = f.Str("name"), Role = f.Str("role"), Server = f.Str("server"),
+                You = f.Int("you"), Name = f.Str("name"), Role = f.Str("role"), Server = f.Str("server"), Install = f.Str("install"),
                 MaxFileMb = f.Int("maxFileMb"), FilesMaxMb = f.Int("filesMaxMb"),
                 CanShareFiles = !f.Has("canShareFiles") || f.Bool("canShareFiles"),
                 CanModerate = f.Bool("canModerate"), CanManage = f.Bool("canManage"), CanPin = f.Bool("canPin"), CanManageFiles = f.Bool("canManageFiles"),

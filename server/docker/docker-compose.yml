@@ -1,0 +1,42 @@
+# A Lodge with Docker Compose. Copy this file and lodge.env (from lodge.env.example) into a folder of their own, then:
+#   docker compose up -d          start (then the owner link: docker compose exec lodge lodge-admin claim-owner)
+#   docker compose pull && docker compose up -d     update to the newest image
+# Put your web server (HTTPS) in front of 127.0.0.1:5280 as for a normal install (server/deploy/reverse-proxy.md).
+services:
+  lodge:
+    image: ghcr.io/elanoran/lodge:latest
+    # or build it from a checkout of the repository instead of pulling:
+    # build: { context: ../.., dockerfile: server/docker/Dockerfile }
+    restart: unless-stopped
+    env_file: lodge.env
+    environment:
+      # your web server reaches the Lodge through this network's gateway (the host): only it may say who the visitor is
+      # (X-Forwarded-For), like 127.0.0.1 on a normal install. Without it every member would share one address for the
+      # Lodge's lockouts and rate limits. If your web server runs in another container on this network, trust the subnet.
+      LODGE_TRUSTED_PROXIES: 172.31.81.1
+    ports:
+      # 127.0.0.1 only: Docker opens published ports past the host's firewall (ufw), so never publish the Lodge on all
+      # addresses - your web server on this machine forwards to it
+      - "127.0.0.1:5280:8080"
+    volumes:
+      - lodge-data:/data          # everything the Lodge keeps: codes, chat, files, the Cairn key - back it up
+      - lodge-backups:/backups    # lodge-backup's archives (they contain the invite codes)
+    # locked down: nothing but /data, /backups and a small /tmp is writable, no Linux capabilities, no privilege gain
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 200
+    networks: [lodge]
+networks:
+  lodge:
+    ipam:
+      config:
+        - subnet: 172.31.81.0/24
+          gateway: 172.31.81.1
+volumes:
+  lodge-data:
+  lodge-backups:

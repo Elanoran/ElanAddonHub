@@ -112,7 +112,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.37.0";
+    public const string Version = "2.37.1";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
 
     public readonly LodgeConfig Cfg;
@@ -299,7 +299,7 @@ public partial class LodgeHub
         var visible = Channels.VisibleTo(me.Role).ToList();
         var w = new WelcomeMsg
         {
-            You = me.Id, Name = me.Name, Role = me.Role, Server = Version,
+            You = me.Id, Name = me.Name, Role = me.Role, Server = Version, Install = Cfg.Docker ? "docker" : null,
             MaxFileMb = Cfg.MaxFileMb,
             CanShareFiles = Roles.Can(me.Role, Perm.ShareFiles),
             CanModerate = Roles.Can(me.Role, Perm.Moderate),

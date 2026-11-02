@@ -60,7 +60,10 @@ namespace ElansAddonHub.Lodge
         public static string ShortVersion(string v) { var p = ParseVersion(v); return p == null ? v : p.Build == 0 ? p.Major + "." + p.Minor : p.ToString(); }
         public bool ServerOutdated => (Online || TestFed) && ParseVersion(ServerVersion) is Version have && ParseVersion(Brand.LatestLodgeServer) is Version want && have < want;
         public bool ShowServerNotice => CanUpdateServer && ServerOutdated && Settings.LodgeUpdateDismissed != Brand.LatestLodgeServer;
-        public string ServerNoticeText => $"Your Lodge server is on {ShortVersion(ServerVersion)} - {ShortVersion(Brand.LatestLodgeServer)} is available. On the server run: {Brand.ServerUpdateCommand}";
+        public string ServerNoticeText => $"Your Lodge server is on {ShortVersion(ServerVersion)} - {ShortVersion(Brand.LatestLodgeServer)} is available. On the server run: {UpdateCommand}";
+        // 3.5.10: a Lodge in Docker says so in its welcome; its update is a new image, not lodge-update
+        public string ServerInstall { get; private set; }
+        public string UpdateCommand => ServerInstall == "docker" ? Brand.ServerUpdateCommandDocker : Brand.ServerUpdateCommand;
         public void DismissServerNotice() { Settings.LodgeUpdateDismissed = Brand.LatestLodgeServer; SettingsStore.Save(Settings); Changed?.Invoke(); }
         public int MaxFileMb { get; private set; } = 25;
         // a server older than 2.3 sends no "features": reactions and pins are hidden then
@@ -602,6 +605,7 @@ namespace ElansAddonHub.Lodge
             var w = WelcomeMsg.Read(new LodgeJsonFields(m));                   // shared/Elans.Shared/Lodge/WelcomeMessages.cs
             int myId = w.You;
             ServerVersion = w.Server;
+            ServerInstall = w.Install;
             MyRole = w.Role ?? "member";
             MaxFileMb = w.MaxFileMb > 0 ? w.MaxFileMb : 25;
             CanShareFiles = w.CanShareFiles;

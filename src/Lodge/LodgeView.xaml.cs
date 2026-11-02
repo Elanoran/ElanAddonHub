@@ -306,7 +306,7 @@ namespace ElansAddonHub.Lodge
         public void DeclineUpgradeForTest() => UpgradeLater_Click(null, null);
         void ServerNoticeCopy_Click(object sender, RoutedEventArgs e)
         {
-            try { Clipboard.SetText(Brand.ServerUpdateCommand); ServerNoticeCopy.Content = "Copied"; } catch { }
+            try { Clipboard.SetText(Session.UpdateCommand); ServerNoticeCopy.Content = "Copied"; } catch { }
         }
         public bool ServerNoticeVisibleForTest => ServerNotice.Visibility == Visibility.Visible;
         public string ServerNoticeTextForTest => ServerNoticeText.Text;
