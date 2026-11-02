@@ -1,12 +1,18 @@
-# Elan's Toolkit
+# 🧰 Elan's Toolkit
+
+![Latest release](https://img.shields.io/github/v/release/Elanoran/ElanAddonHub?style=flat-square&label=latest%20release)
 
 Useful for **every class** on WoW Forever: a movable HUD, a waypoint arrow, profession trainers on your map, and one place
 that catches the errors of all of Elan's addons.
 
-**[Download ElansToolkit.zip](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansToolkit.zip)**
-· works on its own · or get it with [Elan's Outpost](../README.md)
+[![Download ElansToolkit.zip](https://img.shields.io/badge/Download-ElansToolkit.zip-2da44e?style=for-the-badge&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansToolkit.zip)
 
-## What it does
+Works on its own.
+
+> [!TIP]
+> Get it with [Elan's Outpost](../README.md) to keep it up to date by itself.
+
+## 🧭 What it does
 
 - **HUD**: one movable block with a **cast bar** (spell name, icon, time), a **threat bar** and a **flight path
   countdown** that learns how long each route takes ("~" marks an estimate). Elan's class addons add their own pieces to it.
@@ -26,7 +32,7 @@ that catches the errors of all of Elan's addons.
 - **Atlas recording** (for Elan's Outpost, on by default): what drops, what vendors sell, where creatures stand, as ids
   and counts only. It can be turned off in Settings.
 
-## Commands
+## ⌨️ Commands
 
 | Command | |
 |---|---|
@@ -42,16 +48,18 @@ that catches the errors of all of Elan's addons.
 
 `/elanstoolkit` works too, and `/way` when no other addon (such as TomTom) has it.
 
-## Settings
+## ⚙️ Settings
 
 Trainer pins, outgrown trainers, zone levels, Atlas recording (and WoW's combat log, always or only in dungeons and
 raids), the minimap button; the HUD's parts; and the arrow's style, colour, size, sound and when it hides.
 
-## Good to know
+## 💡 Good to know
 
 - Folder name: `ElansToolkit`. It works on its own; with [Elan's Hub](ElansHub.md) and Elan's Outpost it also gets profession
   guides and the Lodge's gathering nodes, and shares what it learns.
 - Elan's Hunter Helper needs this addon; Elan's Paladin and Priest Helper use its Bug Trap and waypoint arrow when it is there.
-- After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
+
+> [!WARNING]
+> After an update that adds files, quit WoW completely and start it again; a `/reload` is not enough.
 
 [All of Elan's addons](README.md) · [How to install by hand](README.md#installing-by-hand)

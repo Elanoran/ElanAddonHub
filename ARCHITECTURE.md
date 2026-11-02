@@ -1,8 +1,10 @@
 # How Elan's addons and the Outpost fit together
 
-This is the contract between the in-game addons, Elan's Hub and Elan's Outpost. Read it before adding
-any data that crosses from the game to the Outpost (or back). If something new doesn't fit a role
-below, change this file first.
+This is the contract between the in-game addons, Elan's Hub and Elan's Outpost.
+
+> [!IMPORTANT]
+> Read it before adding any data that crosses from the game to the Outpost (or back). If something new doesn't fit a
+> role below, change this file first.
 
 ## Contents
 
@@ -40,6 +42,19 @@ below, change this file first.
 | **Lodge server** | Members, voice, chat, calendar, shared flight times, files, the Atlas pool, the Armory (characters members chose to share). | Talks to the game or the addons directly. Only the Outpost talks to it. |
 
 One sentence version: **addons → Hub → Outpost → Lodge, and back the same way.**
+
+```mermaid
+flowchart LR
+    A["🧩 Feature addons"]:::addon <--> H["🔗 Elan's Hub"]:::hub
+    H <-->|saved data / SharedData.lua| O["🏠 Elan's Outpost"]:::outpost
+    O <-->|what the user shares| L["🏕️ Lodge server"]:::lodge
+    L <-->|opt-in, give to get| C["⛰️ The Cairn"]:::cairn
+    classDef addon fill:#2da44e,stroke:#1a7f37,color:#fff
+    classDef hub fill:#1b998b,stroke:#137a6f,color:#fff
+    classDef outpost fill:#0969da,stroke:#0550ae,color:#fff
+    classDef lodge fill:#d4761a,stroke:#a35a12,color:#fff
+    classDef cairn fill:#8250df,stroke:#6639ba,color:#fff
+```
 
 ### Which data belongs where
 
