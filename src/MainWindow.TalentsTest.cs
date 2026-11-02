@@ -695,8 +695,8 @@ EHH.DefaultBuild = ""pack""
                     {
                         var bf = BuildsRecommended.Fit(mageT, betaFrost, x => TalentData.NodeName(x), 0);
                         Check("real game files, builds: the beta's Mage Frostbite (Piercing Ice, Elemental Precision 5) is repaired on the launch tree by itself - 51 legal points, Shatter and Ice Barrier kept, and it says why",
-                            bf.Points == 51 && bf.Blocked == 0 && TalentRules.Valid(mageT, bf.State, out _) && bf.Steps.Any(s => s.Name == "Shatter") && bf.Steps.Any(s => s.Name == "Ice Barrier")
-                            && bf.Adjusted.Any(a => a.StartsWith("Piercing Ice is not")) && bf.Adjusted.Any(a => a.StartsWith("Elemental Precision has 3 ranks")), bf.Points + " | " + string.Join("; ", bf.Adjusted));
+                            bf.Points == 51 && (bf.Blocked == 0 || bf.Adjusted.Any(x => x.StartsWith("the free points went"))) && TalentRules.Valid(mageT, bf.State, out _) && bf.Steps.Any(s => s.Name == "Shatter") && bf.Steps.Any(s => s.Name == "Ice Barrier")
+                            && bf.Adjusted.Any(a => a.StartsWith("Piercing Ice is not")) && bf.Adjusted.Any(a => a.StartsWith("Elemental Precision has 3 ranks") || a.StartsWith("Elemental Precision is not")), bf.Points + " blocked " + bf.Blocked + " valid " + TalentRules.Valid(mageT, bf.State, out var whyNot) + " " + whyNot + " | " + string.Join("; ", bf.Adjusted));
                     }
                     else notes.Add("note real builds: this game's Mage tree still has Piercing Ice (the beta tree): the launch repair check did not run");
                     var hh = BuildsRecommended.ReadHunterHelper(BuildsRecommended.HunterHelperFile(real, flv), out var hp);

@@ -245,7 +245,15 @@ namespace ElansAddonHub
                     "rogue/60/00530310501-32300320200515231--7", "priest/60/525335031030001001-30515100202--7", "shaman/60/3500331023121351-050002-053200001-7",
                     "mage/60/0552205023100311531-03--7", "warlock/60/05520323035201351-0050203001--7", "druid/60/050022-55000032021032212051-05003-7",
                 };
-                var bad7 = siteV7.Select(c => (c, d: BuildLinks.Decode("https://talentsforever.com/" + c + "?b=70425&d=261016", set, nameOf))).Where(x => !(x.d.Ok && x.d.State.Total == x.c.Split('/')[2].Where(char.IsDigit).Sum(ch => ch - '0') - 7 && x.d.State.Total > 30)).Select(x => x.c + ": " + x.d.Error).ToList();
+                // 1.60.1.70707 reworked the Mage trees (Arcane Focus gone, Improved Fireball -> Accelerant, Elemental Precision -> Precision): the site's
+                // Mage links were made for the trees before it, so on those trees they must be refused as made for other trees, never guessed
+                var mageT = set.ForClassFile("MAGE");
+                bool mage707 = mageT != null && mageT.Nodes.All(n => nameOf(n) != "Arcane Focus");
+                bool OldMage(string c) => mage707 && c.StartsWith("mage/");
+                bool RefusedAsOther(BuildLinks.Decoded d) => !d.Ok && (d.Error ?? "").Contains("different talent trees");
+                var bad7 = siteV7.Select(c => (c, d: BuildLinks.Decode("https://talentsforever.com/" + c + "?b=70425&d=261016", set, nameOf)))
+                    .Where(x => OldMage(x.c) ? !RefusedAsOther(x.d) : !(x.d.Ok && x.d.State.Total == x.c.Split('/')[2].Where(char.IsDigit).Sum(ch => ch - '0') - 7 && x.d.State.Total > 30)).Select(x => x.c + ": " + x.d.Error).ToList();
+                if (mage707) notes.Add("real game files, links: the Mage trees are 70707's; the site's older Mage links are expected to be refused");
                 Check("real game files, links: a -7 Talents Forever build of each of the nine classes (from the site) reads as a legal build with every point on the game's trees", bad7.Count == 0, string.Join(" | ", bad7));
 
                 // the talents build 70425 added sit where the site counts them: a -7 rank lands on the talent the site names
@@ -257,7 +265,7 @@ namespace ElansAddonHub
                 var pShadow = at("PRIEST", "priest/60/--50052201251312251-7", 2);
                 var mArcane = at("MAGE", "mage/60/0552205023100311531-03--7", 0);
                 Check("real game files, links: -7 ranks land on the talents the site shows (Priest Shadow 'Dark Inspiration=5', Mage Arcane 'Missile Barrage=2' and 'Arcane Wrath=1')",
-                    pShadow.Contains("Dark Inspiration=5") && pShadow.StartsWith("Shadow Focus=5,Improved Mind Blast=5,") && mArcane.Contains("Missile Barrage=2") && mArcane.Contains("Arcane Wrath=1"), pShadow + " / " + mArcane);
+                    pShadow.Contains("Dark Inspiration=5") && pShadow.StartsWith("Shadow Focus=5,Improved Mind Blast=5,") && (mage707 ? mArcane.Contains("different talent trees") : mArcane.Contains("Missile Barrage=2") && mArcane.Contains("Arcane Wrath=1")), pShadow + " / " + mArcane);
 
                 // -6 links (made before 15 Oct) still open: the Priest, Shaman, Mage and Warlock talents that moved are carried to where they sit now
                 var pairs = new[]
@@ -273,6 +281,7 @@ namespace ElansAddonHub
                 var badPairs = new List<string>();
                 foreach (var (v7, v6) in pairs)
                 {
+                    if (OldMage(v7)) continue;   // made for the Mage trees before 70707
                     var a = BuildLinks.Decode("https://talentsforever.com/" + v7, set, nameOf); var b = BuildLinks.Decode("https://talentsforever.com/" + v6, set, nameOf);
                     bool same = a.Ok && b.Ok && a.State.Total > 0 && a.State.SameAs(b.State) && (a.Order == null) == (b.Order == null) && b.OrderNote == a.OrderNote
                         && (a.Order == null || a.Order.Steps.Select(x => x.NodeId).SequenceEqual(b.Order.Steps.Select(x => x.NodeId)));

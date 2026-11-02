@@ -45,7 +45,9 @@ namespace ElansAddonHub.Services.Db2
         // SpellReagents: SpellID(0) Reagent[8](1) ReagentCount[8](2) ReagentReCraftCount[8](3) ReagentSource[8](4)
         public static readonly Def SpellReagents = D("SpellReagents", 841946, 0xAB66C99F, 0xFF40D202);
         // SpellDuration: Duration(0) MaxDuration(1) DurationPerResource(2) ; SpellCastTimes: Base(0) Minimum(1) ; SpellRadius: Radius(0) RadiusPerLevel(1) RadiusMin(2) RadiusMax(3)
-        public static readonly Def SpellDuration = D("SpellDuration", 1137828, 0xB423FA7A, 0xA931BD2B);
+        // 1.60.1.70707 (layout 4FDF0951): Duration(0) DurationPerLevel(1) MaxDuration(2) DurationPerResource(3) - a column was inserted after Duration;
+        // only Duration(0) is read, and it sits at 0 in both layouts.
+        public static readonly Def SpellDuration = D("SpellDuration", 1137828, 0xB423FA7A, 0xA931BD2B, 0x4FDF0951);
         public static readonly Def SpellCastTimes = D("SpellCastTimes", 1134089, 0xFDBA5A66, 0x75B6BD3A);
         public static readonly Def SpellRadius = D("SpellRadius", 1134584, 0xAB7E4841, 0xF9A913EE);
         // SpellRange: DisplayName_lang(0) DisplayNameShort_lang(1) Flags(2) RangeMin[2](3) RangeMax[2](4)
