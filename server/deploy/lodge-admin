@@ -65,6 +65,9 @@ INV_HEADER="# Lodge invites: id, sha256(secret), kind, name, role, created by, c
 
 # in the Docker image (LODGE_INSTALL=docker) it runs as the Lodge's own user, who owns /data: no root there
 if [ "$(id -u)" -ne 0 ] && [ "${LODGE_INSTALL:-}" != "docker" ]; then echo "Run with sudo"; exit 1; fi
+# how to run this tool, and where the settings live, in the hints it prints: a normal install, or the Docker image
+ADM="sudo lodge-admin"; WHERE="$ENVF"
+if [ "${LODGE_INSTALL:-}" = "docker" ]; then ADM="docker compose exec lodge lodge-admin"; WHERE="lodge.env (then: docker compose up -d)"; fi
 mkdir -p "$DIR"
 
 cmd="${1:-list}"
@@ -165,7 +168,7 @@ has_owner() {
 # refuse to take away the last Guild Master (same rule as the server): role change, remove, leave
 guard_last_owner() {
   if [ "$force" -ne 1 ] && [ "$(role_of "$name")" = owner ] && [ "$(other_owners "$name")" -eq 0 ]; then
-    echo "$name is the last Guild Master - make someone else an owner first (sudo lodge-admin role NAME owner), or use --force"
+    echo "$name is the last Guild Master - make someone else an owner first ($ADM role NAME owner), or use --force"
     exit 1
   fi
 }
@@ -204,7 +207,7 @@ make_claim() {
   url="${LODGE_PUBLIC_URL:-$(envval LODGE_PUBLIC_URL)}"
   server="${url%/}"
   case "$server" in https://*) server="${server#https://}";; esac
-  if [ -z "$server" ]; then server="<your-lodge-address>"; echo "(set LODGE_PUBLIC_URL=https://your.site/lodge in $ENVF, then run this command again, so the link carries your address)" >&2; fi
+  if [ -z "$server" ]; then server="<your-lodge-address>"; echo "(set LODGE_PUBLIC_URL=https://your.site/lodge in $WHERE, then run this command again, so the link carries your address)" >&2; fi
   {
     echo "=========================================================================="
     echo " OWNER LINK - whoever opens this first becomes the lodge's Guild Master."
@@ -221,13 +224,13 @@ case "$cmd" in
   claim-owner)
     lock
     if [ "$recover" -eq 1 ]; then
-      has_owner || { echo "This lodge has no Guild Master to recover - run: sudo lodge-admin claim-owner"; exit 1; }
+      has_owner || { echo "This lodge has no Guild Master to recover - run: $ADM claim-owner"; exit 1; }
       make_claim "*"
     else
       if has_owner; then
         if [ "$ifneeded" -eq 1 ]; then exit 0; fi   # install.sh: quietly nothing to do
         echo "This lodge already has a Guild Master, so it can't be claimed."
-        echo "If the owner is locked out of every PC: sudo lodge-admin recover-owner <their name>"
+        echo "If the owner is locked out of every PC: $ADM recover-owner <their name>"
         exit 1
       fi
       make_claim "-"
@@ -236,7 +239,7 @@ case "$cmd" in
   recover-owner)
     need_name
     lock
-    if ! has_code || [ "$(role_of "$name")" != owner ]; then echo "$name is not a Guild Master of this lodge (sudo lodge-admin list)"; exit 1; fi
+    if ! has_code || [ "$(role_of "$name")" != owner ]; then echo "$name is not a Guild Master of this lodge ($ADM list)"; exit 1; fi
     oname="$(awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print $1; exit }' "$FILE")"
     echo "This adds a NEW device for the existing owner $oname (nothing else changes)." >&2
     make_claim "$oname"
@@ -245,8 +248,8 @@ case "$cmd" in
     need_name
     lock
     if has_code; then
-      if [[ "$(code_field)" == '!'* ]]; then echo "$name is already in and has no permanent code - make a device link: sudo lodge-admin invite $name"
-      else echo "$name already has a code (sudo lodge-admin show $name)"; fi
+      if [[ "$(code_field)" == '!'* ]]; then echo "$name is already in and has no permanent code - make a device link: $ADM invite $name"
+      else echo "$name already has a code ($ADM show $name)"; fi
       exit 1
     fi
     code="$(openssl rand -hex 16)"
@@ -255,7 +258,7 @@ case "$cmd" in
     ;;
   role)
     need_name
-    if [ -z "$role" ]; then echo "Usage: sudo lodge-admin role NAME owner|officer|veteran|member"; exit 1; fi
+    if [ -z "$role" ]; then echo "Usage: $ADM role NAME owner|officer|veteran|member"; exit 1; fi
     lock
     if ! has_code; then echo "No code for $name"; exit 1; fi
     if [ "$role" != owner ]; then guard_last_owner; fi
@@ -283,8 +286,8 @@ case "$cmd" in
       echo "Queued: $name's Atlas contributions come out of the pool within 15 seconds (they stay a member). The server must be running."
     else
       if [ -f "$FILE" ] && has_code && [ "$force" -ne 1 ]; then
-        echo "$name is still a member. To undo bad Atlas data only: sudo lodge-admin purge $name --atlas-only"
-        echo "To remove them and everything they stored: sudo lodge-admin remove $name"
+        echo "$name is still a member. To undo bad Atlas data only: $ADM purge $name --atlas-only"
+        echo "To remove them and everything they stored: $ADM remove $name"
         exit 1
       fi
       queue_purge all "$name"
@@ -295,13 +298,13 @@ case "$cmd" in
     need_name
     if [ ! -f "$FILE" ] || ! has_code; then echo "No code for $name"; exit 1; fi
     c="$(code_field)"
-    if [[ "$c" == '!'* ]]; then echo "$name has no permanent code (retired). Make a device link: sudo lodge-admin invite $name"; exit 1; fi
+    if [[ "$c" == '!'* ]]; then echo "$name has no permanent code (retired). Make a device link: $ADM invite $name"; exit 1; fi
     echo "$c"
     ;;
   list)
-    if [ ! -f "$FILE" ]; then echo "(nobody yet - sudo lodge-admin claim-owner)"; exit 0; fi
+    if [ ! -f "$FILE" ]; then echo "(nobody yet - $ADM claim-owner)"; exit 0; fi
     names="$(awk -F: '!/^[[:space:]]*#/ && NF >= 2 && $1 != "" { r = ($3 == "" ? "member" : $3); printf "%-24s %s%s\n", $1, r, (substr($2,1,1) == "!" ? "  (no permanent code)" : "") }' "$FILE")"
-    if [ -z "$names" ]; then echo "(nobody yet - sudo lodge-admin invite <name>)"; else echo "$names"; fi
+    if [ -z "$names" ]; then echo "(nobody yet - $ADM invite <name>)"; else echo "$names"; fi
     ;;
 
   # ---------------------------------------------------------------- one-time invites (2.10)
@@ -325,7 +328,7 @@ case "$cmd" in
       fi
       if [ -f "$INV" ] && awk -F'\t' -v n="$iname" -v t="$(now)" 'BEGIN{n=tolower(n)}
            $0 !~ /^#/ && $3=="person" && tolower($4)==n && $11!="1" && $8>t && $10<$9 {f=1} END{exit f?0:1}' "$INV"; then
-        echo "$iname already has a pending invite - revoke it first (sudo lodge-admin invites)"; exit 1
+        echo "$iname already has a pending invite - revoke it first ($ADM invites)"; exit 1
       fi
     fi
     secret="i1.$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=\n')"
@@ -337,14 +340,14 @@ case "$cmd" in
     url="${LODGE_PUBLIC_URL:-$(envval LODGE_PUBLIC_URL)}"
     server="${url%/}"
     case "$server" in https://*) server="${server#https://}";; esac
-    if [ -z "$server" ]; then server="<your-lodge-address>"; echo "(set LODGE_PUBLIC_URL in $ENVF so links carry your address)" >&2; fi
+    if [ -z "$server" ]; then server="<your-lodge-address>"; echo "(set LODGE_PUBLIC_URL in $WHERE so links carry your address)" >&2; fi
     if [ "$kind" = guest ]; then who="a guest (up to $maxuses uses)"; else who="$iname ($irole)"; fi
     echo "Invite $id for $who, valid until $(fmt_time $((created + h * 3600))) UTC:" >&2
     echo "SEND THIS LINK PRIVATELY (not in a channel). It is shown only now and works once - it cannot be shown again." >&2
     printf 'elanshub://lodge/join#%s|%s\n' "$server" "$secret"
     ;;
   invites)
-    if [ ! -f "$INV" ] || ! grep -qv '^#' "$INV"; then echo "(no invites - sudo lodge-admin invite <name>)"; exit 0; fi
+    if [ ! -f "$INV" ] || ! grep -qv '^#' "$INV"; then echo "(no invites - $ADM invite <name>)"; exit 0; fi
     t="$(now)"
     printf '%-10s %-7s %-24s %-8s %-12s %-17s %-5s %s\n' ID KIND NAME ROLE BY "EXPIRES (UTC)" USES STATE
     while IFS=$'\t' read -r id _ kind iname irole by _ ex mx us rv; do
@@ -356,7 +359,7 @@ case "$cmd" in
     ;;
   revoke-invite)
     id="${rest[0]:-}"
-    if [[ ! "$id" =~ ^[0-9a-fA-F]+$ ]]; then echo "Usage: sudo lodge-admin revoke-invite ID  (see: sudo lodge-admin invites)"; exit 1; fi
+    if [[ ! "$id" =~ ^[0-9a-fA-F]+$ ]]; then echo "Usage: $ADM revoke-invite ID  (see: $ADM invites)"; exit 1; fi
     lock
     if [ ! -f "$INV" ] || ! awk -F'\t' -v i="$id" '$0 !~ /^#/ && tolower($1)==tolower(i) {f=1} END{exit f?0:1}' "$INV"; then echo "No invite $id"; exit 1; fi
     awk -F'\t' -v OFS='\t' -v i="$id" '$0 !~ /^#/ && tolower($1)==tolower(i) { $11 = "1" } { print }' "$INV" | write_to "$INV"
@@ -375,7 +378,7 @@ case "$cmd" in
     ;;
   revoke-device)
     id="${rest[0]:-}"
-    if [[ ! "$id" =~ ^[0-9a-fA-F]+$ ]]; then echo "Usage: sudo lodge-admin revoke-device ID  (see: sudo lodge-admin devices)"; exit 1; fi
+    if [[ ! "$id" =~ ^[0-9a-fA-F]+$ ]]; then echo "Usage: $ADM revoke-device ID  (see: $ADM devices)"; exit 1; fi
     lock
     if [ ! -f "$DEV" ] || ! awk -F'\t' -v i="$id" '$0 !~ /^#/ && tolower($1)==tolower(i) {f=1} END{exit f?0:1}' "$DEV"; then echo "No device $id"; exit 1; fi
     awk -F'\t' -v i="$id" '$0 ~ /^#/ { print; next } tolower($1)==tolower(i) { next } { print }' "$DEV" | write_to "$DEV"
@@ -388,7 +391,7 @@ case "$cmd" in
     if [[ "$(code_field)" == '!'* ]]; then echo "$name has no permanent code (already retired)"; exit 1; fi
     if [ "$force" -ne 1 ] && { [ ! -f "$DEV" ] || ! awk -F'\t' -v n="$name" 'BEGIN{n=tolower(n)} $0 !~ /^#/ && tolower($3)==n {f=1} END{exit f?0:1}' "$DEV"; }; then
       echo "$name has no device on a token yet - retiring the code would lock them out."
-      echo "Send them a link first (sudo lodge-admin invite $name), or use --force."
+      echo "Send them a link first ($ADM invite $name), or use --force."
       exit 1
     fi
     newc="!$(openssl rand -hex 16)"
@@ -399,16 +402,16 @@ case "$cmd" in
   stats)
     # GET /admin/stats on this machine (loopback only; the token travels through a pipe, never on the command line - not visible in ps)
     tok="$(envval LODGE_ADMIN_TOKEN)"
-    if [ "${#tok}" -lt 24 ]; then echo "LODGE_ADMIN_TOKEN in $ENVF is missing or shorter than 24 characters (generate one: openssl rand -hex 32)"; exit 1; fi
+    if [ "${#tok}" -lt 24 ]; then echo "LODGE_ADMIN_TOKEN in $WHERE is missing or shorter than 24 characters (generate one: openssl rand -hex 32)"; exit 1; fi
     urls="$(envval LODGE_URLS)"
     port="$(echo "${urls:-http://127.0.0.1:5280}" | sed -E 's/.*:([0-9]+).*/\1/')"
     base="$(envval LODGE_PATHBASE)"
     printf 'X-Lodge-Admin: %s\n' "$tok" | "${LODGE_CURL:-curl}" -fsS -m 10 -H @- "http://127.0.0.1:${port:-5280}${base%/}/admin/stats" \
-      || { echo "The Lodge did not answer (is it running and updated? systemctl status lodge)" >&2; exit 1; }
+      || { echo "The Lodge did not answer (is it running and updated? $([ "${LODGE_INSTALL:-}" = docker ] && echo "docker compose ps" || echo "systemctl status lodge"))" >&2; exit 1; }
     echo
     ;;
   *)
-    echo "Usage: sudo lodge-admin claim-owner [--recover] | recover-owner NAME"
+    echo "Usage: $ADM claim-owner [--recover] | recover-owner NAME"
     echo "                       | invite NAME [role] [--days N] | invite --guest [--uses N] | invites | revoke-invite ID"
     echo "                       | devices [NAME] | revoke-device ID | retire-code NAME"
     echo "                       | add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
