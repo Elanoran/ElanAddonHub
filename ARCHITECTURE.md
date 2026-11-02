@@ -2500,7 +2500,7 @@ Where the facts come from: FileDataIDs from the community listfile; layout block
   - Progress `Done / Total` (map tiles first, then "finishing the zoom levels").
   - Old builds' folders are deleted when a new key is built (`RemoveOtherBuilds`).
 - Settings > General > Game data shows the size and clears everything except `_page`.
-- **Measured** on the development PC (i.e. 1.60.1.70338):
+- **Measured** in the test environment (i.e. 1.60.1.70338):
 
   | Map | Map tiles | Files | Size | Time |
   |---|---|---|---|---|
@@ -2658,7 +2658,7 @@ files).
     written as `.tmp` and renamed;
   - progress `Done / Total` ("Building Kalimdor terrain: 412 / 980 tiles", then "drawing the zone borders");
   - a tile the game does not have counts as `Missing`, an unreadable one as `Failed` (neither stops the build).
-- **Measured** on the development PC:
+- **Measured** in the test environment:
 
   | Map | Tiles | Files | Size | Time |
   |---|---|---|---|---|
@@ -3074,7 +3074,7 @@ This PC: RTX 4060 Ti, hardware WebGL through ANGLE / Direct3D 11, Medium detail,
 - On the invented 32-tile test continent the same orbit gives 60 fps and 290 MB in total.
 - **First open**: the first time a continent is opened in 3D the pictures (8 - 17 s) and the terrain (2 - 4 s) are
   built (see above); later the page shows its first meshes within about 2 s.
-- Software WebGL (SwiftShader) was not available on the development PC to measure: the page switches itself to Low detail and
+- Software WebGL (SwiftShader) was not available in the test environment to measure: the page switches itself to Low detail and
   pixel ratio 1 there, and the self-test accepts any frame rate above 5 for it.
 
 ### Drawn dungeon plans
@@ -3955,7 +3955,7 @@ exterior lit (0x2040). Build 1.60.1.70450:
 
 **Textures**:
 
-- The build streams its files: on the author's PC only 30 of the 1,240 textures the Kingdoms' materials name are
+- The build streams its files: in the test environment only 30 of the 1,240 textures the Kingdoms' materials name are
   installed.
 - A material's colour is the average of its texture's small mip level when it is there
   (`CascBuildingSource.ReadTexture` reads only the header and that mip, then `Blp.Decode`).
@@ -3973,7 +3973,7 @@ exterior lit (0x2040). Build 1.60.1.70450:
   - across a gap: along the long axis the terrain (`.wmt`) or a liquid surface (`.wmw`) is at least 2 yards below the
     model's origin (the deck) at two of five points in the middle part (all five for the broader ones);
   - at both ends the ground is dry and not more than 9 yards below the deck.
-- **Checked offline** against the community names of the Kingdoms' and Kalimdor's WMOs (the author's own check on the
+- **Checked offline** against the community names of the Kingdoms' and Kalimdor's WMOs (a check in the test environment on the
   real files, not part of the app or the repo):
   - of the placements named "bridge", 56 of 63 on the Kingdoms and 68 of 85 on Kalimdor are found;
   - 14 and 3 other buildings that also span a gap (gates, a dam, ruins) are taken for bridges;
@@ -4026,7 +4026,7 @@ The card's numbers come from it:
 | time | the sum over the shapes still to make of 0.005 s + 0.012 s per group (replaced by the measured values of an earlier build in the same game version: `manifest.json` has them) |
 | size | 500 bytes + 26,000 per group |
 
-**Measured on the author's PC** (SSD, other programs running):
+**Measured in the test environment** (SSD, other programs running):
 
 | continent | buildings | shapes | groups | scan | build | size | bridges alone |
 |---|---|---|---|---|---|---|---|
