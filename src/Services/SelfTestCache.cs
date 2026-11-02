@@ -37,6 +37,7 @@ namespace ElansAddonHub.Services
             new Def { Name = "atlaspagereal", Parent = "atlaspage", Readers = @"^src/(" + Core + @"|Services/Db2/\w+\.cs|Services/Atlas/\w+(\.\w+)?\.cs|Services/Atlas/Classic/\w+\.cs|Services/(IconStore|IconSheet)\.cs|Controls/AtlasMap\.cs|Controls/GameTooltip\w*\.cs)$", Tests = @"^src/MainWindow\.AtlasPageTest\.Real\.cs$" },
             new Def { Name = "atlasdatareal", Parent = "atlasdata", Readers = @"^src/(Services/Atlas/(ObjectKinds|QuestChains|SeenView|AtlasBrowse\.Index)\.cs|Services/Atlas/Classic/\w+\.cs|Services/Db2/(WorldLookups|WdbSeen)\.cs)$", Tests = @"^src/MainWindow\.AtlasDataTest\.Real\.cs$" },
             new Def { Name = "atlashiddenreal", Parent = "atlashidden", Readers = @"^src/(Services/Atlas/AtlasHidden\.cs|Services/Db2/(SpellModel|SpellTables|ClassModel|ClassTables|ItemTables)\.cs)$", Tests = @"^src/MainWindow\.AtlasHiddenTest\.Real\.cs$" },
+            new Def { Name = "modelsreal", Parent = "models", Readers = @"^src/(Services/Db2/(Wdc5|ModelData|SpellTables)\.cs|Services/Atlas/Classic/\w+\.cs|Services/Models3d/\w+\.cs|Services/WorldMap/ObjTexture\.cs|Controls/ModelView\.cs|ModelViewer/\w+\.(html|js)|AtlasPage\.Model\.cs)$", Tests = @"^src/MainWindow\.ModelsTest\.(Real|View)\.cs$" },     // 3.6 (step 2: the model build; steps 3 + 4: the viewer and the NPC page card)
             new Def { Name = "zonelorereal", Parent = "zonelore", Readers = @"^src/(Services/Atlas/ZoneLore(\.\w+)?\.cs|Assets/Data/zonelore\.json)$", Tests = @"^src/MainWindow\.ZoneLoreTest\.Real\.cs$" },
         };
 

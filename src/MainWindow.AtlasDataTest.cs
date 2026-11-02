@@ -196,7 +196,7 @@ namespace ElansAddonHub
                     && b11.RequiredMinRepFaction == 72 && b11.RequiredMinRepValue == 9000 && b11.SourceItem == 5000 && b11.Enders.Length == 2 && b11.Enders.Any(e => e.IsObject && e.Id == 1618) && b12.BreadcrumbFor == 10);
                 var v2 = Path.Combine(work, "index2.bin"); built.Save(v2);
                 var back2 = ClassicIndex.Load(v2);
-                Check("index: format 2 keeps the locks, the chain fields and the enders through a save", back2 != null && back2.Provenance.FormatVersion == 2 && back2.ObjectInfo(3715).LockId == 57 && back2.QuestInfo(11).PrevQuestId == 10 && back2.QuestInfo(11).ExclusiveGroup == -5
+                Check("index: format 2 and later keep the locks, the chain fields and the enders through a save", back2 != null && back2.Provenance.FormatVersion == ClassicIndex.FormatVersion && back2.ObjectInfo(3715).LockId == 57 && back2.QuestInfo(11).PrevQuestId == 10 && back2.QuestInfo(11).ExclusiveGroup == -5
                     && back2.QuestInfo(11).RequiredMinRepValue == 9000 && back2.QuestInfo(12).BreadcrumbFor == 10 && back2.QuestInfo(10).Enders.Length == 1 && back2.QuestInfo(11).SourceItem == 5000);
                 var v1 = Path.Combine(work, "index1.bin");
                 using (var fs = new FileStream(v1, FileMode.Create)) using (var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionLevel.Fastest)) using (var bw = new BinaryWriter(gz, new System.Text.UTF8Encoding(false))) built.Write(bw, 1);

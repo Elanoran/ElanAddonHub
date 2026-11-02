@@ -70,7 +70,7 @@ namespace ElansAddonHub
                 var ipath = Path.Combine(work, "classic-index.bin");
                 var rep = await Task.Run(() => ClassicImporter.Import(dump, ClassicPaths.UpdatesDir(cdir), ipath, new ClassicProvenance { DumpName = Path.GetFileName(dump) }, null, CancellationToken.None));
                 var ci = ClassicIndex.Load(ipath);
-                Check("real data: the Classic dump reads into a format-2 index (" + (ci?.Objects.Count ?? 0) + " objects, " + (ci?.Quests.Count ?? 0) + " quests, " + (ci?.Objects.Values.Count(o => o.LockId > 0) ?? 0) + " objects with a lock, "
+                Check("real data: the Classic dump reads into a format-" + ClassicIndex.FormatVersion + " index (" + (ci?.Objects.Count ?? 0) + " objects, " + (ci?.Quests.Count ?? 0) + " quests, " + (ci?.Objects.Values.Count(o => o.LockId > 0) ?? 0) + " objects with a lock, "
                     + (ci?.Quests.Values.Count(q => q.NextQuestInChain > 0 || q.PrevQuestId != 0) ?? 0) + " quests with chain links)",
                     ci != null && ci.Provenance.FormatVersion == ClassicIndex.FormatVersion && ci.Objects.Values.Count(o => o.LockId > 0) > 1000 && ci.Quests.Values.Count(q => q.PrevQuestId != 0) > 500);
                 if (ci == null) return;

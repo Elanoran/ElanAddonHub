@@ -15,7 +15,7 @@ This is the contract between the in-game addons, Elan's Hub and Elan's Outpost.
 [Atlas: the game's own data](#atlas-the-games-own-data) · [Item data layer v1](#item-data-layer-v1) · [Spells, skills, recipes, factions and item details](#spells-skills-recipes-factions-and-item-details) · [Browse by category](#browse-by-category) · [What the client has seen (SeenData)](#what-the-client-has-seen-seendata) · [Combat log](#combat-log) · [Map layer](#map-layer) · [Atlas: items, maps, instances and where things come from](#atlas-items-maps-instances-and-where-things-come-from) · [atlas.obs v1](#atlasobs-v1)
 
 **[The Atlas: pages and planners](#the-atlas-pages-and-planners)** - Talents, classes and races, professions, the Atlas page and shell, gear upgrades.<br>
-[Talent layer](#talent-layer) · [Classes and races](#classes-and-races) · [Professions and camping](#professions-and-camping) · [Atlas page](#atlas-page) · [Atlas shell](#atlas-shell) · [Atlas entity template and global search](#atlas-entity-template-and-global-search) · [Foundation the layers share](#foundation-the-layers-share) · [Gear upgrades](#gear-upgrades) · [Enchants and food in the Upgrades panel](#enchants-and-food-in-the-upgrades-panel) · [Consumables](#consumables)
+[Talent layer](#talent-layer) · [Classes and races](#classes-and-races) · [Professions and camping](#professions-and-camping) · [Atlas page](#atlas-page) · [Atlas shell](#atlas-shell) · [Atlas entity template and global search](#atlas-entity-template-and-global-search) · [3D models in the Atlas](#3d-models-in-the-atlas) · [Foundation the layers share](#foundation-the-layers-share) · [Gear upgrades](#gear-upgrades) · [Enchants and food in the Upgrades panel](#enchants-and-food-in-the-upgrades-panel) · [Consumables](#consumables)
 
 **[The world map](#the-world-map)** - Entrances, the 2D and 3D world map, drawn dungeon plans.<br>
 [Dungeon and raid entrances](#dungeon-and-raid-entrances) · [World map](#world-map) · [Drawn dungeon plans](#drawn-dungeon-plans)
@@ -2162,6 +2162,35 @@ one template.
 - the caption's hit-test island, the narrow icon.
 
 The other Atlas sections switch tabs to find their tables (`SwitchTab`).
+
+### 3D models in the Atlas
+
+*Since Outpost 3.6.0.*
+
+Creature pages show the creature's model, animated, in a card at the top of the rail (in the Overview after the tooltip card when the
+window is narrow). Beasts, elementals, dragons and bosses; humanoid NPCs (the HD character model, baked skin and gear) are not shown yet.
+
+- **Which model** (`Services/Db2/ModelData.cs`): the NPC's display id from what this client has seen (`SeenData`, the first display),
+  else the Classic baseline's `DisplayId1..4` with their chances; then `CreatureDisplayInfo` (model, scale, skin textures
+  `TextureVariationFileDataID[4]`, `ExtendedDisplayInfoID` = humanoid) and `CreatureModelData` (the M2 file). Read like the other
+  tables: known layouts only, an unknown one turns the models off with its reason.
+- **Looks**: a creature with several displays gets a "Look 1 · 2 · ..." switch (each look's chance as its tooltip; the default is the
+  highest chance). The chances follow the Classic dump's own rule (update z2823; the importer applies it with `creature_model_info`,
+  `ClassicDisplayChances`): in this dump that leaves one look for 2- and 3-display creatures and 25 % each for 4-display ones.
+- **Model build** (`Services/Models3d/`): the M2 and its first skin become an "M2B2" file - positions, normals, uvs, bone weights and
+  indices, the default geosets (id 0, x01, 32xx; after wow.export, MIT), batches with their blend and flags, skin textures resolved
+  (type 0 from TXID, 11/12/13 from the display), the bones with pivots and the Stand animation (inline or from an `.anim` file).
+  Textures are packed like the world map's (MTX1, at most 1024 px). Cached per game build under `atlas\models\<build>_m1\`.
+- **Viewer** (`Controls/ModelView.cs`, `ModelViewer/viewer.html + viewer.js`, three.js r149): a sandboxed WebView2 on its own host
+  `models.outpost.local` (read-only, only `viewer.html` may load, everything else 403, messages validated). Bones are posed every frame
+  (pivot, translation, rotation, scale, parent first) and skin one mesh. Drag to turn, wheel to zoom, a slow spin.
+- **Airspace**: the HWND WebView2 clips itself to the visible part of the card (`SetWindowRgn`) while the page scrolls, and is swapped
+  for a snapshot while the Ctrl+K palette is open. (`WebView2CompositionControl` needs the Windows SDK projection, which the app does
+  not target.) Rendering pauses when the card is out of view; the view is released when the page is left.
+- **Not yet**: billboarded bones, texture animations, particles, colour / alpha tracks after the first key; item models.
+- Tests: `models` (synthetic tables, model files, viewer protocol, card placement) and `modelsreal` (real files: the Timber Wolf,
+  Stonetusk Boar, Rock Elemental, Scalding Whelp and Ragnaros build and animate; the page's bone matrices match an independent C#
+  calculation; the Reef Shark's looks switch).
 
 ### Foundation the layers share
 

@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.6.0
+- **Creatures in 3D.** A creature's Atlas page now shows its model from your game files, animated, in a card beside the facts: drag to turn it, scroll to zoom. Beasts, elementals, dragons and bosses for now; humanoid NPCs come later.
+- **Looks.** A creature that can appear in several looks gets a Look switch on its model card, with how often each look is seen.
+- The Classic baseline is read again once, in the background, to pick up the creatures' looks (no download).
+
 ## 3.5.13
 - **Ready for game patch 1.60.1.70707.** Spell durations show again in spell and talent texts (the patch changed the layout of the game's spell duration table).
 - **New Mage builds for the reworked trees.** 70707 removed Arcane Focus, turned Improved Fireball into Accelerant and Elemental Precision into Precision: the recommended Frostbite, Pyre and Arcanist builds are rewritten for the new trees.

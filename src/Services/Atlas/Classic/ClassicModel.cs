@@ -66,6 +66,9 @@ namespace ElansAddonHub.Services.Atlas.Classic
         public int FactionId;       // FactionTemplate id: the Outpost resolves friendly / hostile from the client's own FactionTemplate data
         public int NpcFlags;        // 0x2 quest giver, 0x80 vendor, 0x10 trainer ... (a service npc)
         public ClassicSpawn[] Spawns = new ClassicSpawn[0];
+        // 3.6: the creature's display ids (CreatureDisplayInfo ids, the 3D model) in the dump's order, empty slots left out, and the server's chance of each
+        // (DisplayIdProbability, percent; 0 when the dump gives none). Empty in an index older than format 3.
+        public int[] DisplayIds = new int[0], DisplayChances = new int[0];
         public string Source => ClassicLabel.Source;
         public bool IsVendor => (NpcFlags & 0x80) != 0;
         public bool IsQuestGiver => (NpcFlags & 0x2) != 0;

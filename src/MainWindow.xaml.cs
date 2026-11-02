@@ -470,6 +470,8 @@ namespace ElansAddonHub
             if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
             if (Begin("atlasdata")) { result += "\r\n" + await AtlasDataTest(dir); End(); }
             await RealSec("atlasdatareal", AtlasDataRealTest);
+            if (Begin("models")) { result += "\r\n" + await ModelsTest(dir); End(); }
+            await RealSec("modelsreal", ModelsRealTest);
             if (Begin("datahonesty")) { result += "\r\n" + await DataHonestyTest(dir); End(); }
             if (Begin("datasources")) { result += "\r\n" + await DataSourcesTest(dir); End(); }
             if (Begin("atlashidden")) { result += "\r\n" + await AtlasHiddenTest(dir); End(); }

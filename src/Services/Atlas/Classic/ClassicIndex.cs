@@ -18,8 +18,11 @@ namespace ElansAddonHub.Services.Atlas.Classic
     public sealed class ClassicIndex
     {
         // 2 (Outpost 2.77): objects carry their lock, quests their chain (prev / next / exclusive group / breadcrumb), skill and reputation needs, enders.
-        // A version-1 file still loads (those fields empty); ClassicAtlas.Outdated tells the page to read the dump again.
-        public const int FormatVersion = 2, OldestReadable = 1;
+        // 3 (Outpost 3.6): npcs carry their display ids and chances (the Atlas 3D models).
+        // 4 (Outpost 3.6, step 5): the same layout, but the chances follow update z2823's rule (ClassicDisplayChances); a format-3 file has 100 / 0 for
+        // most multi-display creatures, so it counts as outdated and is read again from the dump.
+        // An older file still loads (those fields empty); ClassicSetup.Outdated tells the page to read the dump again.
+        public const int FormatVersion = 4, OldestReadable = 1;
         static readonly byte[] Magic = { (byte)'E', (byte)'C', (byte)'L', (byte)'I' };
 
         public ClassicProvenance Provenance = new ClassicProvenance();
@@ -210,6 +213,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
             {
                 V(w, n.Id); Str(w, n.Name); Str(w, n.SubName); V(w, n.MinLevel); V(w, n.MaxLevel); V(w, n.Rank); V(w, n.Type); V(w, n.Family); V(w, n.FactionId); V(w, n.NpcFlags);
                 Spawns(w, n.Spawns);
+                if (format >= 3) Pairs(w, n.DisplayIds, n.DisplayChances);     // 3.6: display id + chance
             }
 
             V(w, Objects.Count);
@@ -260,6 +264,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
             {
                 var c = new ClassicNpc { Id = RV(r), Name = RStr(r), SubName = RStr(r), MinLevel = RV(r), MaxLevel = RV(r), Rank = RV(r), Type = RV(r), Family = RV(r), FactionId = RV(r), NpcFlags = RV(r) };
                 c.Spawns = RSpawns(r);
+                if (ver >= 3) RPairs(r, out c.DisplayIds, out c.DisplayChances);
                 x.Npcs[c.Id] = c;
             }
 

@@ -19,7 +19,7 @@ namespace ElansAddonHub
     // (All, Items, Creatures, Quests, Zones, Spells, Pages), grouped results, and a preview of the selected one. Empty, it lists Pinned, Recent and the Pages. The search runs on a
     // worker (AtlasPaletteSearch) with a cancellation token: a newer keystroke cancels the older search, and a late answer is dropped.
     // A WebView2 (the world map) is always drawn above every WPF element, so while the palette is open over the map the live view is swapped for a snapshot of it
-    // (WorldMapView.FreezeAsync) and swapped back when the palette closes.
+    // (WorldMapView.FreezeAsync) and swapped back when the palette closes; since 3.6 the same for an NPC page's model viewer (ModelView.FreezeAsync).
     public partial class AtlasPage
     {
         sealed class PalEntry { public string Id = "", Kind = ""; public AtlasHit Hit; public ContentControl Row; }
@@ -35,6 +35,7 @@ namespace ElansAddonHub
         AtlasPaletteSearch.Result palResult;
         Task palSearch = Task.CompletedTask, palOpening = Task.CompletedTask;
         WorldMapView frozenMap;
+        ModelView frozenModel;
         PalEntry palPreviewFor;
 
         public bool PaletteOpen => palOpen && PaletteLayer.Visibility == Visibility.Visible;
@@ -133,7 +134,13 @@ namespace ElansAddonHub
                 frozenMap = wm;
                 try { await wm.FreezeAsync(); } catch (Exception e) { Util.Log("atlas palette: map snapshot: " + e.Message); }
             }
-            if (!palOpen) { frozenMap?.Thaw(); frozenMap = null; return; }      // closed while the snapshot was taken
+            // 3.6: an NPC page's model viewer is a web view too (ModelView): the same swap
+            if (IsVisible && modelView != null && modelView.HasWebForTest)
+            {
+                frozenModel = modelView;
+                try { await modelView.FreezeAsync(); } catch (Exception e) { Util.Log("atlas palette: model snapshot: " + e.Message); }
+            }
+            if (!palOpen) { frozenMap?.Thaw(); frozenMap = null; frozenModel?.Thaw(); frozenModel = null; return; }      // closed while the snapshot was taken
             BuildChips();
             if (overlayHost != null) overlayHost.Visibility = Visibility.Visible;
             PaletteLayer.Visibility = Visibility.Visible;
@@ -158,6 +165,7 @@ namespace ElansAddonHub
             PaletteLayer.Visibility = Visibility.Collapsed;
             if (overlayHost != null) overlayHost.Visibility = Visibility.Collapsed;
             if (frozenMap != null) { frozenMap.Thaw(); frozenMap = null; }
+            if (frozenModel != null) { frozenModel.Thaw(); frozenModel = null; }
             try { PaletteClosed?.Invoke(); } catch (Exception e) { Util.Log("atlas palette: closed: " + e.Message); }
             if (!restoreFocus) return;
             // the focus goes back to where it was (not to the title bar box: it would open the palette again); on the Atlas page that is the page

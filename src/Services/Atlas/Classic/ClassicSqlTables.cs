@@ -11,9 +11,18 @@ namespace ElansAddonHub.Services.Atlas.Classic
         public sealed class Spec
         {
             public string Name; public string[] Cols; public string[] Pk;
+            public Dictionary<string, string> Aliases;   // 3.6: an older name of a kept column (the dump's name before an update renamed it) -> the kept name
         }
 
-        static Spec S(string name, string pk, string cols) => new Spec { Name = name, Pk = pk.Split(','), Cols = cols.Split(',') };
+        static Spec S(string name, string pk, string cols, Dictionary<string, string> aliases = null) => new Spec { Name = name, Pk = pk.Split(','), Cols = cols.Split(','), Aliases = aliases };
+
+        // 3.6: the display ids of a creature (Atlas 3D models). The z2815 dump calls them ModelId1..4; update z2823 renames them DisplayId1..4 (ALTER TABLE
+        // CHANGE) and adds DisplayIdProbability1..4, so both names land in the same kept column.
+        static readonly Dictionary<string, string> DisplayAliases = new Dictionary<string, string> { ["modelid1"] = "displayid1", ["modelid2"] = "displayid2", ["modelid3"] = "displayid3", ["modelid4"] = "displayid4" };
+
+        // 3.6 step 5: the model rows update z2823's display chances look at (EXISTS ... modelid_other_team > 0); update z2824 renames that column
+        // modelid_alternative (ALTER TABLE CHANGE), so both names land in the same kept column
+        static readonly Dictionary<string, string> ModelInfoAliases = new Dictionary<string, string> { ["modelid_alternative"] = "modelid_other_team" };
 
         const string LootCols = "entry,item,chanceorquestchance,groupid,mincountorref,maxcount,comments";
         const string VendorCols = "entry,item,maxcount,incrtime";
@@ -21,7 +30,9 @@ namespace ElansAddonHub.Services.Atlas.Classic
 
         public static readonly Dictionary<string, Spec> Tables = new[]
         {
-            S("creature_template", "entry", "entry,name,subname,minlevel,maxlevel,faction,family,creaturetype,npcflags,rank,lootid,pickpocketlootid,skinninglootid,vendortemplateid"),
+            S("creature_template", "entry", "entry,name,subname,minlevel,maxlevel,faction,family,creaturetype,npcflags,rank,lootid,pickpocketlootid,skinninglootid,vendortemplateid,"
+                + "displayid1,displayid2,displayid3,displayid4,displayidprobability1,displayidprobability2,displayidprobability3,displayidprobability4", DisplayAliases),
+            S("creature_model_info", "modelid", "modelid,modelid_other_team", ModelInfoAliases),
             S("creature", "guid", SpawnCols),
             S("creature_spawn_entry", "guid,entry", "guid,entry"),
             S("creature_loot_template", "entry,item", LootCols),
@@ -66,6 +77,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
         {
             Spec = spec;
             for (int i = 0; i < spec.Cols.Length; i++) Idx[spec.Cols[i]] = i;
+            if (spec.Aliases != null) foreach (var a in spec.Aliases) if (Idx.TryGetValue(a.Value, out var ai)) Idx[a.Key] = ai;
             PkIdx = spec.Pk.Select(p => Idx[p]).ToArray();
         }
 

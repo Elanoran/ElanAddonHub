@@ -52,6 +52,14 @@ namespace ElansAddonHub.Services.Atlas.Classic
         // ---- queries
         public static IReadOnlyList<ClassicItemSource> SourcesOf(int itemId) => Current?.SourcesOf(itemId) ?? NoSources;
         public static ClassicNpc NpcInfo(int npcId) => Current?.NpcInfo(npcId);
+        // 3.6: the npc's display ids with their chances (percent, 0 = the dump gives none); empty without the index or with one older than format 3
+        public static IReadOnlyList<KeyValuePair<int, int>> Displays(int npcId)
+        {
+            var n = NpcInfo(npcId);
+            var l = new List<KeyValuePair<int, int>>();
+            if (n != null) for (int i = 0; i < n.DisplayIds.Length; i++) l.Add(new KeyValuePair<int, int>(n.DisplayIds[i], i < n.DisplayChances.Length ? n.DisplayChances[i] : 0));
+            return l;
+        }
         public static ClassicObject ObjectInfo(int objectId) => Current?.ObjectInfo(objectId);
         public static ClassicQuest QuestInfo(int questId) => Current?.QuestInfo(questId);
         public static ClassicItemInfo ItemInfo(int itemId) => Current?.ItemInfo(itemId);

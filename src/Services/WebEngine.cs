@@ -13,6 +13,7 @@ namespace ElansAddonHub.Services
     //   Player  = the Lodge video player      <data>\webview2           (always InPrivate)
     //   Browser = the Browser page            <data>\webview2\browser   (InPrivate unless "Remember logins")
     //   WorldMap = the Atlas world map page   <data>\webview2\worldmap  (always InPrivate; only ever shows its own virtual host)
+    //              and since 3.6 the Atlas model viewer (ModelView: its own virtual host models.outpost.local)
     public enum WebProfile { Player, Browser, WorldMap }
 
     // Everything the two WebView2 users share: the embedded loader, the environments, creating a control into one, and the

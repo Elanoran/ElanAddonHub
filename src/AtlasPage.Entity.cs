@@ -70,6 +70,8 @@ namespace ElansAddonHub
         static string ChipText(Border b) => (b.Child as TextBlock)?.Text ?? "";
 
         public static int ColumnModeFor(double scrollerWidth, bool hasRail) => hasRail && scrollerWidth >= RailFrom ? 1 : 0;
+        // the rail has something to hold: the facts, the map thumbnail, or (3.6) the model card alone
+        bool HasRail(AtlasPageModel m) => factsCard != null || modelCard != null || HasRailMap(m);
 
         // ============================================================================================================================ a page
         void Draw(AtlasPageModel m)
@@ -100,10 +102,11 @@ namespace ElansAddonHub
 
             PlanTabs(m);
             factsCard = FactsFor(m);
+            modelCard = ModelCardFor(m);          // 3.6: an NPC's 3D model (AtlasPage.Model.cs)
             var want = AtlasTabs.TabOf(history.Current);
             if (!AtlasTabs.SamePage(history.Current, m.Id) || !tabsShown.Contains(want)) want = "";
             tabNow = want.Length > 0 ? want : tabsShown.Contains(tabDefault) ? tabDefault : AtlasTabs.Overview;
-            bool hasRail = factsCard != null || HasRailMap(m);
+            bool hasRail = HasRail(m);
             int mode = ColumnModeFor(Scroller.ActualWidth, hasRail);
             railOn = mode > 0;
 
@@ -121,6 +124,7 @@ namespace ElansAddonHub
             columnMode = -1;
             tabHost.Content = TabContentFor(tabNow);
             ApplyLayout(mode);
+            StartModel();
             // a link named a tab the page does not have: the id says what the page shows
             if (AtlasTabs.TabOf(history.Current).Length > 0 && AtlasTabs.TabOf(history.Current) != tabNow) SyncIdToTab(false);
             Scroller.ScrollToTop(); contentScroller?.ScrollToTop();
@@ -139,6 +143,7 @@ namespace ElansAddonHub
         {
             entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null; loreCard = null; classLoreCard = null; overviewLead = 0;
             LeaveFixedHead();
+            ReleaseModel();            // 3.6: the model viewer's browser goes with its page
             railMap?.ClearMarkers(); railMap = null;
             tabsShown.Clear(); tabButtons.Clear(); tabContent.Clear();
             tabNow = ""; tabDefault = AtlasTabs.Overview; columnMode = -1; railOn = false; wide = false;
@@ -368,9 +373,12 @@ namespace ElansAddonHub
                 case AtlasTabs.Overview:
                     {
                         if (!HeaderCarriesFacts(m) && !HeroIsTheCard(m)) col.Children.Add(ItemCard(m));       // most kinds: the game tooltip is the page's main card (a zone's header already says it all; a class's or race's hero too)
+                        overviewTip = col.Children.Count;                        // 3.6: the model card goes right after the tooltip when the rail is off
+                        bool modelHere = !railOn && modelCard != null;
+                        if (modelHere) { (modelCard.Parent as Panel)?.Children.Remove(modelCard); col.Children.Add(modelCard); }
                         if (m.Lore != null) col.Children.Add(LoreCard(m));       // a zone with the Outpost's notes: "About <zone>"
                         if (m.ClassLore != null) col.Children.Add(ClassLoreCard(m));     // a class or race: the game's own words and the Outpost's notes, "About <class>"
-                        overviewLead = col.Children.Count;                       // the facts go after these when the rail is off
+                        overviewLead = col.Children.Count - (modelHere ? 1 : 0); // the facts go after these when the rail is off (counted without the model card, PlaceRailItems puts both back)
                         if (!railOn && factsCard != null) col.Children.Add(factsCard);
                         if (m.Custom is QuestChainInfo chain) col.Children.Add(QuestChainCard(chain));
                         if (m.Entrance != null) col.Children.Add(EntranceCard(m));
@@ -492,7 +500,7 @@ namespace ElansAddonHub
         {
             if (startInfo != null || tileGrids.Count > 0 || homeCardGrid != null) { LayoutStart(); return; }
             if (entityGrid == null || model == null) return;
-            bool hasRail = factsCard != null || HasRailMap(model);
+            bool hasRail = HasRail(model);
             int m = ColumnModeFor(Scroller.ActualWidth, hasRail);
             if (m == columnMode && entityGrid.ColumnDefinitions.Count > 0) return;
             ApplyLayout(m);
@@ -518,20 +526,26 @@ namespace ElansAddonHub
             PlaceRailItems();
         }
 
-        // wide: the rail holds the map thumbnail and the facts; narrow: the facts are in the Overview (after the tooltip) and the rail is empty
+        // wide: the rail holds the model (3.6), the map thumbnail and the facts; narrow: the facts are in the Overview (after the tooltip) and the rail is
+        // empty; the model card then sits right after the tooltip card
         void PlaceRailItems()
         {
             if (factsCard != null) (factsCard.Parent as Panel)?.Children.Remove(factsCard);
+            if (modelCard != null) (modelCard.Parent as Panel)?.Children.Remove(modelCard);
             railStack.Children.Clear();
             railStack.Visibility = railOn ? Visibility.Visible : Visibility.Collapsed;
             if (railOn)
             {
+                if (modelCard != null) railStack.Children.Add(modelCard);
                 UpdateRailMap();
                 if (railMapHost != null) railStack.Children.Add(railMapHost);
                 if (factsCard != null) railStack.Children.Add(factsCard);
             }
-            else if (factsCard != null && tabContent.TryGetValue(AtlasTabs.Overview, out var ov) && ov is StackPanel sp)
-                sp.Children.Insert(Math.Min(overviewLead, sp.Children.Count), factsCard);
+            else if (tabContent.TryGetValue(AtlasTabs.Overview, out var ov) && ov is StackPanel sp)
+            {
+                if (factsCard != null) sp.Children.Insert(Math.Min(overviewLead, sp.Children.Count), factsCard);
+                if (modelCard != null) sp.Children.Insert(Math.Min(overviewTip, sp.Children.Count), modelCard);
+            }
             ApplyRailWidth();
         }
 
@@ -539,7 +553,7 @@ namespace ElansAddonHub
         void ApplyRailWidth()
         {
             if (!railOn || entityGrid == null || entityGrid.ColumnDefinitions.Count < 3) return;
-            bool any = factsCard != null || (railMapHost != null && railMapHost.Visibility == Visibility.Visible);
+            bool any = factsCard != null || modelCard != null || (railMapHost != null && railMapHost.Visibility == Visibility.Visible);
             entityGrid.ColumnDefinitions[1].Width = new GridLength(any ? 12 : 0);
             entityGrid.ColumnDefinitions[2].Width = new GridLength(any ? RailWidth : 0);
             railStack.Visibility = any ? Visibility.Visible : Visibility.Collapsed;

@@ -32,6 +32,8 @@ namespace ElansAddonHub.Services.Atlas.Classic
         public readonly SortedDictionary<string, int> SourceRowsByKind = new SortedDictionary<string, int>();
         public readonly SortedDictionary<string, int> ItemsByKind = new SortedDictionary<string, int>();
         public int ReferenceCycles;
+        public bool DisplayChanceRuleRan;                   // 3.6 step 5: update z2823's display chances, worked out by ClassicDisplayChances
+        public int DisplayChanceRows, DisplayChanceChanged;     // creatures the rule's statements matched / whose chances it changed
         public double Seconds;
         public long PeakWorkingSetMb, ManagedMb;
         public long IndexBytes;
@@ -48,6 +50,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
             sb.AppendLine("index: items " + Items + ", npcs " + Npcs + " (" + NpcSpawns + " spawns), objects " + Objects + " (" + ObjectSpawns + " spawns), quests " + Quests + ", vendors " + VendorNpcs);
             sb.AppendLine("items with at least one source: " + ItemsWithSource + " of " + Items + "; source rows " + ItemRowsWithSource);
             foreach (var kv in SourceRowsByKind) sb.AppendLine("  " + kv.Key + ": " + kv.Value + " rows, " + (ItemsByKind.TryGetValue(kv.Key, out var n) ? n : 0) + " items");
+            if (DisplayChanceRuleRan) sb.AppendLine("display chances (update z2823, the importer's own rule): " + DisplayChanceRows + " creatures matched, " + DisplayChanceChanged + " changed");
             sb.AppendLine("time " + Seconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " s, peak working set " + PeakWorkingSetMb + " MB, managed " + ManagedMb + " MB, index " + IndexBytes + " bytes");
             if (SkipReasons.Count > 0)
             {
@@ -55,6 +58,67 @@ namespace ElansAddonHub.Services.Atlas.Classic
                 foreach (var kv in SkipReasons.OrderByDescending(x => x.Value).Take(15)) sb.AppendLine("  " + kv.Value + "x " + kv.Key);
             }
             return sb.ToString();
+        }
+    }
+
+    // ============================================================================================================================
+    // 3.6 step 5: the display chances of update 4620_z2823_01_mangos_displayid_probability.sql, worked out in C#. The file adds DisplayIdProbability1..4
+    // and then sets them with six UPDATEs in this order ("setting probabilities to exactly replicate previous behaviour"); five of them carry an
+    // EXISTS / NOT EXISTS sub-select on creature_model_info that ClassicSqlExec does not read (skipped as unsupported), so before this every
+    // multi-display creature with fewer than four displays read 100 / 0. The six, as the file has them (D = DisplayId, P = DisplayIdProbability,
+    // "other(D2)" = EXISTS(SELECT modelid FROM creature_model_info WHERE creature_template.DisplayId2=creature_model_info.modelid AND modelid_other_team > 0)):
+    //   1  P1=100                            WHERE D1!=0
+    //   2  P1=50,P2=50                       WHERE D1!=0 AND D2!=0 AND other(D2)
+    //   3  P1=0,P2=100                       WHERE D1!=0 AND D2!=0 AND NOT other(D2)
+    //   4  P1=33,P2=33,P3=33                 WHERE D1!=0 AND D2!=0 AND D3!=0 AND other(D2)
+    //   5  P1=0,P2=0,P3=100                  WHERE D1!=0 AND D2!=0 AND D3!=0 AND NOT other(D2)
+    //   6  P1=25,P2=25,P3=25,P4=25           WHERE D1!=0 AND D2!=0 AND D3!=0 AND D4!=0
+    // Run one after the other on every row, so a later one overrides an earlier one; a column no statement sets keeps what it had (the ADD COLUMN default
+    // 0). Everything the rule reads is in the dump (creature_template and creature_model_info.modelid / modelid_other_team); nothing is guessed.
+    // ============================================================================================================================
+    static class ClassicDisplayChances
+    {
+        static readonly Regex RuleFileRx = new Regex(@"^\d+_z2823_01_mangos_displayid_probability\.sql$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        public static bool IsRuleFile(string name) => name != null && RuleFileRx.IsMatch(name);
+
+        // the six statements on one row: d = DisplayId1..4, other = other(D2), p = DisplayIdProbability1..4 as they are (changed in place); true = matched one
+        public static bool Rule(long[] d, bool other, long[] p)
+        {
+            bool hit = false;
+            if (d[0] != 0) { p[0] = 100; hit = true; }
+            if (d[0] != 0 && d[1] != 0 && other) { p[0] = 50; p[1] = 50; }
+            if (d[0] != 0 && d[1] != 0 && !other) { p[0] = 0; p[1] = 100; }
+            if (d[0] != 0 && d[1] != 0 && d[2] != 0 && other) { p[0] = 33; p[1] = 33; p[2] = 33; }
+            if (d[0] != 0 && d[1] != 0 && d[2] != 0 && !other) { p[0] = 0; p[1] = 0; p[2] = 100; }
+            if (d[0] != 0 && d[1] != 0 && d[2] != 0 && d[3] != 0) { p[0] = 25; p[1] = 25; p[2] = 25; p[3] = 25; }
+            return hit;
+        }
+
+        public static void Apply(ClassicSqlExec exec, ClassicImportReport rep)
+        {
+            if (!exec.Tables.TryGetValue("creature_template", out var ct) || !exec.Tables.TryGetValue("creature_model_info", out var mi)) return;
+            // the model ids with modelid_other_team > 0 (the sub-select's rows)
+            var other = new HashSet<long>();
+            int mid = mi.Idx["modelid"], mot = mi.Idx["modelid_other_team"];
+            foreach (var r in mi.Rows) if (SqlVal.ToLong(r[mot]) > 0) other.Add(SqlVal.ToLong(r[mid]));
+            var di = new[] { ct.Idx["displayid1"], ct.Idx["displayid2"], ct.Idx["displayid3"], ct.Idx["displayid4"] };
+            var pi = new[] { ct.Idx["displayidprobability1"], ct.Idx["displayidprobability2"], ct.Idx["displayidprobability3"], ct.Idx["displayidprobability4"] };
+            int rows = 0, changed = 0;
+            var d = new long[4]; var p = new long[4];
+            foreach (var r in ct.Rows)
+            {
+                for (int k = 0; k < 4; k++) { d[k] = SqlVal.ToLong(r[di[k]]); p[k] = SqlVal.ToLong(r[pi[k]]); }
+                var before = (long[])p.Clone();
+                if (!Rule(d, other.Contains(d[1]), p)) continue;
+                rows++;
+                bool diff = false;
+                for (int k = 0; k < 4; k++) if (p[k] != before[k]) diff = true;
+                if (diff) changed++;
+                for (int k = 0; k < 4; k++) r[pi[k]] = p[k];
+            }
+            ct.Updated += rows;
+            rep.DisplayChanceRuleRan = true; rep.DisplayChanceRows += rows; rep.DisplayChanceChanged += changed;
+            rep.Notes.Add("display chances (update z2823): its EXISTS updates worked out by the importer: " + rows + " creatures matched, " + changed + " changed, " + other.Count + " model rows with modelid_other_team");
         }
     }
 
@@ -157,6 +221,9 @@ namespace ElansAddonHub.Services.Atlas.Classic
                     using (var tr = u.f.Value()) Run(tr, exec, u.f.Key, ct, null, rep, false);
                 }
                 catch (IOException e) { rep.Notes.Add("could not read " + u.f.Key + ": " + e.Message); continue; }
+                // 3.6 step 5: the file's conditional UPDATEs (EXISTS on creature_model_info) are beyond ClassicSqlExec; its rule is applied here, at the
+                // point of the update sequence where cMaNGOS ran it (later updates then change the rows as they did in the real database)
+                if (ClassicDisplayChances.IsRuleFile(u.f.Key)) ClassicDisplayChances.Apply(exec, rep);
                 rep.UpdateFilesApplied++;
                 progress?.Report(new ClassicProgress { Phase = "Applying updates " + done + "/" + ordered.Count, Fraction = from + (to - from) * done / Math.Max(1, ordered.Count) });
             }
@@ -206,10 +273,16 @@ namespace ElansAddonHub.Services.Atlas.Classic
                 var t = T["creature_template"];
                 int e = t.Idx["entry"], n = t.Idx["name"], sn = t.Idx["subname"], mn = t.Idx["minlevel"], mx = t.Idx["maxlevel"], f = t.Idx["faction"], fam = t.Idx["family"],
                     ty = t.Idx["creaturetype"], fl = t.Idx["npcflags"], rk = t.Idx["rank"], lo = t.Idx["lootid"], pp = t.Idx["pickpocketlootid"], sk = t.Idx["skinninglootid"], vt = t.Idx["vendortemplateid"];
+                var di = new[] { t.Idx["displayid1"], t.Idx["displayid2"], t.Idx["displayid3"], t.Idx["displayid4"] };
+                var dp = new[] { t.Idx["displayidprobability1"], t.Idx["displayidprobability2"], t.Idx["displayidprobability3"], t.Idx["displayidprobability4"] };
                 foreach (var r in t.Rows)
                 {
                     int id = I(r, e);
-                    idx.Npcs[id] = new ClassicNpc { Id = id, Name = S(r, n), SubName = S(r, sn), MinLevel = I(r, mn), MaxLevel = I(r, mx), FactionId = I(r, f), Family = I(r, fam), Type = I(r, ty), NpcFlags = I(r, fl), Rank = I(r, rk) };
+                    var npc = idx.Npcs[id] = new ClassicNpc { Id = id, Name = S(r, n), SubName = S(r, sn), MinLevel = I(r, mn), MaxLevel = I(r, mx), FactionId = I(r, f), Family = I(r, fam), Type = I(r, ty), NpcFlags = I(r, fl), Rank = I(r, rk) };
+                    // 3.6: the display ids and their chances (empty slots left out, so the two lists stay aligned)
+                    var dis = new List<int>(4); var dch = new List<int>(4);
+                    for (int k = 0; k < 4; k++) { int d = I(r, di[k]); if (d > 0) { dis.Add(d); dch.Add(Math.Max(0, I(r, dp[k]))); } }
+                    npc.DisplayIds = dis.ToArray(); npc.DisplayChances = dch.ToArray();
                     lootOf[id] = new[] { I(r, lo), I(r, sk), I(r, pp) };
                     if (I(r, vt) > 0) vendorTemplate[id] = I(r, vt);
                 }
