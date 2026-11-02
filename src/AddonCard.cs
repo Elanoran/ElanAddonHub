@@ -104,6 +104,9 @@ namespace ElansAddonHub
         public List<ChangeEntry> Changes { get; private set; }
         // compact one-liner: "1.17.0  >  1.18.0" / "Installed 1.18.0" / "Latest 1.18.0"
         public string VersionLine { get; private set; }
+        // 3.5.9: the addon's own page in the public repo (addons/<id>.md: what it does, its commands, how to install it by hand)
+        public const string AboutBase = "https://github.com/Elanoran/ElanAddonHub/blob/main/addons/";
+        public string AboutUrl => string.IsNullOrEmpty(Info?.Id) ? null : AboutBase + Info.Id + ".md";
         public string DevNote { get; private set; }
         // previous installed version kept by the hub (last 2): "Roll back to v1.2.3" in the details
         public Installer.BackupInfo RollbackBackup { get; private set; }

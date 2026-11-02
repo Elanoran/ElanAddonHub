@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.9
+- **About this addon.** Each of Elan's addons now has its own page - what it does, its commands, what it needs and how to install it by hand - and the addon's card on the Addons page links to it (open the card's details).
+- **The addons without the Outpost.** Every addon can be downloaded on its own from a link that always gives the newest version, for friends who'd rather not run the Outpost.
+
 ## 3.5.8
 - **A cleaner details window in the Library.** The main thing comes first with its one main button: a macro or WeakAura's text with Copy in its corner and where to paste it, an addon's Install, a file's Save. The facts fit in two lines, versions only show when there is more than one, and New version / Edit sit at the bottom with Delete kept apart in red. Close it with the X, Esc or a click outside.
 - **Macros in colour.** A shared macro shows #showtooltip, slash commands, [conditions], targets such as @mouseover, and /run Lua in their own colours, with a "57 / 255 characters" counter - WoW cuts a macro off at 255.

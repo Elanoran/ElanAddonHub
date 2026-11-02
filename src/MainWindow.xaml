@@ -248,7 +248,11 @@
                   <Border Visibility="Collapsed" local:Motion.Expand="{Binding Expanded}" Padding="16,0,16,16">
                     <StackPanel>
                       <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="0,0,0,16" />
-                      <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" Margin="0,0,0,12" />
+                      <DockPanel Margin="0,0,0,12">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="About this addon" FontSize="12" Height="26" Margin="8,-4,-8,0" Tag="{Binding AboutUrl}"
+                                Click="AboutAddon_Click" ToolTip="What it does, its commands and how to install it without the Outpost" AutomationProperties.Name="About this addon" />
+                        <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      </DockPanel>
                       <StackPanel Visibility="{Binding DevNoteVisibility}" Margin="0,0,0,16">
                         <TextBlock Text="{Binding DevNote}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" />
                         <Button Style="{StaticResource GhostButton}" Content="Replace the git copy with the release..." FontSize="12"

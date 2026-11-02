@@ -985,6 +985,12 @@ namespace ElansAddonHub
             if ((sender as FrameworkElement)?.Tag is AddonCard card) card.Expanded = !card.Expanded;
         }
 
+        // an addon card's "About this addon": its page (in the Outpost's browser when it can run)
+        void AboutAddon_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is string url && url.StartsWith(AddonCard.AboutBase)) OpenAtlasLink(url);
+        }
+
         void OpenLink_Click(object sender, RoutedEventArgs e)
         {
             if ((sender as FrameworkElement)?.Tag is string url && url.StartsWith("https://"))
