@@ -89,7 +89,7 @@ foreach ($t in $tables) {
 # ---- which builds: the asked one, else the newest Forever build any of our tables lists; plus the installed one
 $installed = $null
 foreach ($root in @($Wow, 'C:\Program Files (x86)\World of Warcraft', 'D:\Blizzard\World of Warcraft', 'D:\World of Warcraft', 'C:\World of Warcraft') | Where-Object { $_ }) {
-    $bi = Join-Path $root '.build.info'
+    $bi = [IO.Path]::Combine($root, '.build.info')   # not Join-Path: a C:\ path throws on a Linux runner
     if (Test-Path $bi) {
         $lines = Get-Content $bi; $head = $lines[0] -split '\|' | ForEach-Object { ($_ -split '!')[0] }
         $iv = [array]::IndexOf($head, 'Version'); $ip = [array]::IndexOf($head, 'Product')
