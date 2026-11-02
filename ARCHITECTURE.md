@@ -488,26 +488,14 @@ So Hunter Helper adds shot timers, Quick Shots, aspect and distance; a future cl
 
 ### Release and update trust
 
-*Decided 2026-10-15.*
-
-**Set aside for now.** Considered after the sharing review and set aside by the owner (low hassle preferred; GitHub
-account has two-factor login):
-
-- signed releases (Ed25519 manifest signature pinned in the Outpost)
-- Authenticode code signing
-- signed git tags verified by lodge-update
-- publishing from GitHub Actions
-- a hardware security key
-- expiring fine-grained tokens
-- encrypted off-site backups
-
-**Remaining risk**: a stolen GitHub token on the release PC (the gh CLI OAuth token and Git Credential Manager
-token have broad, non-expiring scope) could publish a release.
-
-**In place**: two-factor login, downloads only from github.com over https, mandatory SHA-256 for the self-update,
-install paths confined to AddOns.
-
-**Cheapest next steps if revisited**: protect release tags; a hardware key; or move publishing to GitHub Actions.
+- **Signed releases** (since Outpost 2.99): every release's `manifest.json` comes with `manifest.json.sig`, an ECDSA
+  P-256 / SHA-256 signature made by `Tools/release.py` (addon repo). The Outpost checks it against the public keys built
+  into it (`Services\ReleaseSignature.cs`) before it trusts any checksum in the manifest. Since 3.1.1 an unsigned or
+  wrongly signed manifest is refused.
+- **Checksums**: the self-update must match the SHA-256 in the signed manifest, and addon downloads are checked against
+  theirs.
+- **Downloads** only from github.com over https.
+- **Install paths** are confined to the AddOns folder.
 
 ### Game data start, progress and updates
 
