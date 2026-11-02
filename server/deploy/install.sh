@@ -18,6 +18,11 @@ if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
 NET_MAJOR="$(grep -oE '<TargetFramework>net[0-9]+' "$REPO_DIR/server/Lodge.Server/Lodge.Server.csproj" | grep -oE '[0-9]+$' || true)"
 NET_MAJOR="${NET_MAJOR:-10}"
 have_sdk() { command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep "^${NET_MAJOR}\." >/dev/null; }
+# lodge-admin compares member names without case in any language: that needs GNU awk (Ubuntu's default awk is mawk)
+if ! command -v gawk >/dev/null 2>&1; then
+  echo "== Installing gawk (names with letters beyond A-Z in lodge-admin)"
+  apt-get install -y gawk || echo "install.sh: could not install gawk - lodge-admin then compares only A-Z without case" >&2
+fi
 if ! have_sdk; then
   echo "== Installing the .NET ${NET_MAJOR} SDK (dotnet-sdk-${NET_MAJOR}.0)"
   apt-get update -y || true

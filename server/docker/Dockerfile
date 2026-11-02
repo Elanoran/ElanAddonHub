@@ -12,9 +12,10 @@ COPY server/Lodge.Server/ server/Lodge.Server/
 RUN dotnet publish server/Lodge.Server -c Release -o /out --nologo -v q -p:UseAppHost=true
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
-# lodge-admin and lodge-backup are the same scripts as on a normal install; they need these (bash, tar, awk, flock are there)
+# lodge-admin and lodge-backup are the same scripts as on a normal install; they need these (bash, tar, flock are there;
+# gawk: names compare without case in any language, which Debian's default awk can't do)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl openssl ca-certificates \
+ && apt-get install -y --no-install-recommends curl openssl ca-certificates gawk \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out /app
 COPY server/deploy/lodge-admin server/deploy/lodge-backup /usr/local/bin/

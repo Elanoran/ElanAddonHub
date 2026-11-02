@@ -48,6 +48,9 @@ umask 077
 for loc in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
   if locale -a 2>/dev/null | grep -ix "$loc" >/dev/null; then export LC_ALL="$loc"; break; fi
 done
+# names compare without case (Åse = åse): only GNU awk lowercases letters beyond A-Z; Ubuntu's and Debian's default awk
+# (mawk) does not, so every awk here is gawk when it is installed (install.sh and the Docker image install it)
+if command -v gawk >/dev/null 2>&1; then awk() { gawk "$@"; }; fi
 
 if [ -n "${LODGE_CODES_FILE:-}" ]; then FILE="$LODGE_CODES_FILE"
 elif [ -f /var/lib/lodge/codes ] || [ ! -f /etc/lodge/codes ]; then FILE=/var/lib/lodge/codes
