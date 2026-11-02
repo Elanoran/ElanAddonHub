@@ -55,8 +55,8 @@ namespace ElansAddonHub.Lodge
             if (!s.On) return s.State == "admitted" ? "Off. Your Lodge is admitted and can switch back on any time." : "Off. Your Lodge doesn't share anything with the Cairn.";
             switch (s.Reason)
             {
-                case "invite-needed": return "The Cairn is in its beta: joining needs an invite code from the Cairn's operator. Enter it below.";
-                case "beta-full": return "The Cairn's beta is full right now. Your Lodge keeps the code and tries again later.";
+                case "invite-needed": return "For now the Cairn is invite only: joining needs an invite code from the Cairn's operator. Enter it below.";
+                case "beta-full": return "The Cairn takes no new Lodges right now. Your Lodge keeps the code and tries again later.";
                 case "code-invalid": return "That invite code is not valid. Check it, or ask the Cairn's operator for one.";
                 case "code-expired": return "That invite code has expired. Ask the Cairn's operator for a new one.";
                 case "code-used": return "That invite code was already used. Ask the Cairn's operator for a new one.";

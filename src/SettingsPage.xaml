@@ -901,7 +901,7 @@
                     <TextBlock Text="Invite code" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                     <TextBox x:Name="CairnCodeBox" Style="{StaticResource Input}" Height="36" Margin="0,4,0,0" MaxLength="32" Tag="CAIRN-XXXX-XXXX"
                              AutomationProperties.Name="Invite code" />
-                    <TextBlock Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" Text="During the beta, Lodges join with an invite code from the Cairn's operator. It works once." />
+                    <TextBlock Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" Text="For now the Cairn is invite only: joining needs an invite code from the Cairn's operator. A code works once." />
                   </StackPanel>
                   <Button x:Name="CairnJoinSave" Style="{StaticResource Button.Primary.M}" Content="Ask to join" HorizontalAlignment="Right" Margin="0,12,0,0" Click="CairnJoinSave_Click" />
                 </StackPanel>

@@ -119,7 +119,7 @@ namespace ElansAddonHub
 
                 // ---- every status line
                 async Task<string> S(string extra) { Session.FeedForTest(CairnJoinFrame(extra)); await Task.Delay(40); return CairnJoinText.Status(Session.CairnJoin, now); }
-                Check("beta full: says so and keeps the code", (await S("\"on\":true,\"state\":\"error\",\"reason\":\"beta-full\",\"mode\":\"beta\",\"hasCode\":true")).Contains("beta is full") && Session.CairnJoin.HasCode);
+                Check("full (invite only): says so and keeps the code", (await S("\"on\":true,\"state\":\"error\",\"reason\":\"beta-full\",\"mode\":\"beta\",\"hasCode\":true")).Contains("takes no new Lodges") && Session.CairnJoin.HasCode);
                 Check("code expired", (await S("\"on\":true,\"state\":\"error\",\"reason\":\"code-expired\",\"mode\":\"beta\"")).Contains("expired"));
                 Check("code invalid", (await S("\"on\":true,\"state\":\"error\",\"reason\":\"code-invalid\",\"mode\":\"beta\"")).Contains("not valid"));
                 Check("code used", (await S("\"on\":true,\"state\":\"error\",\"reason\":\"code-used\",\"mode\":\"beta\"")).Contains("already used"));
