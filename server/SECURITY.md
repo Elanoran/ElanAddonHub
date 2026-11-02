@@ -4,14 +4,53 @@
 anyone's server. So we guard against three things: a hostile member or guest on a Lodge (floods, oversized or malformed messages,
 pretending to be someone else, files that run something), a hostile or hacked Lodge server talking to your Outpost (it must not be able to
 crash it, fill its memory or disk, fake who said something, or reach anything on your PC), and a forged Cairn or update (Cairn data,
-Cairn notices and Outpost releases are signed, and only a valid signature is accepted). The sections below describe the protections,
-newest at the bottom; "Current protections" sums them up.
+Cairn notices and Outpost releases are signed, and only a valid signature is accepted). "Current protections" below sums up the
+protections; the release history describes them in detail, newest at the bottom.
 
 **Reporting a problem.** Please don't put the details of a security problem in a public issue. Report it privately
 through GitHub instead: [Report a vulnerability](https://github.com/Elanoran/ElanAddonHub/security/advisories/new) (the repository's
 Security tab); only the maintainer sees it. We fix what we can confirm and credit you in the changelog if you like.
 
-## 2.2.0 hardening (from the security review of 1.4.0)
+**Contents:** [Current protections](#current-protections-summary) · [What the operator takes care of](#what-the-operator-takes-care-of) · [Release history](#release-history) · [Tests](#tests)
+
+## Current protections (summary)
+
+- Access: invite links that work once and turn into a per-device token; codes and tokens only in a header, stored hashed, compared in
+  constant time; a wrong-code lockout per address (IPv4, or IPv6 /64); a request rate limit per address; ranks checked by the server on
+  every message.
+- Abuse: per-person budgets for chat, control messages, voice, uploads, downloads, search and every shared-data feature (guests per address);
+  sustained floods close the connection; storage, file count and history are bounded.
+- Input: one JSON engine with fixed limits on both sides; every field validated by the side that receives it; names and text cleaned; file
+  names cleaned, dangerous types and zips containing them refused.
+- Privacy: invisible members, position and profile visibility decided only by the server; nothing secret logged; the admin endpoint only on
+  loopback.
+- The host: a locked-down systemd service or the hardened container (`server/docker`), private file modes, atomic writes, backups that
+  hold the codes kept `0600`.
+
+## What the operator takes care of
+
+- The reverse proxy must pass the visitor's real address (`X-Forwarded-For`) and must not let a visitor set it. The server takes
+  `X-Forwarded-For` / `-Proto` only from loopback and the `LODGE_TRUSTED_PROXIES` networks (`TrustedProxies`, tested with the real ASP.NET
+  middleware in `TrustedProxyTests`); see [deploy/reverse-proxy.md](deploy/reverse-proxy.md).
+- Budgets and the lockout are kept in memory: a restart starts them over.
+- The shared guest code, if enabled, is only as private as the people who have it; prefer personal invites.
+- Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`)
+  once a person's PCs have their own keys.
+- **Docker install** (`server/docker`): the container runs as a non-root user with `cap_drop: [ALL]`, `no-new-privileges`, a read-only
+  root file system and memory / process limits; it publishes only `127.0.0.1:5280`, because Docker's port rules bypass the host
+  firewall. The compose file uses a fixed network so `LODGE_TRUSTED_PROXIES` can name its gateway. The image has no daily backup timer: run `docker compose exec lodge lodge-backup` by hand or from the host's cron; backups live in the
+  `lodge-backups` volume.
+
+> [!CAUTION]
+> Backups contain the invite codes and the Lodge's Cairn key: keep them as private as the server.
+> On a Docker install, anyone in the host's `docker` group is effectively root.
+
+## Release history
+
+What each release added, oldest first. Open one to read it.
+
+<details>
+<summary><b>2.2.0 hardening (from the security review of 1.4.0)</b></summary>
 
 | # | Finding | Fix |
 |---|---|---|
@@ -23,7 +62,10 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
 | 6 | Guest names checked before normalization | `Names.Normalize` (NFKC, control/format characters removed, whitespace collapsed, 24 chars) is applied once, before reservation checks, collision suffixes and reconnect matching. Suffixes never land on a reserved personal name. |
 | 7 | Credentials and logging | `LODGE_ALLOW_QUERY_CODE=false` refuses `?code=` with a clear 401 (no strike); the header always wins. ASP.NET request logs (full URLs) are filtered out; client-chosen log fields are normalized and bounded. New codes are 128-bit; old codes keep working. |
 
-## 2.3.0 (reactions, pins, replies)
+</details>
+
+<details>
+<summary><b>2.3.0 (reactions, pins, replies)</b></summary>
 
 - Reactions: fixed whitelist (anything else ignored), one per person and emoji, names normalized and compared
   case-insensitively, at most 30 per emoji; they are ordinary control messages, so they spend the per-identity Control
@@ -32,13 +74,19 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
   logged without text. A channel the rank can't see never leaks messages, reactions or pins. Pin text is clipped to 300 chars.
 - Replies: the quoted id must exist in the same channel; the snippet is normalized and bounded.
 
-## 2.4.0 (reaction ids)
+</details>
+
+<details>
+<summary><b>2.4.0 (reaction ids)</b></summary>
 
 - Reactions are a fixed whitelist of 8 ids; legacy emoji are mapped through the same function (`ChatModule.CanonReaction`, length-bounded),
   everything else is ignored. Same properties as 2.3: one per person per reaction, 30 per reaction, Control budget, rank-visible channels only.
 - Stored reactions are migrated on history load with the same bounds (names deduplicated case-insensitively, max 30, unknown keys dropped).
 
-## 2.5.0 (rich presence, Appear offline)
+</details>
+
+<details>
+<summary><b>2.5.0 (rich presence, Appear offline)</b></summary>
 
 - Rich presence fields are untrusted client input: strings go through `Names.Snippet` (NFKC, control/format characters removed,
   length-bounded), numbers are clamped, `flags` is masked to a whitelist, inconsistent combinations are dropped, non-string/number
@@ -52,7 +100,10 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
   old hub sees an invisible member as an ordinary one (it doesn't know the `invisible` marker).
 - Toggling visibility broadcasts at most as much as a status change and uses the same per-identity Control budget.
 
-## 2.6.0 (avatars and profiles)
+</details>
+
+<details>
+<summary><b>2.6.0 (avatars and profiles)</b></summary>
 
 - No uploads: an avatar is one of 24 whitelisted ids (the art ships with the hub), the accent one of 8 ids. Unknown values refuse the whole
   `profile:set` and change nothing; a non-string JSON value can't throw into the receive loop. `about`/`playTimes`/character names go through
@@ -71,7 +122,10 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
   (`game.name`) whatever `showChars` says, and `profile:get` of a personal name tells a lodge member whether that name is an invited member
   (offline members answer with `found: true`).
 
-## 2.7.0 (display names)
+</details>
+
+<details>
+<summary><b>2.7.0 (display names)</b></summary>
 
 - A display name is cosmetic; the login name stays the only identity (messages, history, pins, reactions, rate limits, budgets, moderation
   all key on it). The hub shows `Display · @Login` in the hover card and profile card so the real name is never hidden.
@@ -89,7 +143,10 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
 - Stored in `profiles.json` and re-validated on load (format only); owner reset clears it. Invisible members: unchanged - the broadcast
   goes only to viewers who may see them and lookups answer like offline.
 
-## 2.9.0 (sign-up cards, longer history, search)
+</details>
+
+<details>
+<summary><b>2.9.0 (sign-up cards, longer history, search)</b></summary>
 
 - "Looking for group" cards: a chat message with `kind: "lfg"` and a structured payload. Created through the ordinary `msg` path, so it spends the Chat
   budget; join / maybe / leave / close / cancel are control messages and spend the Control budget. Everything is validated server side in one
@@ -109,7 +166,10 @@ Security tab); only the maintainer sees it. We fix what we can confirm and credi
   newest first, at most 50 hits (`more` when there are others) with channel, id, author, time and a ~120 character snippet. The query is cleaned like any text,
   cut to 64 characters and needs 2. Budget of 6 per minute (a burst of 6, one more every 10 s); refused searches count towards the flood disconnect.
 
-## 2.10.0 (one-time invites, device tokens)
+</details>
+
+<details>
+<summary><b>2.10.0 (one-time invites, device tokens)</b></summary>
 
 The problem this removes: a permanent personal code pasted into a DM stays valid, in that chat's history, forever. Now a link lets one
 person in once, and what that person keeps afterwards is a key that belongs to one device and can be revoked on its own.
@@ -133,7 +193,10 @@ address is only for recognising a device; behind a proxy it is the address the p
 `lodge-admin` also accepts names with any letters now (it was ASCII only, which contradicted the server's rule of `\p{L}\p{N}`), and no
 longer lets a backslash into a name.
 
-## 2.11.0 (raid / event calendar)
+</details>
+
+<details>
+<summary><b>2.11.0 (raid / event calendar)</b></summary>
 
 - Events live in their own atomic file `calendar.json` (tmp, flush, rename; a tmp is recovered only when the main file is missing; 8 MB cap on load; every loaded event needs an id, title and start; at most 800 kept). Bounds: 200 future events in total (a series that does not fit is refused whole), 40 upcoming per person, 60 sign-ups per event, repeat at most 26 weeks, start within a year, length 15 min to 24 h. Past events are dropped 30 days after their end (on load, on create and by the 15 s housekeeping).
 - Permissions (`Roles.Can`): `CalendarCreate` = member and up (guests view and sign up only); edit / cancel = the organiser (a personal identity, matched by login name) or `CalendarManage` = officer and up. A guest name can never match an organiser.
@@ -143,7 +206,10 @@ longer lets a backslash into a name.
 - Logs: event ids, counts and login names only (`X created calendar event <id> (3 date(s))`); never a title, note or comment. Tested (unit and real-socket).
 - Honest limits: the calendar list is visible to every rank including guests (the chat card follows the channel's rank rule, the event does not); a guest's sign-up is keyed by the connection's name, which another guest may reuse later; the creator's zone id is stored with the event (it is not secret, it only drives recurrence).
 
-## 2.12.0 (starting a lodge, inviting from the app, leaving)
+</details>
+
+<details>
+<summary><b>2.12.0 (starting a lodge, inviting from the app, leaving)</b></summary>
 
 - **Owner claim.** A brand-new lodge has no owner, so nobody can invite anybody. The server console is the proof of ownership: `install.sh` (fresh install) and
   `sudo lodge-admin claim-owner` make ONE `owner-claim` invite - 1 hour, single use, printed only to stdout with a warning, stored only as a SHA-256, never logged
@@ -157,11 +223,17 @@ longer lets a backslash into a name.
   `no-referrer`, `no-store`. It never redirects by itself: the person clicks "Open in the Outpost".
 - **Lodge name / welcome** are public (an invitee sees them): validated, capped at 40 / 280 characters, owner only.
 
-## Outpost 2.40 (client): a link asks nothing
+</details>
+
+<details>
+<summary><b>Outpost 2.40 (client): a link asks nothing</b></summary>
 
 - Opening, pasting or receiving an invite link (elanshub:// click, web link, the Create-a-lodge guide) makes **no network request of any kind** until the person presses Join: the join banner shows only what is in the link (plus the lodge name and welcome text the app already knows when the link is for the lodge it is signed in to), so an arbitrary host in a link learns neither the IP address nor that the link was opened before the person consents. The `linkopen` and `invites2` self-tests assert zero requests before Join.
 
-## Compatibility
+</details>
+
+<details>
+<summary><b>Compatibility</b></summary>
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
 - Uploads can now get **507** (storage full) and **429** (too many at once / too many per 10 minutes).
@@ -176,7 +248,10 @@ longer lets a backslash into a name.
 - `?code=` is **off by default since 2.8** (`LODGE_ALLOW_QUERY_CODE=true` brings it back for 1.x hubs): such a request
   gets a clear 401 and is never checked.
 
-## 2.8 hardening
+</details>
+
+<details>
+<summary><b>2.8 hardening</b></summary>
 
 - File names are cleaned on the server (`Names.FileName`) and again by the client: path parts, drive letters, the
   Windows-invalid characters `\ / : * ? " < > |`, control and format characters (bidi overrides, zero-width), leading and
@@ -193,7 +268,10 @@ longer lets a backslash into a name.
 - A client that pings (2.8+) and then goes silent for 75 s is closed (clients that never ping are left alone).
 - History: edits/deletes/reactions are written after 5 quiet seconds and at shutdown (atomic temp file + rename).
 
-## Backups and updates (`lodge-backup`, `lodge-update`)
+</details>
+
+<details>
+<summary><b>Backups and updates (<code>lodge-backup</code>, <code>lodge-update</code>)</b></summary>
 
 - Backup archives contain the invite codes, so `/var/backups/lodge` is `root:root 0700` and each archive `root:root 0600`
   (created under `umask 077`, written as `.part` and renamed only after `tar -t` verifies it). The `lodge` user cannot
@@ -207,7 +285,10 @@ longer lets a backslash into a name.
   sends an invite code anywhere (the version is read from the source, not from an authenticated `/health`), and the
   health probe only talks to `127.0.0.1`. Systemd drop-ins and `lodge.env` ownership are left alone.
 
-## 2.13.0 (shared flight times)
+</details>
+
+<details>
+<summary><b>2.13.0 (shared flight times)</b></summary>
 
 - Two messages, nothing else: `flights.share` (members and up; legs `{ "<faction>|<idA>><idB>": {t, n} }`, up to 500 per message, optional `names` `{id: name}`) and `flights.get` (anyone, guests included). Answers: `flights.shared {ok, accepted, rejected, why?}` (`why`: `guest`, `rate`, `empty`, `save`) and `flights.data {at, legs, names}`. The `flights` feature is in the welcome and in `/features`; an older server simply does not answer.
 - Everything is validated server side in one place (`Flights`): faction exactly `Horde` or `Alliance`, ids 1-32 characters of letters/digits/space and `' . , -` (no quote, backslash, bracket, `|` or `>`), the two ids different, 1 <= t <= 1800 (rounded to 0.1), 1 <= n <= 50 and whole, anything not a number refused. A name is cleaned like any text (NFKC, control/format characters out), loses `" \ < > | [ ]` and is cut at 60. Entries that fail count as `rejected`; a malformed message costs nothing and never throws.
@@ -217,17 +298,23 @@ longer lets a backslash into a name.
 - Names are voted (most contributors win, ties alphabetical) and kept only for ids used by a leg.
 - Logs: counts only (`X shared flight times (N stored, M refused)`); never a key, id, name or time. Tested (unit and real-socket).
 
-## 2.14.0 (shared files)
+</details>
+
+<details>
+<summary><b>2.14.0 (shared files)</b></summary>
 
 - Who: `Perm.FilesRead` (everybody, guests included) lists and downloads; `Perm.FilesManage` (officer and owner) uploads a new slot, a new version, rolls back and deletes. The check is made server side in `FilesModule` for every upload, delete and roll back (not only in the client). `Perm.ShareFiles` (chat attachments) is unrelated.
 - Transport: authenticated HTTP like `/files` (device token or code header, same wrong-credential lockout): `PUT /slots/new`, `PUT /slots/{id}`, `GET /slots/{id}/{v}`. Content-Length is required and checked against the maximum before anything is read; the body is streamed to `<id>.part` while a SHA-256 is computed (never held in memory), and must match the announced length and `X-Sha256` exactly. Only then is it renamed to its server-generated name (32 random hex characters + `.bin`) and the index (`index.json`, written tmp + atomic rename) updated; any failure deletes the partial file and changes nothing.
 - File names are display-only: sanitised (`Names.FileName`: no path parts, drive letters, `: * ? " < > |`, control/format characters, device names) and never used as a path. Slot names and notes are cleaned text. Downloads are `application/octet-stream`, `Content-Disposition: attachment`, `nosniff`, `Cache-Control: private, no-store`.
-- Refused: executable/script extensions (`exe dll com bat cmd ps1 psm1 vbs vbe js jse wsf wsh msi msp scr cpl jar lnk reg hta sys drv pif application appref-ms`, trailing dots/spaces ignored); a `.zip` is listed (System.IO.Compression, nothing extracted) and refused when any entry has such an extension, an absolute path, a drive letter, `:` or a `..` segment, has more than 20000 entries or isn't a valid zip.
+- Refused: executable/script extensions (`exe dll com bat cmd ps1 psm1 vbs vbe js jse wsf wsh msi msp scr cpl jar lnk reg hta sys drv pif application appref-ms`, trailing dots/spaces ignored); a `.zip` is listed (System.IO.Compression, nothing extracted) and refused when any entry has such an extension, an absolute path, a drive letter, `:` or a `..` segment, has more than 20000 entries or isn't a valid zip. Since 2.37.2 a zip inside it is listed the same way (opened in memory, at most 64 MB unpacked) and zips nested deeper are refused (`Elans.Shared.ZipCheck`, also used by the Outpost before an upload).
 - Limits: `LODGE_FILES_MAX_MB` per file, `LODGE_FILES_TOTAL_MB` for all kept versions (space is reserved for running uploads and checked again at commit; the version that a new one pushes out counts as free), 200 slots, one running upload per person, 3 at once, `LODGE_FILES_UPLOADS_PER_10MIN` per person. The Kestrel body limit is raised to the larger of the two file limits only.
 - `LODGE_FILES_ENABLED=0` makes the server stop advertising `files` and answer 403; nothing is deleted.
 - Logs: who shared / deleted / rolled back and the size - never a file name, slot name, note or hash.
 
-## 2.15.0 (the Atlas pool)
+</details>
+
+<details>
+<summary><b>2.15.0 (the Atlas pool)</b></summary>
 
 - Two messages: `atlas.share` (members and up) and `atlas.get` (anyone, guests included); answers `atlas.shared` and `atlas.data` (paged, about 200 KB). Feature `atlas` in the welcome and `/features`; `LODGE_ATLAS_ENABLED=0` stops advertising it and both messages answer `disabled`. Data is never deleted by switching it off.
 - Everything is validated server side in one place (`Atlas`): ids and counts are whole numbers in fixed ranges (a string, boolean, fraction or NaN is refused), coordinates 0..1, times after 2001 and at most five minutes ahead (2.22; was one day), find sources match `npc|obj|vendor|quest:N` or `fish`, names are cleaned like any text (NFKC, control characters out) and lose `" \ < > | [ ]`, cut at 80. An entry that fails is refused whole. Unknown fields are dropped; character names are never accepted or stored, finds carry the member's Lodge name.
@@ -236,7 +323,10 @@ longer lets a backslash into a name.
 - Storage: `<data>/atlas.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 64 MB cap on load, every loaded value re-validated by the same rules, written at most every 30 s while busy, every 15 s housekeeping and at shutdown. It is inside the data folder, so `lodge-backup` includes it. Table bounds: 6000 vendors, 20000 quests, 8000 spawn npcs, 40000 revealed items, 2000 members.
 - Logs: counts only (`X shared atlas observations (N stored, M refused)`); never an id, name or number. Tested (unit tests with a captured logger).
 
-## 2.16.0 (the Armory)
+</details>
+
+<details>
+<summary><b>2.16.0 (the Armory)</b></summary>
 
 - Four messages: `armory.put` (members and up), `armory.delete` (members and up), `armory.list` and `armory.get` (members and up; guests get an error with code `guest`); answers `armory.saved`, `armory.deleted`, `armory.chars`, `armory.char`. Feature `armory` in the welcome and `/features`; `LODGE_ARMORY_ENABLED=0` stops advertising it, `armory.put` answers why `disabled` and the rest answer an error.
 - Opt-in by design: the server only holds what a member explicitly uploaded for a character they chose; it asks for nothing. A snapshot is rebuilt field by field in one place (`Armory.Clean`): unknown fields (bags, bank, gold, mail, zone ...) are dropped, text is cleaned like names, every number is clamped, ids and counts are whole numbers in fixed ranges, an item link must be the exact `|cAARRGGBB|Hitem:..|h[Name]|h|r` shape and belong to a worn item, a build code must match `ETB<n>-<base64url>`, lists are capped (400 talent nodes, 12 professions, 40 pets, 40 abilities, 100 known abilities, 24 slots, 40 links). A character is refused above 48 KB serialized (why `size`), with a key that is not `Realm-Name` shaped (why `invalid`) or with nothing to show (why `empty`).
@@ -246,7 +336,10 @@ longer lets a backslash into a name.
 - Storage: `<data>/armory.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 96 MB cap on load, every loaded character re-validated by `Armory.Clean`, written at most every 10 s while busy, at once on a delete, every 15 s housekeeping and at shutdown.
 - Logs: counts only (`X shared a character with the armory`, `X took N character(s) out of the armory`); never a name, guild, item or number from a snapshot. Tested with a captured logger.
 
-## 2.17.0 (hosted datasets: the Classic baseline)
+</details>
+
+<details>
+<summary><b>2.17.0 (hosted datasets: the Classic baseline)</b></summary>
 
 - Messages: `dataset.info` (members and up, Page budget), `dataset.delete` (officers and the owner); HTTP `PUT /datasets/{name}` (officers and the owner) and `GET /datasets/{name}` (members and up), behind the same credential gate as every route (a wrong token or code counts towards the same lockout). Guests are refused everywhere.
 - The dataset name is never a path: it is looked up in a fixed list in code (`DatasetKinds`); anything else answers 404 before a byte is read. Content lives under server-generated 32-hex file names in `<data>/datasets/`, with `index.json` written by tmp + rename; startup removes `.part` / `.tmp` files and blobs nothing refers to.
@@ -255,14 +348,22 @@ longer lets a backslash into a name.
 - Downloads are always `application/octet-stream` attachments, `nosniff`, `no-store`; the Outposts verify the SHA-256 and unpack with their own name allowlist (never using an entry's path), so the server being wrong or replaced can at worst make an Outpost refuse a bundle.
 - Who may replace what a whole lodge fetches is the officer rank and above (as for shared files); a malicious officer could host data that is useless but not harmful: the Outposts treat it as data (an SQL dump read by their own importer), never as something to run.
 - Logs: who shared or removed a dataset and its size; never content.
-## Realm status (feature `realms`)
+
+</details>
+
+<details>
+<summary><b>Realm status (feature <code>realms</code>)</b></summary>
 
 - The Battle.net client secret exists only in the server's environment (`LODGE_BNET_CLIENT_SECRET`, in the env file with mode 600). It is sent only to `https://oauth.battle.net/token` (HTTP Basic, over TLS); the access token only as a `Bearer` header to `https://{region}.api.blizzard.com`, never in a URL. Neither is logged, put in a message to a client, or put in an error text: failures log the kind of failure (HTTP status or exception type) and nothing else. `server/Lodge.Tests/RealmsTests.cs` checks that the secret, its Basic encoding, the client id and the token never appear in logs, messages, the welcome or the feature list.
 - Clients never ask for or send anything about realms, so there is no new request surface. The region is restricted to 2-3 lowercase letters and namespaces to `[a-z0-9-]`, so configuration cannot build another host name. The host names are fixed in code.
 - One poll per interval for the whole lodge (not per member), 15 s timeouts, response bodies capped at 2 MB, backoff on errors. The Blizzard JSON is parsed defensively: names are cut to 60 characters, at most 16 realms, unknown shapes simply find nothing.
 - The status is public information, so guests receive it too.
 - Real Blizzard calls are never made by the tests (a fake HTTP handler).
-## 2.22.0 (security: forgetting members, a trust model for the Atlas, caps)
+
+</details>
+
+<details>
+<summary><b>2.22.0 (security: forgetting members, a trust model for the Atlas, caps)</b></summary>
 
 From the sharing and security review. What changed, and the choices made:
 
@@ -280,18 +381,24 @@ From the sharing and security review. What changed, and the choices made:
 - **The Atlas does not grow past its file limit.** `atlas.json` is only loaded up to 64 MB. A share is refused with `why: "full"` (logged, once per fill) once the file on disk is within 2 MB of that; a save that would exceed the limit is not written (the last good file stays). Revert a member to make room.
 - **Guests get a coarser Atlas.** In `atlas.data`, finds show `by: "a member"` and the day only (`at` rounded down to 00:00 UTC). Members see what they saw before.
 - **Chat uploads block programs and scripts** like the Files module (`exe dll bat cmd ps1 ... lnk jar`, checked on the real last extension, trailing dots and spaces ignored): HTTP 415 "Programs and scripts (.exe) can't be shared here". A zip is checked like a shared file's (since 2.31.1).
-- **The flaky test**: `LfgTests.Many_simultaneous_joins_never_exceed_the_slots_or_double_up_a_person` failed about one run in six with "Collection was modified". A real race, not a test problem: the LFG join / leave / close handlers read the card's JSON (`Lfg.Is`, `IsAuthor`, the id for the broadcast) outside the store lock while another request was setting the card's text. All reads are under the lock now, and `Concurrent_joins_leaves_and_closes_never_throw` hammers it (it failed 1 run in 3 before the fix).
+- **The flaky test**: `LfgTests.Many_simultaneous_joins_never_exceed_the_slots_or_double_up_a_person` failed about one run in six with "Collection was modified". A real race, not a test problem: the LFG join / leave / close handlers read the card's JSON (`Lfg.Is`, `IsAuthor`, the id for the broadcast) outside the store lock while another request was setting the card's text. All reads are under the lock now, and `Concurrent_joins_leaves_and_closes_never_throw` hammers it (it failed 1 run in 3 before the fix). Since 2.37.2 chat edit, delete and react read the message under the lock as well (`Concurrent_edits_reactions_and_deletes_never_throw`).
 
 The Outpost side (same release train): manifest folders, ids and game versions must be plain names that resolve inside AddOns / the backup folder, updates only from https GitHub hosts and the self-update needs a SHA-256, downloaded chat files open only by a picture / text / PDF extension, SavedVariables parsing is depth- and size-limited, and an `http://` lodge address (other than localhost / 127.0.0.1) is refused. See `src/CHANGELOG.md`.
 
-## 2.23.0 (hunter field notes, feature `atlas5`)
+</details>
+
+<details>
+<summary><b>2.23.0 (hunter field notes, feature <code>atlas5</code>)</b></summary>
 
 - A new Atlas section, `fieldnotes`, validated in one place (`Atlas.ParseFieldNote`): whole numbers in fixed ranges, levels 1..80, a class from a fixed list, ability tokens that match `letters + rank`, coordinates 0..1, times after 2001 and at most five minutes ahead, names cleaned like every other name (control and `" \ < > | [ ]` characters out). An entry that fails is refused whole; unknown fields (the game's own hist / dead / data values) are dropped. No character names are accepted or stored.
 - Caps: 60 npcs and 600 points per share, 600 npcs and 8000 points per member, 24 points / 10 maps / 24 taught tokens per npc and member, 20000 npcs in the pool, 40 points per npc in the merge. The share goes through the same rate bucket and the same size cap as the rest of the Atlas.
 - Per member, the stored note only grows, so a resend or an old upload can never count twice. The merge is rebuilt from the members' notes, so a revert / leave (2.22) removes a member's part exactly (`PurgeResult.FieldNotes`).
 - Privacy: the merge shows how many members saw a beast; members and up also get up to five Lodge display names (never the login when a display name is set, never a character name); guests get the counts, levels and positions, no names, and a time rounded down to the UTC day.
 
-## Contribute to the Cairn (opt-in, feature `cairn`)
+</details>
+
+<details>
+<summary><b>Contribute to the Cairn (opt-in, feature <code>cairn</code>)</b></summary>
 
 - The pre-2.28 way (still works; the Guild Master switch below replaced it): off by default, on only with `LODGE_CAIRN_ENABLED=1`, an https URL (plain http only to this machine; no user, query or fragment in it) and a key that looks like a Cairn key; otherwise it stays off and the log says why (the host only, never the key).
 - What leaves the server is built from the Atlas pool's guest view and an allow-list of fields (`CairnRules.Records`): ids, counts, prices and map fractions. No names (member, character, display or login), no finds, notes, quests, seen tables or revealed items, no member counts; flight legs keyed by a node name are dropped (game text).
@@ -299,7 +406,10 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 - Members are told: the welcome lists `cairn` while the server contributes, and the Outpost shows it in Settings > Privacy. Members who switched Atlas sharing off contribute nothing (their data never reaches the pool); a purge lowers the totals, and the next contribution takes the difference back out of the Cairn.
 - A failed or refused post changes nothing locally (only confirmed records are remembered); 401 / 429 stop the run until the next one.
 
-## Joining the Cairn (2.28, feature `cairnjoin`)
+</details>
+
+<details>
+<summary><b>Joining the Cairn (2.28, feature <code>cairnjoin</code>)</b></summary>
 
 - Off by default. Only the Guild Master switches it on (`admin.cairn`, checked on the server against the rank, not just hidden in the app);
   officers see the status. Nothing about the switch needs server settings; `LODGE_CAIRN_*` still wins when set (the switch is then locked).
@@ -315,7 +425,10 @@ The Outpost side (same release train): manifest folders, ids and game versions m
   invite code is kept (mode 600, `data/cairn-join.json`) only until the Cairn took or refused it, never logged, never sent to any member.
 - The Cairn's answers are read with a size cap; its error texts are shown to officers and the Guild Master as text only.
 
-## Receiving the Cairn's data (give to get, feature `cairn2`)
+</details>
+
+<details>
+<summary><b>Receiving the Cairn's data (give to get, feature <code>cairn2</code>)</b></summary>
 
 - Only a Lodge that contributes receives: the receiver is on exactly while the contributor is, and the Cairn itself serves the dataset only
   to a key in good standing (an accepted contribution within its grace period). A 401 / 403 from the Cairn deletes the stored copy at once
@@ -327,7 +440,10 @@ The Outpost side (same release train): manifest folders, ids and game versions m
   guests, never anonymously, `private` caching only, 4 downloads per member per hour. The member's own statement is trusted as far as the
   Lodge can know it (a client that says "on" and uploads nothing is a matter for the owner, as with any member).
 
-## Operator stats and connected outposts
+</details>
+
+<details>
+<summary><b>Operator stats and connected outposts</b></summary>
 
 - `GET /admin/stats` is off unless `LODGE_ADMIN_TOKEN` (>= 24 characters) is set; it answers only a direct loopback connection without proxy
   headers (the client's own address is recorded before `UseForwardedHeaders`, so a forwarded request from the reverse proxy - even one on the
@@ -335,7 +451,11 @@ The Outpost side (same release train): manifest folders, ids and game versions m
   stats` passes it to curl through a pipe (`-H @-`), so it is not in `ps`. The answer is counts only.
 - Connected outposts: two numbers per week leave the Lodge (members who share, members who received); the per-week member hashes use a random
   salt that is discarded with the week, so neither the Cairn nor a later reader of `cairn-week.json` can tie a count to a person.
-## 2.31.1 (security review of the shared Lodge protocol)
+
+</details>
+
+<details>
+<summary><b>2.31.1 (security review of the shared Lodge protocol)</b></summary>
 
 - Frames: `LodgeJson.Parse` (Elans.Shared, both sides) refuses a frame with more than 20k items in one array / keys in one object, 1M values
   or 100k objects / arrays in all, before anything is built - an 8 MB frame of empty objects used to cost about 1.1 GB to read. The biggest
@@ -350,7 +470,10 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 - Text: the status note gets the names' cleaning (bidi, zero-width and control characters out). A failed admin request shows only the server's
   own messages (anything else is a plain text; the detail stays in the log); uploads record only the verified name.
 
-## The Outpost's side (Outpost 3.1.1)
+</details>
+
+<details>
+<summary><b>The Outpost's side (Outpost 3.1.1)</b></summary>
 
 The Outpost treats every Lodge as possibly hostile:
 
@@ -369,35 +492,7 @@ The Outpost treats every Lodge as possibly hostile:
 - Signatures: an update is installed only with a valid release signature (an unsigned manifest is refused); Cairn data and Cairn notices
   must carry the Cairn's signature, and a Cairn dataset older than the one already stored is refused.
 
-## Current protections (summary)
-
-- Access: invite links that work once and turn into a per-device token; codes and tokens only in a header, stored hashed, compared in
-  constant time; a wrong-code lockout per address (IPv4, or IPv6 /64); a request rate limit per address; ranks checked by the server on
-  every message.
-- Abuse: per-person budgets for chat, control messages, voice, uploads, downloads, search and every shared-data feature (guests per address);
-  sustained floods close the connection; storage, file count and history are bounded.
-- Input: one JSON engine with fixed limits on both sides; every field validated by the side that receives it; names and text cleaned; file
-  names cleaned, dangerous types and zips containing them refused.
-- Privacy: invisible members, position and profile visibility decided only by the server; nothing secret logged; the admin endpoint only on
-  loopback.
-- The host: a locked-down systemd service or the hardened container (`server/docker`), private file modes, atomic writes, backups that
-  hold the codes kept `0600`.
-
-## What the operator takes care of
-
-- The reverse proxy must pass the visitor's real address (`X-Forwarded-For`) and must not let a visitor set it. The server takes
-  `X-Forwarded-For` / `-Proto` only from loopback and the `LODGE_TRUSTED_PROXIES` networks (`TrustedProxies`, tested with the real ASP.NET
-  middleware in `TrustedProxyTests`); see `deploy/reverse-proxy.md`.
-- Budgets and the lockout are kept in memory: a restart starts them over.
-- The shared guest code, if enabled, is only as private as the people who have it; prefer personal invites.
-- Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`)
-  once a person's PCs have their own keys.
-- Backups contain the invite codes and the Lodge's Cairn key: keep them as private as the server.
-- **Docker install** (`server/docker`): the container runs as a non-root user with `cap_drop: [ALL]`, `no-new-privileges`, a read-only
-  root file system and memory / process limits; it publishes only `127.0.0.1:5280`, because Docker's port rules bypass the host
-  firewall. The compose file uses a fixed network so `LODGE_TRUSTED_PROXIES` can name its gateway. Anyone in the host's `docker` group
-  is effectively root. The image has no daily backup timer: run `docker compose exec lodge lodge-backup` by hand or from the host's cron; backups live in the
-  `lodge-backups` volume.
+</details>
 
 ## Tests
 

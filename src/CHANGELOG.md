@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.5.11
+- **Safer shared zips.** A zip shared in the Lodge (Files or chat) is now also checked one level down: a zip inside it may not hold a program or script either, and zips nested deeper are refused. The Outpost checks before uploading and the Lodge server (2.37.2) checks again.
+- **Lodge server 2.37.2:** editing, deleting and reacting to a chat message at the same moment as someone else can no longer trip over each other.
+
 ## 3.5.10
 - **Lodges can run in Docker.** A Lodge can now also be hosted as a container image (see "Hosting a Lodge" in the README). When your Lodge server is behind, the notice above the chat shows the right command for it: `docker compose pull && docker compose up -d` for a Lodge in Docker, `sudo lodge-update` for a normal install.
 
