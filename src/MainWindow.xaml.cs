@@ -341,7 +341,7 @@ namespace ElansAddonHub
             result += "\r\n" + TestScope.SelfTest();
             result += "\r\n" + InfraGuard.SelfTest(Environment.GetCommandLineArgs());   // the public repo never names our own hosting
             result += "\r\n" + SelfTestCache.SelfTest(dir);
-            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + ReleaseSignature.SelfTest(Environment.GetEnvironmentVariable("ELANSHUB_RELEASE_DIR")) + Environment.NewLine + await SignedCheckSelfTest() + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
+            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + ReleaseSignature.SelfTest(Environment.GetEnvironmentVariable("ELANSHUB_RELEASE_DIR")) + Environment.NewLine + await SignedCheckSelfTest() + Environment.NewLine + UpdateHomes.SelfTest() + Environment.NewLine + await HomesCheckSelfTest() + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
@@ -898,19 +898,33 @@ namespace ElansAddonHub
             UpdateCardsSkeleton();
             try
             {
+                UpdateHomes.Use(settings);
                 var ch = await UpdateChannel.Resolve(settings);
                 Manifest m;
-                try { m = await SignedManifest(ch.Url); }
-                catch (Exception) when (ch.Pre)
+                try
                 {
-                    // the pre-release's manifest can't be read: stay on stable rather than failing the check
-                    Util.Log("test manifest failed, using stable");
+                    try { m = await SignedManifest(ch.Url, ch.Pre); }
+                    catch (Exception) when (ch.Pre)
+                    {
+                        // the pre-release's manifest can't be read: stay on stable rather than failing the check
+                        Util.Log("test manifest failed, using stable");
+                        ch = UpdateChannel.Stable(settings);
+                        m = await SignedManifest(ch.Url, false);
+                    }
+                }
+                catch (Exception e) when (UpdateHomes.Applies(settings))
+                {
+                    // 3.8.1: GitHub failed - the update homes, one after the other, with the same signed check (and their own rest after a failure).
+                    // None worked: the check fails exactly as before, with GitHub's error.
+                    m = await UpdateHomes.TryHomes(settings, e, u => SignedManifest(u, false));
+                    if (m == null) throw;
                     ch = UpdateChannel.Stable(settings);
-                    m = await SignedManifest(ch.Url);
                 }
                 manifest = m;
                 manifestPre = ch.Pre;
-                if (UpdateChannel.Track(settings, manifest.Hub?.Version, ch.Pre)) SettingsStore.Save(settings);
+                var dirty = UpdateChannel.Track(settings, manifest.Hub?.Version, ch.Pre);
+                if (UpdateHomes.Accepted(settings, manifest, ch.Pre, manifestSigned)) dirty = true;
+                if (dirty) SettingsStore.Save(settings);
                 lastError = null;
                 lastCheck = DateTime.Now;
                 RebuildCards();
@@ -940,8 +954,9 @@ namespace ElansAddonHub
 
         // 2.99: the manifest only counts when its signature checks with the release keys built into the Outpost (ReleaseSignature)
         public sealed class ReleaseSignatureException : Exception { public ReleaseSignatureException(string m) : base(m) { } }
-        string lastSigNote;
-        async Task<Manifest> SignedManifest(string url)
+        string lastSigNote, lastOlderNote;
+        bool manifestSigned;   // 3.8.1: the manifest SignedManifest read last had a valid signature (only then are its "homes" remembered)
+        async Task<Manifest> SignedManifest(string url, bool pre)
         {
             var bytes = await Net.GetBytes(url);
             var sig = await Net.GetTextOrNull(ReleaseSignature.SigUrl(url));
@@ -949,7 +964,16 @@ namespace ElansAddonHub
             if (why != lastSigNote) { lastSigNote = why; Util.Log("update information: " + why); }
             if (r == ReleaseSignature.Result.Invalid) throw new ReleaseSignatureException(why + " - nothing is installed from it");
             int bom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
-            return Util.FromJson<Manifest>(System.Text.Encoding.UTF8.GetString(bytes, bom, bytes.Length - bom));
+            var m = Util.FromJson<Manifest>(System.Text.Encoding.UTF8.GetString(bytes, bom, bytes.Length - bom));
+            // 3.8.1: never older than the newest release this Outpost already accepted, from any source (UpdateHomes.Older)
+            var older = UpdateHomes.Older(settings, m, pre);
+            if (older != null)
+            {
+                if (older != lastOlderNote) { lastOlderNote = older; Util.Log("update information refused: " + older); }
+                throw new System.IO.InvalidDataException(older);
+            }
+            manifestSigned = r == ReleaseSignature.Result.Valid;
+            return m;
         }
 
         // self-test ("update"): the real update check against the fake update server - signed is fine, unsigned or another key's signature is
@@ -974,6 +998,134 @@ namespace ElansAddonHub
             finally { FakeUpdateServer.Sign = FakeUpdateServer.Signing.Signed; }
             await CheckNow();
             Ck("signed again: accepted", lastError == null, lastError);
+            return sb.ToString().TrimEnd();
+        }
+
+        // 3.8.1 self-test ("update"): the update homes through the real check. The fake update server plays GitHub (UpdateHomes.SelfTestPrimary),
+        // FakeUpdateServer.Home plays the built-in home (and a second one a signed manifest names). Settings, knobs and the manifest are put back after.
+        async Task<string> HomesCheckSelfTest()
+        {
+            var sb = new System.Text.StringBuilder();
+            void Ck(string what, bool ok, string info = null) => sb.AppendLine($"homes check {what}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+            var savedUrl = settings.ManifestUrl;
+            var saved = (settings.UpdateHomes, settings.HomesRestUntil, settings.SeenHub, settings.SeenHubAny);
+            void Clear() { settings.UpdateHomes = null; settings.HomesRestUntil = 0; settings.SeenHub = null; settings.SeenHubAny = null; }
+            FakeUpdateServer.Home home = null, home2 = null;
+            try
+            {
+                if (FakeUpdateServer.Start() == null) { Ck("fake update server", false, "could not start"); return sb.ToString().TrimEnd(); }
+                home = new FakeUpdateServer.Home(); home2 = new FakeUpdateServer.Home();
+                settings.ManifestUrl = FakeUpdateServer.ManifestUrl;
+                UpdateHomes.SelfTestPrimary = settings.ManifestUrl;
+                UpdateHomes.SelfTestBuiltIn = new List<string> { home.Url };
+                Clear();
+                // the home serves the same release, its manifest naming GitHub addresses (mapped onto the home by file name)
+                const string Gh = "https://github.com/Elanoran/ElanAddonHub/releases/download/ehh-test/";
+                home.Files = FakeUpdateServer.Release(Gh, App.Version);
+                home2.Files = FakeUpdateServer.Release(Gh, App.Version, new List<string> { home2.Url });   // a home serves the same release file, homes and all
+
+                await CheckNow();
+                Ck("GitHub works: the home is never contacted", lastError == null && manifest != null && home.Requests == 0 && manifest.Addons.All(a => a.Url.StartsWith(FakeUpdateServer.ManifestUrl.Replace("manifest.json", ""))), lastError);
+                Ck("the newest version seen is remembered", settings.SeenHub == App.Version && settings.SeenHubAny == App.Version, settings.SeenHub);
+
+                FakeUpdateServer.FailStatus = 503;
+                await CheckNow();
+                Ck("GitHub 503: the home's signed manifest is used", lastError == null && home.Requests > 0 && manifest != null, lastError);
+                Ck("its downloads map onto the home by file name", manifest.Addons.All(a => a.Url == home.Url + a.Id + "-1.0.0.zip") && manifest.Hub.Url == home.Url + "hub.exe", manifest.Addons.FirstOrDefault()?.Url);
+                // a download from the home is trusted (even with the self-test's dev-source switch off) and its checksum matches the signed manifest
+                var wasDev = Net.AllowDevSources; Net.AllowDevSources = false;
+                var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elans-home-" + Guid.NewGuid().ToString("N") + ".zip");
+                try
+                {
+                    var a0 = manifest.Addons[0];
+                    await Net.Download(a0.Url, tmp, null, trustedOnly: true);
+                    Ck("a home download passes the update rule and matches its signed SHA-256", string.Equals(Util.Sha256(tmp), a0.Sha256, StringComparison.OrdinalIgnoreCase));
+                    Ck("another local address is still refused for updates", Net.UpdateUrlProblem(FakeUpdateServer.ManifestUrl.Replace("manifest.json", "ElansTestA-1.0.0.zip")) != null);
+                }
+                finally { Net.AllowDevSources = wasDev; try { System.IO.File.Delete(tmp); } catch { } }
+
+                FakeUpdateServer.FailStatus = 0; FakeUpdateServer.Stop();
+                var n = home.Requests;
+                await CheckNow();
+                Ck("GitHub unreachable (network error): the home is used", lastError == null && home.Requests > n, lastError);
+                FakeUpdateServer.Start();
+                FakeUpdateServer.FailStatus = 404;
+
+                var good = manifest;
+                home.Files["manifest.json.sig"] = FakeUpdateServer.Release(Gh, App.Version, sign: FakeUpdateServer.Signing.OtherKey)["manifest.json.sig"];
+                await CheckNow();
+                Ck("a home with a signature by another key is refused", lastError == "Couldn't reach the update server" && manifest == good, lastError);
+                settings.HomesRestUntil = 0;
+                home.Files = FakeUpdateServer.Release(Gh, App.Version);
+                var tampered = (byte[])home.Files["manifest.json"].Clone(); tampered[tampered.Length - 3] ^= 1; home.Files["manifest.json"] = tampered;
+                await CheckNow();
+                Ck("a changed manifest at the home is refused", lastError != null && manifest == good, lastError);
+                settings.HomesRestUntil = 0;
+                home.Files = FakeUpdateServer.Release(Gh, App.Version, sign: FakeUpdateServer.Signing.Unsigned);
+                await CheckNow();
+                Ck("an unsigned manifest at the home is refused", lastError != null && manifest == good, lastError);
+                settings.HomesRestUntil = 0;
+                home.Files = FakeUpdateServer.Release(Gh, "0.0.1");
+                await CheckNow();
+                Ck("an older valid release at the home is refused (never older)", lastError != null && manifest == good && settings.SeenHub == App.Version, lastError);
+                settings.HomesRestUntil = 0;
+                home.Files = FakeUpdateServer.Release(Gh, App.Version);
+
+                // GitHub itself offering an older (validly signed) release: refused, and the home is asked instead
+                FakeUpdateServer.FailStatus = 0; FakeUpdateServer.HubVersion = "0.0.1";
+                n = home.Requests;
+                await CheckNow();
+                Ck("an older release on GitHub is refused, the home's current one is used", lastError == null && manifest?.Hub?.Version == App.Version && home.Requests > n, manifest?.Hub?.Version);
+                FakeUpdateServer.HubVersion = null;
+
+                // the home down: it rests (persisted) and is not asked again inside the window
+                FakeUpdateServer.FailStatus = 503; home.Down = true; settings.HomesRestUntil = 0;
+                await CheckNow();
+                var until = settings.HomesRestUntil;
+                var hours = (DateTimeOffset.FromUnixTimeSeconds(until) - DateTimeOffset.UtcNow).TotalHours;
+                Ck("a failed home rests about " + UpdateHomes.Rest.TotalHours + " h", lastError == "Couldn't reach the update server" && hours > UpdateHomes.Rest.TotalHours - 0.1 && hours <= UpdateHomes.Rest.TotalHours + 0.01, hours.ToString("0.00"));
+                Ck("the rest is saved", SettingsStore.Load().HomesRestUntil == until);
+                n = home.Requests;
+                await CheckNow();
+                Ck("a resting home is not asked again", home.Requests == n && lastError == "Couldn't reach the update server", (home.Requests - n) + " requests");
+                home.Down = false; settings.HomesRestUntil = 0;
+
+                // homes from the signed manifest
+                FakeUpdateServer.FailStatus = 0; FakeUpdateServer.Homes = new List<string> { home2.Url, "http://example.org/not-https/" };
+                await CheckNow();
+                Ck("a signed manifest's homes are remembered (https only)", lastError == null && settings.UpdateHomes != null && settings.UpdateHomes.SequenceEqual(new[] { home2.Url }) && SettingsStore.Load().UpdateHomes?.FirstOrDefault() == home2.Url, string.Join(",", settings.UpdateHomes ?? new List<string>()));
+                FakeUpdateServer.FailStatus = 503;
+                int h1 = home.Requests, h2 = home2.Requests;
+                await CheckNow();
+                Ck("and used from then on instead of the built-in one", lastError == null && home2.Requests > h2 && home.Requests == h1 && manifest.Addons.All(a => a.Url.StartsWith(home2.Url)), lastError);
+                FakeUpdateServer.FailStatus = 0;
+                FakeUpdateServer.Homes = new List<string> { "https://evil.example/outpost/" };
+                FakeUpdateServer.Sign = FakeUpdateServer.Signing.Unsigned;
+                home2.Down = true;   // only GitHub's manifest is there to read
+                await CheckNow();
+                Ck("homes in an unsigned manifest are ignored", lastError != null && lastError.StartsWith("Update refused") && settings.UpdateHomes.SequenceEqual(new[] { home2.Url }), lastError);
+                settings.HomesRestUntil = 0;
+                FakeUpdateServer.Sign = FakeUpdateServer.Signing.OtherKey;
+                await CheckNow();
+                Ck("homes in a manifest signed by another key are ignored", lastError != null && lastError.StartsWith("Update refused") && settings.UpdateHomes.SequenceEqual(new[] { home2.Url }), lastError);
+                settings.HomesRestUntil = 0; home2.Down = false;
+                FakeUpdateServer.Sign = FakeUpdateServer.Signing.Signed; FakeUpdateServer.Homes = null;
+                await CheckNow();
+                Ck("a signed manifest without homes = the built-in one again", lastError == null && settings.UpdateHomes == null, lastError);
+            }
+            catch (Exception e) { Ck("run", false, e.Message); }
+            finally
+            {
+                FakeUpdateServer.FailStatus = 0; FakeUpdateServer.Homes = null; FakeUpdateServer.Sign = FakeUpdateServer.Signing.Signed; FakeUpdateServer.HubVersion = null;
+                FakeUpdateServer.Start();
+                UpdateHomes.SelfTestPrimary = null; UpdateHomes.SelfTestBuiltIn = null;
+                home?.Dispose(); home2?.Dispose();
+                settings.ManifestUrl = savedUrl;
+                (settings.UpdateHomes, settings.HomesRestUntil, settings.SeenHub, settings.SeenHubAny) = saved;
+                SettingsStore.Save(settings);
+            }
+            await CheckNow();
+            Ck("back on the fake server: accepted", lastError == null, lastError);
             return sb.ToString().TrimEnd();
         }
 

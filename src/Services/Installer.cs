@@ -54,7 +54,10 @@ namespace ElansAddonHub.Services
             try
             {
                 var zip = Path.Combine(work, "addon.zip");
-                await Net.Download(a.Url, zip, new Progress<double>(p => progress?.Report(p * 0.8)), trustedOnly: true);   // https + GitHub only (also after redirects)
+                // 3.8.1: from an update home (GitHub failed) the checksum is never optional
+                if (string.IsNullOrEmpty(a.Sha256) && UpdateHomes.Covers(a.Url))
+                    throw new InvalidDataException("The update information has no checksum for this download - nothing was installed.");
+                await Net.Download(a.Url, zip, new Progress<double>(p => progress?.Report(p * 0.8)), trustedOnly: true);   // https + GitHub or an update home only (also after redirects)
                 // a manifest from a release carries the checksum and it is then mandatory; an older manifest without one is installed with a warning in the log
                 if (string.IsNullOrEmpty(a.Sha256)) Util.Log($"WARNING: the manifest has no checksum for {a.Id} {a.Version} - installed without verification");
                 else if (!Net.IsSha256(a.Sha256)) throw new InvalidDataException("The update information has a malformed checksum - nothing was installed.");

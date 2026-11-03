@@ -10,6 +10,8 @@ namespace ElansAddonHub.Services
     {
         [DataMember(Name = "hub")] public HubInfo Hub { get; set; }
         [DataMember(Name = "addons")] public List<AddonInfo> Addons { get; set; }
+        // 3.8.1: optional - where to look when GitHub fails (UpdateHomes). Only taken from a manifest whose signature is valid.
+        [DataMember(Name = "homes")] public List<string> Homes { get; set; }
     }
 
     [DataContract]
@@ -79,6 +81,12 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "channel")] public string Channel { get; set; }
         // hub version known to be a pre-release (so the "Test build" chip can show while running it)
         [DataMember(Name = "testBuild")] public string TestBuild { get; set; }
+        // 3.8.1: update homes (UpdateHomes): the list from the last valid signed manifest (null = the built-in one), when they may be tried again
+        // after they all failed (unix seconds, 0 = now), and the newest Outpost version accepted (stable / any channel) - an older one is refused
+        [DataMember(Name = "updateHomes")] public List<string> UpdateHomes { get; set; }
+        [DataMember(Name = "homesRestUntil")] public long HomesRestUntil { get; set; }
+        [DataMember(Name = "seenHub")] public string SeenHub { get; set; }
+        [DataMember(Name = "seenHubAny")] public string SeenHubAny { get; set; }
         // addon id -> manifest version the user rolled back from (not auto-installed again)
         [DataMember(Name = "skipVersions")] public Dictionary<string, string> SkipVersions { get; set; }
         // versions we already showed a tray notification for

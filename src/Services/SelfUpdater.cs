@@ -23,7 +23,7 @@ namespace ElansAddonHub.Services
             hub != null && !string.IsNullOrEmpty(hub.Url) && Util.CompareVersions(hub.Version, App.Version) > 0;
 #endif
 
-        // Why this update must not be installed, or null. The address must be https on a GitHub host and the manifest must carry a valid SHA-256 of the exe:
+        // Why this update must not be installed, or null. The address must be https on a GitHub host (3.8.1: or right inside an update home, UpdateHomes) and the manifest must carry a valid SHA-256 of the exe:
         // without a hash the file cannot be checked, and this exe replaces the running program - so there is no "install anyway" for it.
         public static string Problem(HubInfo hub)
         {

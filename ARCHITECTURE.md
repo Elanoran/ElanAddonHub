@@ -547,8 +547,28 @@ So Hunter Helper adds shot timers, Quick Shots, aspect and distance; a future cl
   wrongly signed manifest is refused.
 - **Checksums**: the self-update must match the SHA-256 in the signed manifest, and addon downloads are checked against
   theirs.
-- **Downloads** only from github.com over https.
+- **Downloads** only over https, from GitHub or (3.8.1) from an update home, right inside its folder.
 - **Install paths** are confined to the AddOns folder.
+- **Update homes** (3.8.1, `Services\UpdateHomes.cs`): GitHub stays the first and normal source. Only when the GitHub check
+  fails (network error, 5xx, rate limit, a missing release file, a refused manifest) does the Outpost try its update homes,
+  one after the other, never in parallel and never while GitHub works. A home is a plain static https folder holding
+  `manifest.json`, `manifest.json.sig` and the release files by name; the manifest is the same signed file as on GitHub,
+  and each download address in it is mapped onto the home by its file name (`.../releases/download/<tag>/ElansBags-1.2.0.zip`
+  -> `<home>ElansBags-1.2.0.zip`). The built-in home is `https://updates.nasferatu.dk/outpost/`. A manifest read from a
+  home goes through exactly the same checks: signature required, SHA-256 per download (never optional from a home), https,
+  the same install paths. When every home fails they rest for 6 hours (kept in the settings), logged once per run; the
+  user sees only the usual "Couldn't reach the update server". Only for the normal update address: a custom manifest
+  address (development, the self-test) has no homes.
+- **Signed list of homes**: a release's manifest may carry `"homes": ["https://...", ...]` (at most 4, https only). The
+  Outpost takes it only from a manifest whose signature is valid, keeps it, and uses it instead of the built-in home from
+  then on (still after GitHub). A signed manifest without `homes` sets it back to the built-in one. This lets a future
+  release move every Outpost to another site. `release.py --homes` writes it before signing; `release.py --mirror` sends a
+  stable release's manifest, signature and named files to the home and checks every file's SHA-256 there against the
+  local files and the manifest (both off by default).
+- **Never older** (3.8.1): the Outpost keeps the newest Outpost version it has accepted from any source and refuses a
+  manifest that is older (logged), so a replayed old release - on GitHub or a home - cannot roll addons back. Stable
+  manifests are compared with the newest stable one seen, a pre-release with everything seen, so switching from the test
+  channel back to stable still works. A refused manifest from GitHub counts as a GitHub failure (the homes are asked).
 
 ### Game data start, progress and updates
 

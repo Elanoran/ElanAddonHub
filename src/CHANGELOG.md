@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.8.1
+- **A second home for updates.** If GitHub can't be reached, the Outpost now looks for updates and addons at updates.nasferatu.dk as well. Everything from there is checked exactly like from GitHub: the release signature and every file's checksum must match.
+- **Never an older version.** The Outpost no longer accepts an update older than the newest version it has already seen, wherever it comes from.
+
 ## 3.8.0
 - **The 3D world map takes the game's own light.** Sky, fog, sun and water follow the zone you look at, from your game files: Burning Steppes glows red, Tirisfal is dark, Elwynn has its warm sun. Zoomed out to a continent, the map's default light is used. Turn it off in Settings > General > Game data ("World map game lighting") to keep the old look.
 

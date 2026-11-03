@@ -30,6 +30,7 @@ namespace ElansAddonHub.Services
             if (AllowDevSources) return null;
             if (string.IsNullOrWhiteSpace(url)) return "The update has no download address.";
             if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var u)) return "The update address is not a web address.";
+            if (UpdateHomes.Covers(u)) return null;   // 3.8.1: a file right inside an update home (built in, or from a signed manifest; https)
             if (!string.Equals(u.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return "The update address is not https, so it was refused.";
             var host = u.Host.ToLowerInvariant();
             if (host == "github.com" || host == "www.github.com" || host.EndsWith(".githubusercontent.com", StringComparison.Ordinal)) return null;

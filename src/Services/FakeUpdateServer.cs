@@ -32,6 +32,10 @@ namespace ElansAddonHub.Services
         // only). Unsigned / OtherKey prove that a manifest without its signature, or signed by anyone else, is refused.
         public enum Signing { Signed, Unsigned, OtherKey }
         public static Signing Sign = Signing.Signed;
+        // 3.8.1 (update homes): FailStatus answers every request with that status (GitHub down: 503, rate limited: 403, a missing file: 404);
+        // Homes goes into the signed manifest as its "homes" list
+        public static int FailStatus;
+        public static List<string> Homes;
         static System.Security.Cryptography.ECDsa runKey, otherKey;
         const string RunKeyId = "5e1f7e57c0ffee00";
 
@@ -104,18 +108,78 @@ namespace ElansAddonHub.Services
 
         static string J(string s) => "\"" + (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
-        static string Manifest()
+        static string Manifest() => Manifest("http://127.0.0.1:" + port + "/", HubVersion ?? App.Version, Homes);
+
+        static string Manifest(string b, string hubVersion, List<string> homes)
         {
-            var b = "http://127.0.0.1:" + port + "/";
             var addons = AddonIds.Select(id => "{\"id\":" + J(id) + ",\"name\":" + J(id) + ",\"description\":" + J("Self-test addon " + id) + ",\"version\":\"1.0.0\","
                 + "\"url\":" + J(b + id + "-1.0.0.zip") + ",\"sha256\":" + J(Sha(zips[id])) + ",\"flavor\":" + J(Flavor) + ",\"flavorName\":\"Classic (test)\","
                 + "\"folders\":[" + J(id) + "],\"required\":false,\"changelog\":[{\"version\":\"1.0.0\",\"text\":\"First test release\"}]}");
-            return "{\"hub\":{\"version\":" + J(HubVersion ?? App.Version) + ",\"url\":" + J(b + "hub.exe") + ",\"sha256\":\"\"},\"addons\":[" + string.Join(",", addons) + "]}";
+            return "{\"hub\":{\"version\":" + J(hubVersion) + ",\"url\":" + J(b + "hub.exe") + ",\"sha256\":\"\"},\"addons\":[" + string.Join(",", addons) + "]"
+                + (homes == null ? "" : ",\"homes\":[" + string.Join(",", homes.Select(J)) + "]") + "}";
+        }
+
+        // 3.8.1: the files of one release as an update home serves them (manifest.json, manifest.json.sig, the zips by name). fileBase = where the
+        // manifest says the files are (a GitHub-like address: the Outpost maps it onto the home). Needs Start() first (the run key, the zips).
+        public static Dictionary<string, byte[]> Release(string fileBase, string hubVersion, List<string> homes = null, Signing sign = Signing.Signed)
+        {
+            var man = Encoding.UTF8.GetBytes(Manifest(fileBase, hubVersion, homes));
+            var files = new Dictionary<string, byte[]> { ["manifest.json"] = man };
+            if (sign != Signing.Unsigned) files["manifest.json.sig"] = Encoding.UTF8.GetBytes(Elans.Shared.ReleaseSig.Make(sign == Signing.OtherKey ? otherKey : runKey, RunKeyId, man));
+            foreach (var id in AddonIds) files[id + "-1.0.0.zip"] = zips[id];
+            return files;
+        }
+
+        // 3.8.1: a second fake that plays an update home: a plain static folder at http://127.0.0.1:<port>/outpost/ serving Files by name.
+        // Down = it answers every request with 503 (an empty or broken home); Requests counts what reached it.
+        public sealed class Home : IDisposable
+        {
+            readonly HttpListener l;
+            public readonly string Url;
+            public Dictionary<string, byte[]> Files = new Dictionary<string, byte[]>();
+            public bool Down;
+            public int Requests;
+
+            public Home()
+            {
+                for (int attempt = 0; attempt < 20 && l == null; attempt++)
+                {
+                    var p = FreePort();
+                    var x = new HttpListener();
+                    x.Prefixes.Add("http://127.0.0.1:" + p + "/");
+                    try { x.Start(); l = x; Url = "http://127.0.0.1:" + p + "/outpost/"; }
+                    catch { x.Close(); }
+                }
+                if (l == null) throw new InvalidOperationException("no free port for the fake update home");
+                Task.Run(async () =>
+                {
+                    while (l.IsListening)
+                    {
+                        HttpListenerContext c;
+                        try { c = await l.GetContextAsync(); } catch { return; }
+                        try
+                        {
+                            System.Threading.Interlocked.Increment(ref Requests);
+                            var path = c.Request.Url.AbsolutePath;
+                            byte[] body = null;
+                            if (Down) c.Response.StatusCode = 503;
+                            else if (path.StartsWith("/outpost/") && Files.TryGetValue(path.Substring("/outpost/".Length), out var b)) body = b;
+                            else c.Response.StatusCode = 404;
+                            if (body != null) { c.Response.ContentLength64 = body.Length; c.Response.OutputStream.Write(body, 0, body.Length); }
+                            c.Response.Close();
+                        }
+                        catch { try { c.Response.Abort(); } catch { } }
+                    }
+                });
+            }
+
+            public void Dispose() { try { l.Stop(); l.Close(); } catch { } }
         }
 
         static void Serve(HttpListenerContext c)
         {
             System.Threading.Interlocked.Increment(ref Requests);
+            if (FailStatus != 0) { c.Response.StatusCode = FailStatus; c.Response.Close(); return; }
             var path = c.Request.Url.AbsolutePath.TrimStart('/');
             byte[] body = null; string type = "application/octet-stream";
             if (path == "manifest.json") { if (DelayMs > 0) System.Threading.Thread.Sleep(DelayMs); body = Encoding.UTF8.GetBytes(Manifest()); type = "application/json"; }
