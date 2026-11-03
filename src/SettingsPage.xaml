@@ -188,6 +188,9 @@
               <HeaderedContentControl x:Name="WorldMapObjectsRow" Style="{StaticResource Setting.Row}" Header="World map trees &amp; objects (experimental)" Tag="Trees, rocks and fences for the 3D world map.">
                 <StackPanel x:Name="WorldMapObjectsButtons" Orientation="Vertical" HorizontalAlignment="Right" />
               </HeaderedContentControl>
+              <HeaderedContentControl x:Name="WorldMapLightRow" Style="{StaticResource Setting.Row}" Header="World map game lighting" Tag="The 3D view takes the sky, fog, light and water colours of the zone you look at from your game files (at noon). Off: the same calm colours everywhere.">
+                <CheckBox x:Name="WorldMapLightBox" Style="{StaticResource Switch}" Click="WorldMapLight_Click" AutomationProperties.Name="World map game lighting" />
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="World map 3D height" Tag="How tall the land is in the 3D view: 1x is true to the game (the middle), lower flattens it, higher makes the mountains taller.">
                 <StackPanel Orientation="Horizontal">
                   <Slider x:Name="Exag3dSlider" Minimum="0.5" Maximum="1.5" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" IsSnapToTickEnabled="True" Width="180" VerticalAlignment="Center" ValueChanged="Exag3d_Changed" AutomationProperties.Name="3D height exaggeration" />

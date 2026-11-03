@@ -350,6 +350,7 @@ namespace ElansAddonHub
                         var s5 = await Wm3State();
                         Check("3D liquids: no script error while the liquids load and rebuild (" + (s5?.List("errs")?.Count ?? -1) + " errors)", s5 != null && (s5.List("errs") ?? new List<object>()).Count == 0, s5 == null ? "?" : Json.Write(s5.List("errs")));
                     }
+                    await WorldLightPage3d(Check, P);      // 3.8: sky, fog and light per zone (MainWindow.WorldMapTest.Light.cs)
                     // the picture: a close view of the invented hills, then FPS and memory of a continuous orbit
                     WorldMapMath.WorldToLatLng(0, 1000, out var hlat, out var hlng);
                     await WmEval("window.wm3.setView(" + hlat.ToString("R", I) + "," + hlng.ToString("R", I) + ",1500,20,35)");

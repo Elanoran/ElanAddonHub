@@ -237,6 +237,7 @@ namespace ElansAddonHub
         public async Task SelfTest(string dir)
         {
             System.IO.Directory.CreateDirectory(dir);
+            ElansAddonHub.Services.WorldMap.WorldLight.AutoStart = false;   // 3.8: a self-test never reads the real light tables on its own (worldlight / worldlightreal hand them in)
             var args = Environment.GetCommandLineArgs();
             var scope = TestScope.FromArgs(args, out var scopeNote, out var scopeError);
             if (scopeError != null)
@@ -436,6 +437,8 @@ namespace ElansAddonHub
             await RealSec("buildingsreal", BuildingsRealTest);
             if (Begin("objects")) { result += "\r\n" + await ObjectsTest(dir); End(); }
             await RealSec("objectsreal", ObjectsRealTest);
+            if (Begin("worldlight")) { result += "\r\n" + await WorldLightTest(dir); End(); }
+            await RealSec("worldlightreal", WorldLightRealTest);
             if (Begin("dungeonmaps")) { result += "\r\n" + await DungeonMapsTest(dir); End(); }
             await RealSec("dungeonmapsreal", DungeonMapsRealTest);
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }

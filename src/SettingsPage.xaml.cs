@@ -139,6 +139,7 @@ namespace ElansAddonHub
             {
                 WorldMapFlatOnly.IsChecked = s.WorldMapFlat; WorldMapAuto.IsChecked = !s.WorldMapFlat;
                 LivePosBox.IsChecked = s.WorldMapLivePos;
+                WorldMapLightBox.IsChecked = !s.WorldMapLightOff;
                 LodgePosBox.IsChecked = s.ShareLivePosWithLodge;
                 LodgePosOfficers.IsChecked = LodgeSession.ScopeOf(s) == "officers"; LodgePosEveryone.IsChecked = !LodgePosOfficers.IsChecked;
                 var det = s.WorldMap3dDetail;
@@ -502,6 +503,16 @@ namespace ElansAddonHub
             SettingsStore.Save(settings);
             host?.UpdateLive();
         }
+        // 3.8 "World map game lighting" (on by default): off gives the 3D map its fixed look back at once
+        void WorldMapLight_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.WorldMapLightOff = WorldMapLightBox.IsChecked != true;
+            SettingsStore.Save(settings);
+            host?.UpdateWorldLight();
+        }
+        public bool WorldMapLightShownForTest => WorldMapLightBox.IsChecked == true;
+        public void WorldMapLightClickForTest(bool on) { WorldMapLightBox.IsChecked = on; WorldMapLight_Click(WorldMapLightBox, new RoutedEventArgs()); }
         public void LivePosHowTo_Click(object sender, RoutedEventArgs e) => HelpPages.Open(HelpPages.LivePosition, Window.GetWindow(this));
 
         // 2.97 "Share my map position with the Lodge" (off by default) and who sees it (everyone | officers): only with a Lodge that has "liveposition"

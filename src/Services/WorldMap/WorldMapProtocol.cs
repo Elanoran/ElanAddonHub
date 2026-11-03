@@ -22,6 +22,7 @@ namespace ElansAddonHub.Services.WorldMap
     //                 need {layer}                        a layer was switched on and has no data yet
     //                 webgl {ok, why, renderer}           (3D page) WebGL is there, or why not: the app falls back to the flat map
     //                 view3 {lat, lng, dist, az, tilt}    (3D page) the camera moved: its target on the plane, distance in yards, bearing and tilt in degrees
+    //                                                      (3.8: gz, the ground height there in yards, optional - the zone light's height)
     //                 stats {fps, mem, tris, tiles, tex}  (3D page) a frame-rate / memory sample every few seconds (diagnostics)
     //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height scale (0.5-1.5, 1 = true height) the person chose
     //                 buildings {mode}                    (3D page) the Buildings switch: off | bridges | all
@@ -39,6 +40,7 @@ namespace ElansAddonHub.Services.WorldMap
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     //                 me {state, ...}                      the live position layer (see Me below), at most once a second
     //                 members {list}                      the Lodge members who share their position with me (see Members below), at most once a second
+    //                 light {on, sky, fog, ...}           (3D page, 3.8) the game's sky / fog / light colours where the camera looks (see Light below)
     // ============================================================================================================================
     public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap, MemberFollow, Objects, OBuild, OPause, OResume, OCancel, GNeed, WNeed }
 
@@ -59,6 +61,7 @@ namespace ElansAddonHub.Services.WorldMap
         public int Seq = -1;                                   // view / view3: the last place the app sent the page to ("s" of init/goto/fit), -1 when the page names none
         public int MemberId;                                   // mfollow: the member followed, 0 = none
         public int Col = -1, Row = -1;                         // gneed (3.2): the tile whose real ground the page wants
+        public double Ground = double.NaN;                     // view3 (3.8): the ground height under the camera's spot, yards (NaN = not sent)
     }
 
     // a Lodge member's shared position for the world map (2.97): world coordinates (continent map id, x north, y west, yards), never the viewer's own.
@@ -146,6 +149,8 @@ namespace ElansAddonHub.Services.WorldMap
                         if (!(Num(d, "lat", out m.Lat) && Num(d, "lng", out m.Lng) && Num(d, "dist", out m.Dist) && Num(d, "az", out m.Az) && Num(d, "tilt", out m.Tilt))) { refusal = "a 3D view needs lat, lng, dist, az and tilt numbers"; return null; }
                         if (!InPlane(m.Lat, m.Lng)) { refusal = "position outside the map"; return null; }
                         if (m.Dist < 5 || m.Dist > 200000 || Math.Abs(m.Az) > 720 || m.Tilt < -1 || m.Tilt > 91) { refusal = "camera outside its limits"; return null; }
+                        // 3.8: gz = the ground height (yards) under the spot the camera looks at, for the zone light (optional; outside -20000..20000 = not known)
+                        if (Num(d, "gz", out var gz) && gz >= -20000 && gz <= 20000) m.Ground = gz;
                         m.Type = WorldMapMessageType.View3; m.Seq = SeqOf(d); return m;
                     }
                 case "stats":
@@ -374,6 +379,34 @@ namespace ElansAddonHub.Services.WorldMap
             if (pinName != null) d["pin"] = new Dictionary<string, object> { ["name"] = pinName, ["tip"] = pinTip ?? "" };
             return Json.Write(d);
         }
+
+        // ---- 3.8 "light": the game's sky, fog and light colours at the spot the 3D camera looks at (WorldLight.ForView), or off (today's fixed look).
+        //   {t:'light', on:true, sky:[top, middle, band1, band2, smog, fog], fog, amb, dir, sun, hzn?, gnd?, river?, riverFar?, ocean?, oceanFar?, fogEnd, fogDef, local, src}
+        //   {t:'light', on:false, why}
+        // Every colour is #rrggbb; hzn / gnd / the water colours only when a light there sets them (the Classic-era lights leave them 0); fogEnd and fogDef
+        // (the map default's FogEnd) in yards, 0 = not set; local = how much the zone's own lights counted (0 when zoomed out to the continent).
+        // Built and checked here (null = not a light that may be sent); the page checks the shapes again and ignores anything else.
+        public static string Light(LightResult r)
+        {
+            if (r == null) return null;
+            bool Ok(int c) => c >= 0 && c <= 0xFFFFFF;
+            var need = new[] { r.SkyTop, r.SkyMiddle, r.Band1, r.Band2, r.Smog, r.SkyFog, r.Ambient, r.Direct, r.Sun };
+            if (!need.All(Ok)) return null;
+            if (double.IsNaN(r.FogEnd + r.DefaultFogEnd + r.Local) || double.IsInfinity(r.FogEnd + r.DefaultFogEnd + r.Local)) return null;
+            var d = new Dictionary<string, object>
+            {
+                ["t"] = "light", ["on"] = true,
+                ["sky"] = new List<object> { LightResult.Hex(r.SkyTop), LightResult.Hex(r.SkyMiddle), LightResult.Hex(r.Band1), LightResult.Hex(r.Band2), LightResult.Hex(r.Smog), LightResult.Hex(r.SkyFog) },
+                ["fog"] = LightResult.Hex(r.SkyFog), ["amb"] = LightResult.Hex(r.Ambient), ["dir"] = LightResult.Hex(r.Direct), ["sun"] = LightResult.Hex(r.Sun),
+                ["fogEnd"] = Math.Round(Math.Max(0, Math.Min(100000, r.FogEnd))), ["fogDef"] = Math.Round(Math.Max(0, Math.Min(100000, r.DefaultFogEnd))),
+                ["local"] = Math.Round(Math.Max(0, Math.Min(1, r.Local)), 3), ["src"] = Clean(r.Source, 200),
+            };
+            void Opt(string k, int c) { if (Ok(c)) d[k] = LightResult.Hex(c); }
+            Opt("hzn", r.HorizonAmbient); Opt("gnd", r.GroundAmbient); Opt("river", r.RiverClose); Opt("riverFar", r.RiverFar); Opt("ocean", r.OceanClose); Opt("oceanFar", r.OceanFar);
+            return Json.Write(d);
+        }
+
+        public static string LightOff(string why) => Json.Write(new Dictionary<string, object> { ["t"] = "light", ["on"] = false, ["why"] = Clean(why, 160) });
     }
 
     // ============================================================================================================================

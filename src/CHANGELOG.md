@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.8.0
+- **The 3D world map takes the game's own light.** Sky, fog, sun and water follow the zone you look at, from your game files: Burning Steppes glows red, Tirisfal is dark, Elwynn has its warm sun. Zoomed out to a continent, the map's default light is used. Turn it off in Settings > General > Game data ("World map game lighting") to keep the old look.
+
 ## 3.7.0
 - **Weapons and shields in 3D.** An item's Atlas page now shows the weapon, shield or off-hand item from your game files: swords, axes, maces, daggers, staves, polearms, bows, guns, wands and shields. Long weapons stand upright, shields face you and sway gently.
 - **Creature models show their feet.** Some older character-style creatures (Stormwind citizens, guards, children such as Aiden, Scholomance students, the Twin Emperors) were drawn without boots or the lower legs, and tall creatures could be cut off at the bottom of the card. Both are fixed; the models are rebuilt once.

@@ -3063,6 +3063,64 @@ Meshes and pictures are loaded per tile, only for tiles in view.
 - The tile pass is throttled to every 120 ms: a change that arrives inside the pause (a liquid file, a texture) or
   builds that ran out of their time slice now keep the page drawing until they are done.
 
+#### The 3D page: sky, fog and light
+
+*Outpost 3.8: `Services\WorldMap\WorldLight.cs`, `WorldMapView.PushLight`, `view3d.js` (`lightMsg`). The idea and blend rules
+are ported from wow.export's map viewer (`FogDataProvider.js`, MIT).*
+
+- **Tables** (read-only, from the player's install, layouts of 1.60.1.70707, unchanged in 70753): Light (map default
+  lights and light spheres), LightParams, LightData (the colours and fog of each light at up to ~12 times of day),
+  ZoneLight + ZoneLightPoint (zone polygons), LightSkybox (ids only).
+  - Read in the background when the 3D page opens and kept in `cache\worldlight.bin` per game build.
+  - A table with an unknown layout is off with its reason. Without Light or LightData the whole feature is off and
+    the map keeps its fixed look.
+- **The light at a spot** (`WorldLight.LightAt(map, x, y, z, time)`):
+  - start from the map's default light (all coordinates 0; Kalimdor 191, the Eastern Kingdoms 1);
+  - lay the zone polygons over it, largest first. Weight 1 from 50 yards inside the border, 0.5 on it, 0 from 50
+    yards outside, and Zmin / Zmax the same way when the height is known (the page sends the ground height `gz` in
+    `view3`);
+  - then the light spheres, largest first: weight 1 inside GameFalloffStart, 0 beyond GameFalloffEnd, linear between.
+    Distance is 3D when the height is known;
+  - each light's LightData is interpolated between its time keys (half-minutes, 0-2880, round midnight).
+    LightParamsID[0] is used (clear weather).
+  - Unlike wow.export, which adds every light on top of the others, each light is laid **over** what is below it by
+    its weight, so a spot deep inside Duskwood's sphere gets exactly Duskwood's colours.
+  - Fields this build leaves 0 mean "not set": the water colours and horizon / ground ambients of the Classic-era
+    lights, and FogEnd on most time keys. They are interpolated only between keys that set them, and a light that
+    does not set them leaves what is below it.
+- **Checked on 1.60.1.70707 at noon**:
+  - Eastern Kingdoms default: fog #659EBB, FogEnd 18000;
+  - Elwynn Forest: direct light #ECB374;
+  - Duskwood: fog #009ACD, FogEnd 6500;
+  - Tirisfal Glades: fog #2C222E;
+  - Burning Steppes: fog #852902;
+  - Orgrimmar: fog #BD563D;
+  - Mulgore: FogEnd 48000.
+- **The host** works the light out for the spot the camera looks at. Zoomed out, the local lights fade between 4000
+  and 12000 yards, so the continent view shows the default light.
+  - Throttled: worked out again only after a move of more than 300 yards, a zoom that changes the fade, another map,
+    or a forced push (page start, tables read, the switch). Sent only when it changed.
+  - It goes to the page as `light {on, sky[6], fog, amb, dir, sun, hzn?, gnd?, river?, ocean?, fogEnd, fogDef, local}`,
+    or `{on:false, why}`. The message is built and checked in `WorldMapProtocol.Light`, and checked again by the page.
+- **The page applies colours, not distances**:
+  - the background becomes a sky gradient (sky top -> middle -> bands -> smog -> fog);
+  - the fog colour is the game's;
+  - ambient / sun / hemisphere take the game colours as tints at today's strengths (0.66 / 0.5 / 0.18), so the map
+    stays readable;
+  - water: with the game's river / ocean colour, today's colour moves 0.6 of the way to it at today's brightness.
+    Where the game sets none (the continents' lights), today's blue keeps its hue and takes a little of the fog's
+    saturation and lightness. The opacity pulse is unchanged.
+  - **The fog distance stays the camera's** (an overview map, not the player's eye). A zone whose FogEnd is nearer
+    than the default's draws it a little nearer (at most 18 %, Duskwood 0.82x).
+  - Changes blend over a second (at once with reduced motion).
+- **Switch**: Settings > General > **World map game lighting** (on by default, `Settings.WorldMapLightOff`). Off gives
+  the fixed look back: background and fog #0b1c20, white light, today's water.
+- **Not yet**: the skybox models (LightSkybox: 21 of 22 open), weather (LightParamsID[1..7]), and the time of day.
+  Everything is noon; "game time of day" could follow the local clock later.
+- **Test hook**: `wm3.light()`. Self-test sections `worldlight` (synthetic tables and the resolver), `worldmap` (the
+  page on the invented continent) and `worldlightreal` (the real tables and the real page, pictures with
+  `ELANSHUB_LIGHT_SHOTS=<folder>`).
+
 #### The 3D page: camera and markers
 
 - **Camera**: orbit around a target on the ground.
@@ -3116,7 +3174,8 @@ Meshes and pictures are loaded per tile, only for tiles in view.
 - Settings > General > Game data has:
   - the cache row (pictures **and** terrain, size, Clear);
   - **World map 3D detail** (Low / Medium / High);
-  - **World map 3D height** (0.5x - 1.5x, 1 = true height).
+  - **World map 3D height** (0.5x - 1.5x, 1 = true height);
+  - **World map game lighting** (3.8, on by default; see "The 3D page: sky, fog and light").
 - The 3D page's own panel has the same two controls (live) and remembers them (`prefs {detail, exag}`); the next start
   of the page reads them from `Settings.WorldMap3dDetail` / `WorldMapExag`.
 

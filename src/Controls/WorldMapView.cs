@@ -198,6 +198,7 @@ namespace ElansAddonHub
             WorldMapService.BuildChanged += OnBuildChanged;
             bld.Attach(); obj.Attach();
             MapData.Changed += OnMapDataChanged;
+            WorldLight.Changed += OnWorldLightChanged;
         }
 
         // ---------------------------------------------------------------- navigation
@@ -704,6 +705,7 @@ namespace ElansAddonHub
                 init["buildings"] = bld.InitInfo(c.MapId, "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture));
                 init["objects"] = obj.InitInfo(c.MapId, "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture));
                 init["prefs"] = new Dictionary<string, object> { ["detail"] = Detail(), ["exag"] = Exag(), ["userDetail"] = Settings != null && !string.IsNullOrEmpty(Settings.WorldMap3dDetail) };
+                if (LightOn && WorldLight.Status == WorldLight.State.NotStarted) WorldLight.Start();      // 3.8: the light tables, read in the background (the page starts with its fixed look)
                 if (ForceNoGlForTest) init["forceNoGl"] = true;
             }
             if (t.HasView)
@@ -871,6 +873,7 @@ namespace ElansAddonHub
                 case WorldMapMessageType.Inited:
                     PageInited = true;
                     if (mode3d && mapId >= 0) { bld.OnInited(mapId); obj.OnInited(mapId); }
+                    lastLight = null; lightMap = -1; PushLight(true);       // 3.8: the new page starts from its fixed look
                     lastMe = null; PushLive(true);
                     lastMembers = null; PushMembers(true);
                     break;
@@ -917,6 +920,7 @@ namespace ElansAddonHub
                         WorldMapMath.LatLngToWorld(m.Lat, m.Lng, out var x, out var y);
                         hasView = true; vx = x; vy = y; vz = Math.Round(DistToZoom(m.Dist), 2);
                         SubChanged?.Invoke(CurrentSub);
+                        PushLight(false);
                         break;
                     }
                 case WorldMapMessageType.Open:
@@ -972,6 +976,49 @@ namespace ElansAddonHub
                     if (Settings != null) { Settings.WorldMap3dDetail = m.Detail; Settings.WorldMapExag = Math.Round(m.Exag, 1); SaveSettings?.Invoke(); }
                     break;
             }
+        }
+
+        // ---------------------------------------------------------------- 3.8: sky, fog and light per zone
+        // The game's light at the spot the 3D camera looks at (WorldLight.ForView: the map's default light, the zone polygons, the light spheres; noon) goes to
+        // the page as a "light" message. Throttled: worked out again only when the spot moved more than WorldLight.MoveYards, the zoom changed the fade to the
+        // default light, the map changed or something forced it (the page started, the tables were read, the switch); sent only when it changed. The switch
+        // (Settings > World map game lighting, on by default) off, the tables unavailable or no light there: {on:false} and the page keeps its fixed look.
+        // ("Game time of day" could follow the local clock later: everything here is at noon.)
+        string lastLight;
+        bool lastLightOn;
+        int lightMap = -1; double lightX = double.NaN, lightY, lightDist;
+        public string LastLightForTest => lastLight;
+        public int LightPostsForTest { get; private set; }
+        public static Func<double> LightTimeForTest;           // self-test: another time of day (half-minutes); null = noon
+        bool LightOn => Settings == null || !Settings.WorldMapLightOff;
+        void OnWorldLightChanged() { try { Dispatcher.BeginInvoke(new Action(() => PushLight(true))); } catch (Exception) { } }
+
+        public void PushLight(bool force)
+        {
+            if (!mode3d || !PageInited || mapId < 0 || loadedPage != "3d") return;
+            string json = null; bool on = false;
+            if (!LightOn) json = WorldMapProtocol.LightOff("game lighting is off in Settings");
+            else if (!WorldLight.Ready)
+            {
+                if (WorldLight.Status == WorldLight.State.NotStarted) WorldLight.Start();
+                json = WorldMapProtocol.LightOff(WorldLight.Status == WorldLight.State.Loading ? "the light tables are being read" : "the light tables are unavailable" + (string.IsNullOrEmpty(WorldLight.Reason) ? "" : " (" + WorldLight.Reason + ")"));
+            }
+            else
+            {
+                double x = vx, y = vy, dist = 106666.0 / Math.Pow(2, Math.Max(0, vz)), gz = double.NaN;
+                var v = LastView3;
+                if (v != null) { WorldMapMath.LatLngToWorld(v.Lat, v.Lng, out x, out y); dist = v.Dist; gz = v.Ground; }
+                else if (!hasView) { x = 0; y = 0; dist = WorldLight.FarDist * 2; }      // no spot yet: the continent's default light
+                if (!force && lastLightOn && !WorldLight.ShouldRecompute(lightMap, lightX, lightY, lightDist, mapId, x, y, dist)) return;
+                lightMap = mapId; lightX = x; lightY = y; lightDist = dist;
+                json = WorldMapProtocol.Light(WorldLight.ForView(WorldLight.Data, mapId, x, y, gz, dist, LightTimeForTest?.Invoke() ?? WorldLight.Noon));
+                on = json != null;
+                if (!on) json = WorldMapProtocol.LightOff("no game light for this map");
+            }
+            lastLightOn = on;
+            if (json == lastLight) return;
+            lastLight = json; LightPostsForTest++;
+            Post(json);
         }
 
         // ---------------------------------------------------------------- the live position layer ("Show my live position on the world map")
@@ -1281,7 +1328,7 @@ namespace ElansAddonHub
         public void Dispose()
         {
             try { pageTimer?.Stop(); } catch (Exception) { }
-            try { bld.Detach(); obj.Detach(); WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; subscribed = false; } catch (Exception) { }
+            try { bld.Detach(); obj.Detach(); WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; WorldLight.Changed -= OnWorldLightChanged; subscribed = false; } catch (Exception) { }
             try { Thaw(); if (web != null) { stage.Children.Remove(web); web.Dispose(); web = null; webTask = null; } } catch (Exception) { }
             pageHello = false; PageInited = false; PageReady = false; pendingInit = null; mapId = -1; initGen++; buildGen++; loadedPage = null; GlOk = false; borderWaitMap = -1;
         }

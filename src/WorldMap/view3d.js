@@ -447,6 +447,88 @@
     releaseOld();
   }
 
+  // ---------------------------------------------------------------- 3.8: sky, fog and light per zone
+  // The app sends the game's light where the camera looks ({t:'light', on, sky[6], fog, amb, dir, sun, hzn?, gnd?, river?, ocean?, fogEnd, fogDef, local},
+  // WorldMapProtocol.Light), or {on:false} for the fixed look (LBASE, the colours this page always had). The COLOURS come from the game: the background is a
+  // sky gradient (sky top -> middle -> bands -> smog -> fog, so the land fades into the sky), the fog colour, the light colours as tints at today's strengths
+  // (so the map stays readable), and the water picks up the zone's river / ocean colour (or, where the game sets none, a little of its fog) at about today's
+  // lightness; the opacity pulse is the same. The fog DISTANCE stays the camera's (see updateCamera). Changes blend over a second (at once with reduced motion).
+  // The colour values are as the page always used them: fog and background as given (three r149 mixes fog after the output encoding and clears raw),
+  // the lights' tints and the water in the renderer's linear space.
+  var LBASE = { bg: 0x0b1c20, fog: 0x0b1c20, amb: 0xffffff, sun: 0xffffff, hemi: 0xcfe8ff, gnd: 0x403a30, w1: 0x3a93c4, w2: 0x103f6e };
+  var LIGHT = { on: false, cur: null, from: null, to: null, t0: 0, anim: false, dens: 1, applied: 0, refused: 0, src: '', why: '', skyCv: null, skyTex: null, bg: null };
+  var ambLight = null, sunLight = null, hemiLight = null;
+  var L_HEX = /^#[0-9a-fA-F]{6}$/;
+  function lHex(v) { return typeof v === 'string' && L_HEX.test(v); }
+  function lNum(v, lo, hi) { return typeof v === 'number' && isFinite(v) && v >= lo && v <= hi; }
+  function lBase() {
+    var bg = new THREE.Color(LBASE.bg);
+    return { sky: [0, 1, 2, 3, 4, 5].map(function () { return bg.clone(); }), fog: new THREE.Color(LBASE.fog), amb: new THREE.Color(LBASE.amb), sun: new THREE.Color(LBASE.sun),
+      hemi: new THREE.Color(LBASE.hemi), gnd: new THREE.Color(LBASE.gnd), w1: new THREE.Color(LBASE.w1), w2: new THREE.Color(LBASE.w2), dens: 1 };
+  }
+  function lCopy(c) { return { sky: c.sky.map(function (x) { return x.clone(); }), fog: c.fog.clone(), amb: c.amb.clone(), sun: c.sun.clone(), hemi: c.hemi.clone(), gnd: c.gnd.clone(), w1: c.w1.clone(), w2: c.w2.clone(), dens: c.dens }; }
+  // a light colour as a tint: the game's hue at full brightness (the strength stays today's), `k` of the way from white
+  function lTint(hex, k) { var c = new THREE.Color(hex).convertSRGBToLinear(), m = Math.max(c.r, c.g, c.b); if (m < 0.004) return new THREE.Color(1, 1, 1); c.multiplyScalar(1 / m); return new THREE.Color(1, 1, 1).lerp(c, k); }
+  // a colour at the brightness (luminance) of `ref`
+  function lAt(hex, ref) { var c = new THREE.Color(hex).convertSRGBToLinear(), r = new THREE.Color(ref), lc = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, lr = 0.2126 * r.r + 0.7152 * r.g + 0.0722 * r.b; return lc < 0.002 ? r : c.multiplyScalar(Math.min(lr / lc, 1 / Math.max(c.r, c.g, c.b))); }
+  // the water: with the game's own water colour, today's colour 0.6 of the way to it taken to today's brightness (a dark game colour must not blacken the
+  // water); where the game sets none, today's blue keeps its hue and takes 0.3 of the zone fog's saturation and lightness (murkier in Tirisfal, never red)
+  function lWater(base, game, fog) {
+    var c = new THREE.Color(base);
+    if (game) return c.lerp(lAt(game, base), 0.6);
+    var a = {}, b = {}; c.getHSL(a); new THREE.Color(fog).getHSL(b);
+    return c.setHSL(a.h, a.s + (b.s - a.s) * 0.3, a.l + (b.l - a.l) * 0.3 * 0.6);
+  }
+  function lTarget(m) {
+    var t = lBase();
+    t.sky = m.sky.map(function (h) { return new THREE.Color(h); });
+    t.fog = new THREE.Color(m.fog);
+    t.amb = lTint(m.amb, 0.45); t.sun = lTint(m.dir, 0.6);
+    t.hemi = new THREE.Color(LBASE.hemi).lerp(lTint(m.sky[1], 1), 0.5);
+    t.gnd = new THREE.Color(LBASE.gnd).lerp(lAt(m.gnd || m.amb, LBASE.gnd), 0.5);
+    t.w1 = lWater(LBASE.w1, m.river, m.fog); t.w2 = lWater(LBASE.w2, m.ocean, m.fog);
+    var d = m.fogEnd > 0 && m.fogDef > 0 ? clamp(m.fogDef / m.fogEnd, 0.8, 2.5) : 1; t.dens = 1 / (1 + 0.15 * (d - 1));
+    return t;
+  }
+  // a message from the app, checked again here: anything that is not the shape above changes nothing
+  function lightMsg(m) {
+    if (m.on === false) { lStart(lBase(), false); LIGHT.src = ''; LIGHT.why = String(m.why || '').slice(0, 160); return true; }
+    var ok = m.on === true && Array.isArray(m.sky) && m.sky.length === 6 && m.sky.every(lHex) && lHex(m.fog) && lHex(m.amb) && lHex(m.dir) && lHex(m.sun)
+      && ['hzn', 'gnd', 'river', 'riverFar', 'ocean', 'oceanFar'].every(function (k) { return m[k] == null || lHex(m[k]); })
+      && lNum(m.fogEnd, 0, 100000) && lNum(m.fogDef, 0, 100000) && lNum(m.local, 0, 1);
+    if (!ok) { LIGHT.refused++; return false; }
+    lStart(lTarget(m), true); LIGHT.applied++; LIGHT.src = String(m.src || '').slice(0, 200); LIGHT.why = '';
+    return true;
+  }
+  function lStart(to, on) {
+    LIGHT.from = lCopy(LIGHT.cur || lBase()); LIGHT.to = to; LIGHT.on = on; LIGHT.t0 = performance.now(); LIGHT.anim = true; dirty = true;
+    if (!scene) { LIGHT.cur = to; LIGHT.anim = false; }
+  }
+  var lCalm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function lStep(now) {
+    if (!LIGHT.anim || !scene) return;
+    var k = lCalm ? 1 : clamp((now - LIGHT.t0) / 1000, 0, 1), e = k * k * (3 - 2 * k), f = LIGHT.from, t = LIGHT.to;
+    var c = { sky: f.sky.map(function (x, i) { return x.clone().lerp(t.sky[i], e); }), fog: f.fog.clone().lerp(t.fog, e), amb: f.amb.clone().lerp(t.amb, e), sun: f.sun.clone().lerp(t.sun, e),
+      hemi: f.hemi.clone().lerp(t.hemi, e), gnd: f.gnd.clone().lerp(t.gnd, e), w1: f.w1.clone().lerp(t.w1, e), w2: f.w2.clone().lerp(t.w2, e), dens: f.dens + (t.dens - f.dens) * e };
+    if (k >= 1) { c = lCopy(t); LIGHT.anim = false; }
+    LIGHT.cur = c; lApply(c, k >= 1 && !LIGHT.on);
+    dirty = true;
+  }
+  function lApply(c, fixed) {
+    if (!scene) return;
+    scene.fog.color.copy(c.fog);
+    if (fixed) { if (!LIGHT.bg) LIGHT.bg = new THREE.Color(LBASE.bg); scene.background = LIGHT.bg; }
+    else {
+      if (!LIGHT.skyCv) { LIGHT.skyCv = document.createElement('canvas'); LIGHT.skyCv.width = 2; LIGHT.skyCv.height = 128; LIGHT.skyTex = new THREE.CanvasTexture(LIGHT.skyCv); LIGHT.skyTex.encoding = THREE.sRGBEncoding; }
+      var g = LIGHT.skyCv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128), at = [0, 0.32, 0.55, 0.72, 0.86, 1];
+      c.sky.forEach(function (x, i) { gr.addColorStop(at[i], '#' + x.getHexString()); });
+      g.fillStyle = gr; g.fillRect(0, 0, 2, 128); LIGHT.skyTex.needsUpdate = true; scene.background = LIGHT.skyTex;
+    }
+    if (ambLight) { ambLight.color.copy(c.amb); sunLight.color.copy(c.sun); hemiLight.color.copy(c.hemi); hemiLight.groundColor.copy(c.gnd); }
+    if (waterMats[1]) { waterMats[1].color.copy(c.w1); waterMats[2].color.copy(c.w2); }
+    LIGHT.dens = c.dens;
+  }
+
   // ---------------------------------------------------------------- camera
   var flight = null;
   function updateCamera() {
@@ -465,7 +547,9 @@
     if (Math.abs(camera.near - near) > near * 0.05 || Math.abs(camera.far - far) > far * 0.05) { camera.near = near; camera.far = far; camera.updateProjectionMatrix(); }
     camera.updateMatrixWorld(true);
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
-    if (scene.fog) { scene.fog.near = Math.max(cam.dist * 1.2, D().maxDist * 0.5); scene.fog.far = Math.max(cam.dist * 3.2, D().maxDist * 1.05); }
+    // the fog stays the camera's (an overview map, not the player's eye: the game's FogEnd in yards would fog everything at map zoom); 3.8: a zone whose
+    // FogEnd is nearer than the map default's (Duskwood) draws it a little nearer (LIGHT.dens, at most 18 %), one farther a little farther
+    if (scene.fog) { var fd = LIGHT.dens || 1; scene.fog.near = Math.max(cam.dist * 1.2, D().maxDist * 0.5) * fd; scene.fog.far = Math.max(cam.dist * 3.2, D().maxDist * 1.05) * fd; }
   }
   function setView(lat, lng, dist, az, tilt, instant) {
     var p = ll2xz(lat, lng);
@@ -490,7 +574,7 @@
   var viewTimer = 0;
   function sendView() {
     clearTimeout(viewTimer);
-    viewTimer = setTimeout(function () { var ll = xz2ll(cam.tx, cam.tz); send({ t: 'view3', lat: clamp(ll[0], -255.9, 0), lng: clamp(ll[1], 0, 255.9), dist: cam.dist, az: ((cam.az % 360) + 360) % 360, tilt: cam.tilt, s: vseq }); }, 500);
+    viewTimer = setTimeout(function () { var ll = xz2ll(cam.tx, cam.tz); send({ t: 'view3', lat: clamp(ll[0], -255.9, 0), lng: clamp(ll[1], 0, 255.9), dist: cam.dist, az: ((cam.az % 360) + 360) % 360, tilt: cam.tilt, s: vseq, gz: Math.round(groundY(cam.tx, cam.tz) * 10) / 10 }); }, 500);
   }
 
   // ---------------------------------------------------------------- picking the ground
@@ -963,6 +1047,7 @@
     if (!renderer || !inited) return;
     loadSteps(now);
     stepFlight(now);
+    lStep(now);
     stepFollow();
     if (meLines && meLineDist > 0 && Math.abs(Math.log(cam.dist / meLineDist)) > 0.3) meDrawLines();      // the ribbon keeps a few pixels wide as you zoom
     else if (meLines && window.WmPrints && window.WmPrints.zoom3d(cam.dist, window.innerHeight) === 2) meDrawLines();      // 2.93: the prints' spacing follows the zoom at once; prints on / off redraws the ribbon
@@ -1018,13 +1103,14 @@
     } catch (e) { glInfo = 'unknown'; }
     software = /swiftshader|llvmpipe|software|basic render|microsoft basic/i.test(glInfo);
     renderer.outputEncoding = THREE.sRGBEncoding;
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b1c20); scene.fog = new THREE.Fog(0x0b1c20, 8000, 20000);
+    scene = new THREE.Scene(); scene.background = new THREE.Color(LBASE.bg); scene.fog = new THREE.Fog(LBASE.fog, 8000, 20000);
     camera = new THREE.PerspectiveCamera(48, 1, 5, 80000);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.66));
-    var sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(-0.55, 0.75, -0.35); scene.add(sun);
-    var hemi = new THREE.HemisphereLight(0xcfe8ff, 0x403a30, 0.18); scene.add(hemi);
+    ambLight = new THREE.AmbientLight(LBASE.amb, 0.66); scene.add(ambLight);
+    sunLight = new THREE.DirectionalLight(LBASE.sun, 0.5); sunLight.position.set(-0.55, 0.75, -0.35); scene.add(sunLight);
+    hemiLight = new THREE.HemisphereLight(LBASE.hemi, LBASE.gnd, 0.18); scene.add(hemiLight);
     // the liquids: translucent, unlit, no depth write, drawn after the terrain (see waterArrays); no global sea plane any more, so a canyon below sea level stays dry
     for (var wk = 1; wk <= 4; wk++) waterMats[wk] = new THREE.MeshBasicMaterial({ color: waterBase[wk].c, transparent: true, opacity: waterBase[wk].o, depthWrite: false, side: THREE.DoubleSide });
+    if (LIGHT.cur) lApply(LIGHT.cur, !LIGHT.on);      // 3.8: a light that came before the scene
     var c = document.createElement('canvas'); c.width = c.height = 4; var g = c.getContext('2d'); g.fillStyle = '#' + ('000000' + seaColor.toString(16)).slice(-6); g.fillRect(0, 0, 4, 4);
     seaTex = new THREE.CanvasTexture(c); seaTex.encoding = THREE.sRGBEncoding;
     // the guard: a lost WebGL context is told to the app, which falls back to the flat map
@@ -2301,6 +2387,7 @@
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
       case 'me': if (inited) meMsg(m); break;
       case 'members': if (inited) membersMsg(m); break;
+      case 'light': lightMsg(m); break;
     }
   }
   if (wv) wv.addEventListener('message', function (e) { handle(e.data); });
@@ -2535,7 +2622,16 @@
           return { kind: b.kind, tex: b.tex, unlit: b.unlit, two: b.two, n: b.n, mat: mt.type, blend: mt.blending, color: mt.color.getHexString(), texFormat: te && te.tex ? (te.tex.isCompressedTexture ? te.tex.format : 'rgba') : null }; }) });
     },
     xz2ll: xz2ll, ll2xz: ll2xz, groundXZ: function (x, z) { return groundY(x, z); }, distToZ: distToZ, zToDist: zToDist,
-    holes: function () { return JSON.stringify({ n: Object.keys(holeMap).length, drawn: !!(holeMesh && holeMesh.parent), rev: cfg && cfg.rev || 0 }); }
+    holes: function () { return JSON.stringify({ n: Object.keys(holeMap).length, drawn: !!(holeMesh && holeMesh.parent), rev: cfg && cfg.rev || 0 }); },
+    // 3.8: the sky, fog and light the page shows now (test): fog / background / lights / water as three holds them, the sky gradient's stops, the fog distances
+    light: function () {
+      if (!scene) return 'null';
+      var c = LIGHT.cur || lBase(), h = function (x) { return x.getHexString(); }, bg = scene.background;
+      return JSON.stringify({ on: LIGHT.on, anim: LIGHT.anim, applied: LIGHT.applied, refused: LIGHT.refused, src: LIGHT.src, why: LIGHT.why, fog: h(scene.fog.color), bg: bg && bg.isColor ? h(bg) : null, skyTex: !!(bg && bg.isTexture),
+        sky: c.sky.map(h), amb: ambLight ? h(ambLight.color) : null, sun: sunLight ? h(sunLight.color) : null, hemi: hemiLight ? h(hemiLight.color) : null, gnd: hemiLight ? h(hemiLight.groundColor) : null,
+        ambI: ambLight ? ambLight.intensity : 0, sunI: sunLight ? sunLight.intensity : 0, hemiI: hemiLight ? hemiLight.intensity : 0,
+        w1: waterMats[1] ? h(waterMats[1].color) : null, w2: waterMats[2] ? h(waterMats[2].color) : null, dens: LIGHT.dens, fogNear: Math.round(scene.fog.near), fogFar: Math.round(scene.fog.far), camDist: Math.round(cam.dist) });
+    }
   };
   send({ t: 'hello', p: '3d' });
 })();

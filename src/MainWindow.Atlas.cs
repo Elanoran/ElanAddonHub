@@ -168,6 +168,9 @@ namespace ElansAddonHub
             worldMapView?.PushMembers(true);
         }
 
+        // 3.8: called by Settings when "World map game lighting" changes
+        public void UpdateWorldLight() => worldMapView?.PushLight(true);
+
         // "Horde|11>22" -> seconds: what the Lodge's members measured, then what this PC's Hunter Helper learned
         IDictionary<string, double> FlightTimesForMap()
         {
