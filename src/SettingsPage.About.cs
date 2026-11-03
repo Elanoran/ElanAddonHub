@@ -84,7 +84,7 @@ namespace ElansAddonHub
                 new NewsSource { Key = "outpost", Label = "Outpost", Name = Brand.Name, Releases = Changelog.Outpost, Current = App.Version, Latest = man?.Hub?.Version },
             };
             bool hub = false;
-            foreach (var a in man?.Addons ?? new List<AddonInfo>())
+            foreach (var a in AddonOrder.Sort(man?.Addons))   // 3.8.2: the same order as the Addons page
             {
                 if (a == null || string.IsNullOrEmpty(a.Id)) continue;
                 var rel = Changelog.FromEntries(a.Changelog);

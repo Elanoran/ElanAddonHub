@@ -201,8 +201,15 @@
                           <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Chevron}" local:Motion.Turn="{Binding Expanded}" Margin="12,0,0,0" VerticalAlignment="Top" />
                           <StackPanel Margin="0,0,8,0">
                             <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0"
+                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" Visibility="{Binding SubtitleVisibility}"
                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
+                            <!-- 3.8.2: in the subtitle's place when something it needs is missing (the card keeps its height) -->
+                            <StackPanel x:Name="NeedsNote" Orientation="Horizontal" Margin="0,2,0,0" Visibility="{Binding NeedsVisibility}" Background="Transparent"
+                                        ToolTip="{Binding NeedsTip}" ToolTipService.InitialShowDelay="300" ToolTipService.ShowDuration="30000"
+                                        AutomationProperties.Name="{Binding NeedsText}" AutomationProperties.HelpText="{Binding NeedsTip}" AutomationProperties.LiveSetting="Polite">
+                              <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Warn}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                              <TextBlock Text="{Binding NeedsText}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </StackPanel>
                           </StackPanel>
                         </DockPanel>
                       </Border>
@@ -223,8 +230,13 @@
                       </StackPanel>
                       <!-- the primary action, with the download / release counts beside it -->
                       <DockPanel Margin="0,8,0,0" Height="28">
-                        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Click="Action_Click" />
-                        <ItemsControl ItemsSource="{Binding Stats}" Focusable="False" VerticalAlignment="Center">
+                        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Click="Action_Click" Opacity="{Binding PillOpacity}" />
+                        <!-- 3.8.2: installs what this addon needs, through the normal install path; the faded pill turns on by itself after -->
+                        <Button x:Name="NeedsInstall" DockPanel.Dock="Left" Style="{StaticResource Button.S}" Content="{Binding NeedsInstallText}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                Visibility="{Binding NeedsInstallVisibility}" IsEnabled="{Binding NeedsInstallEnabled}" Tag="{Binding}" Click="NeedsInstall_Click"
+                                ToolTip="{Binding NeedsInstallTip}" ToolTipService.InitialShowDelay="300" ToolTipService.ShowOnDisabled="True"
+                                AutomationProperties.Name="{Binding NeedsInstallText}" AutomationProperties.HelpText="{Binding NeedsInstallTip}" />
+                        <ItemsControl ItemsSource="{Binding Stats}" Focusable="False" VerticalAlignment="Center" Visibility="{Binding StatsLineVisibility}">
                           <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -279,6 +291,9 @@
                         <Button Style="{StaticResource GhostButton}" Content="{Binding RollbackText}" Margin="4,0,0,0"
                                 Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="OurRollback_Click"
                                 ToolTip="Put the version you had before back (the Outpost keeps the last 2). Your settings are not touched." />
+                        <Button Style="{StaticResource GhostButton}" Content="Remove from WoW..." Margin="4,0,0,0"
+                                Visibility="{Binding RemoveVisibility}" Tag="{Binding}" Click="OurRemove_Click"
+                                ToolTip="Take this addon out of your AddOns folder. A copy is kept, so Roll back puts it back. Your settings are not touched." />
                       </StackPanel>
                     </StackPanel>
                   </Border>

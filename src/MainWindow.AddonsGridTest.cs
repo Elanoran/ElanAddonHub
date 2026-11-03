@@ -12,7 +12,7 @@ namespace ElansAddonHub
     // --selftest "addonsgrid": the Addons page as a grid. Columns at 760 / 1300 / 1700 (1 / 2 / 3), cards of a row equally tall and on the same
     // line, the skeleton cards exactly where the real cards come (no jump), a card opening in place without reshuffling the grid, the Grid | List
     // switch and its setting, the other addons list in the same columns, and every button of every card reachable at every width.
-    // ELANSHUB_DESIGN_SHOTS=addonsgrid writes the pictures (addons-grid-*.png) from the same fixture.
+    // ELANSHUB_DESIGN_SHOTS=addonsgrid writes the pictures (addons-grid-*.png) from the same fixture. 3.8.2: the order and the needs, part 2.
     public partial class MainWindow
     {
         static Point PosIn(FrameworkElement el, FrameworkElement rel) => el.TranslatePoint(new Point(0, 0), rel);
@@ -188,6 +188,9 @@ namespace ElansAddonHub
                 // ---- a keyboard user: the Tab order reaches the switch and the first card's button
                 var actionable = cards.ToList().FindIndex(c => c.ButtonEnabled);
                 Check("the primary button of a card that has an action takes keyboard focus", actionable >= 0 && FindDown<Button>(Card(actionable))?.Focusable == true, actionable.ToString());
+
+                // ---- 3.8.2: our addons' order and what they need (MainWindow.AddonsGridTest.Needs.cs)
+                await AddonsNeedsTest(dir, Check);
             }
             catch (Exception e) { Check("addonsgrid test ran to the end", false, e.ToString()); }
             finally

@@ -33,7 +33,8 @@ namespace ElansAddonHub
                     Id = c.Info.Id, Name = c.Info.Name, Description = c.Info.Description, Required = c.Info.Required,
                     Installed = c.State != CardState.NotInstalled, Checked = c.Info.Required,
                 }).ToList(),
-                Install = ids => { if (GuideInstalledForTest != null) GuideInstalledForTest.AddRange(ids); else _ = GuideInstall(ids); },
+                // 3.8.2: what a picked addon needs is installed first (also when it wasn't ticked)
+                Install = ids => { ids = AddonOrder.WithNeedsFirst(ids, manifest?.Addons); if (GuideInstalledForTest != null) GuideInstalledForTest.AddRange(ids); else _ = GuideInstall(ids); },
                 Join = link => { if (GuideJoinedForTest != null) GuideJoinedForTest.Add(link); else { ShowTab("lodge"); LodgePage.JoinWithLink(link); } },
                 Finished = done => CloseGuide(done),
                 SharingOn = () => !settings.AtlasShareOff,
@@ -62,7 +63,7 @@ namespace ElansAddonHub
             foreach (var id in ids)
             {
                 var card = cards.FirstOrDefault(c => c.Info.Id == id);
-                if (card != null && !card.Busy && card.State == CardState.NotInstalled) await Install(card);
+                if (card != null && !card.Busy && card.State == CardState.NotInstalled) await InstallWithNeeds(card);
             }
         }
     }

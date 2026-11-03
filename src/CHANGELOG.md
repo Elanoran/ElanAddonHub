@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.8.2
+- **Addons in a clear order.** The Addons page now lists Elan's Hub first, then the Toolkit, then the class helpers and Bags.
+- **Needed addons first.** An addon that needs another one (Hunter Helper needs Elan's Toolkit) shows a faded Install button and "Needs Elan's Toolkit", with a button to install the Toolkit right there. The welcome guide installs needed addons first.
+- **Remove an addon.** A card's details now have "Remove from WoW...". It asks first, warns when another installed addon needs it, and keeps a backup you can roll back to.
+
 ## 3.8.1
 - **A second home for updates.** If GitHub can't be reached, the Outpost now looks for updates and addons at updates.nasferatu.dk as well. Everything from there is checked exactly like from GitHub: the release signature and every file's checksum must match.
 - **Never an older version.** The Outpost no longer accepts an update older than the newest version it has already seen, wherever it comes from.

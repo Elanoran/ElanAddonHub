@@ -240,6 +240,33 @@ namespace ElansAddonHub
 
         public AddonCard(AddonInfo info) { Info = info; }
 
+        // ---- 3.8.2: dependencies (AddonOrder.Needs). Catalog: the manifest entry for an id (set by the main window), for names and folders.
+        public System.Func<string, AddonInfo> Catalog { get; set; }
+        public List<string> MissingNeeds { get; private set; } = new List<string>();
+        // Install / Update waits for what it needs (an installed addon whose need went missing only shows the notice)
+        public bool Blocked => MissingNeeds.Count > 0 && (State == CardState.NotInstalled || State == CardState.UpdateAvailable);
+        string NameOf(string id) => Catalog?.Invoke(id)?.Name ?? id;
+        public string NeedsNames => AddonOrder.Names(MissingNeeds.Select(NameOf));
+        public bool NeedsShown => MissingNeeds.Count > 0 && !Busy;
+        public Visibility NeedsVisibility => NeedsShown ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SubtitleVisibility => NeedsShown ? Visibility.Collapsed : Visibility.Visible;
+        public string NeedsText => "Needs " + NeedsNames;
+        public string NeedsTip => State == CardState.NotInstalled || State == CardState.UpdateAvailable
+            ? $"{Name} uses {NeedsNames} and doesn't load in game without it. Install {NeedsNames} first (the button below does it), then this one."
+            : $"{Name} uses {NeedsNames}, which isn't installed in this WoW client, so it doesn't load in game. Install {NeedsNames} (the button below does it).";
+        // the one the inline button installs: the first missing need the Outpost can install
+        public string NeedsInstallId => MissingNeeds.FirstOrDefault(id => Catalog?.Invoke(id) != null);
+        public bool NeedsBusy { get; private set; }
+        public string NeedsInstallText => NeedsInstallId == null ? "" : (NeedsBusy ? "Installing " : "Install ") + NameOf(NeedsInstallId) + (NeedsBusy ? "..." : "");
+        public string NeedsInstallTip => NeedsInstallId == null ? null : $"Download and install {NameOf(NeedsInstallId)} (needed by {Name}). {Name}'s own button turns on when it is in.";
+        public Visibility NeedsInstallVisibility => NeedsShown && NeedsInstallId != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility StatsLineVisibility => NeedsInstallVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        public double PillOpacity => Blocked ? 0.45 : 1;
+        public bool NeedsInstallEnabled => !NeedsBusy;
+        public void SetNeedsBusy(bool on) { NeedsBusy = on; Notify(nameof(NeedsBusy)); Notify(nameof(NeedsInstallText)); Notify(nameof(NeedsInstallEnabled)); }
+        // "Remove from WoW..." in the details: an installed release (never a git checkout)
+        public Visibility RemoveVisibility => (State == CardState.UpToDate || State == CardState.UpdateAvailable) && !Busy ? Visibility.Visible : Visibility.Collapsed;
+
         public void Update(AddonInfo info, string wowRoot)
         {
             Info = info;
@@ -275,6 +302,16 @@ namespace ElansAddonHub
                     SetPill("No client", PillKind.Danger, $"{info.FlavorName ?? info.Flavor} wasn't found in your WoW folder", false); break;
                 default: ButtonText = "Choose your WoW folder in Settings"; ButtonEnabled = false;
                     SetPill("No WoW folder", PillKind.Danger, "Choose your WoW folder in Settings > General", false); break;
+            }
+
+            // 3.8.2: what it needs that this WoW client doesn't have: the Install / Update pill stays, faded and not clickable, until it is there
+            MissingNeeds = State == CardState.NoClient || State == CardState.NoFolder ? new List<string>()
+                : AddonOrder.Missing(info, wowRoot, id => Catalog?.Invoke(id));
+            NeedsBusy = false;
+            if (Blocked)
+            {
+                ButtonEnabled = false;
+                SetPill(ButtonText, PillKind.Action, $"Install {NeedsNames} first: {Name} needs it to load in game.", false);
             }
 
             RollbackBackup = State == CardState.NoClient || State == CardState.NoFolder || State == CardState.DevCopy

@@ -1160,22 +1160,36 @@ namespace ElansAddonHub
             foreach (var a in manifest.Addons ?? Enumerable.Empty<AddonInfo>())
             {
                 var card = cards.FirstOrDefault(c => c.Info.Id == a.Id);
-                if (card == null) { card = new AddonCard(a); cards.Add(card); }
+                if (card == null) { card = new AddonCard(a) { Catalog = ManifestEntry }; cards.Add(card); }
                 if (!card.Busy) card.Update(a, settings.WowRoot);
             }
             foreach (var gone in cards.Where(c => manifest.Addons == null || manifest.Addons.All(a => a.Id != c.Info.Id)).ToList())
                 cards.Remove(gone);
+            // 3.8.2: a fixed, explained order (AddonOrder: required, needed by another, class helpers, the rest), not the manifest's
+            var order = AddonOrder.Sort(manifest.Addons).Select(a => a.Id).ToList();
+            for (int i = 0; i < order.Count; i++)
+            {
+                var at = cards.ToList().FindIndex(c => c.Info.Id == order[i]);
+                if (at >= 0 && at != i) cards.Move(at, i);
+            }
             RememberLayout(cards.Count, null);
             RefreshRailBadges();
             UpdateCardsSkeleton();
         }
 
+        // 3.8.2: the manifest entry of one of our addons (names and folders for the cards' "Needs ...")
+        AddonInfo ManifestEntry(string id) => manifest?.Addons?.FirstOrDefault(a => string.Equals(a?.Id, id, StringComparison.OrdinalIgnoreCase));
+
         async Task AfterCheck()
         {
             if (settings.AutoUpdate)
                 foreach (var card in cards.Where(c => c.State == CardState.NotInstalled && c.Info.Required).ToList())
-                    await Install(card);
-            foreach (var card in cards.Where(c => c.State == CardState.UpdateAvailable).ToList())
+                {
+                    // 3.8.2: one the user removed stays removed (until a newer version)
+                    if (settings.SkipVersions != null && settings.SkipVersions.TryGetValue(card.Info.Id, out var gone) && gone == card.Info.Version) continue;
+                    await InstallWithNeeds(card);
+                }
+            foreach (var card in cards.Where(c => c.State == CardState.UpdateAvailable && !c.Blocked).ToList())   // 3.8.2: blocked = waits for what it needs
             {
                 // a version the user just rolled back from is not pushed again (the Update button still works)
                 if (settings.SkipVersions != null && settings.SkipVersions.TryGetValue(card.Info.Id, out var skipped) && skipped == card.Info.Version) continue;
@@ -1220,20 +1234,26 @@ namespace ElansAddonHub
 
         // ------------------------------------------------------------------ installing
 
+        // tests: stands in for Installer.Install (no download); everything around it - busy, messages, the cards that need it - is the real path
+        public Func<string, AddonInfo, IProgress<double>, bool, Task> InstallerForTest;
+
         async Task Install(AddonCard card)
         {
+            // 3.8.2: never installs over a missing need (the pill is off then; this is the belt for the other callers)
+            if (card.Blocked) { card.Message = $"Install {card.NeedsNames} first: {card.Name} needs it."; return; }
             var replaceDev = card.State == CardState.DevCopy;
             var wasInstalled = card.State != CardState.NotInstalled;
             card.Message = null;
             card.SetBusy(true, wasInstalled ? "Updating..." : "Installing...");
             try
             {
-                using (Activity.Begin("Installing " + card.Name, Activity.Kind.Save)) await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
+                using (Activity.Begin("Installing " + card.Name, Activity.Kind.Save)) await (InstallerForTest ?? Installer.Install)(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
                 if (settings.SkipVersions != null && settings.SkipVersions.Remove(card.Info.Id)) SettingsStore.Save(settings);
                 // the update replaced SharedData.lua with the empty shipped file: put the lodge's flight times back (only if some arrived this session)
                 if (string.Equals(card.Info.Id, "ElansHub", StringComparison.OrdinalIgnoreCase)) { try { Session.RewriteSharedData(); } catch (Exception e) { Util.Log("flights: could not restore SharedData.lua after the Hub install (" + e.GetType().Name + ")"); } }
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
+                RefreshDependents(card);
                 RefreshRailBadges();
                 // WoW only discovers new addon folders when it starts; updates to known addons just need /reload
                 var hint = !wasInstalled && GamePresence.WowRunningNow()
@@ -1249,7 +1269,84 @@ namespace ElansAddonHub
                 Util.Log($"install {card.Info.Id} failed: {e}");
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
+                RefreshDependents(card);
                 card.Message = "Something went wrong: " + e.Message;
+            }
+        }
+
+        // 3.8.2: the cards that need this one look again (their Install pill turns on, or their "Needs ..." notice comes back)
+        void RefreshDependents(AddonCard changed)
+        {
+            foreach (var c in cards.Where(c => c != changed && !c.Busy && AddonOrder.NeedsId(c.Info, changed.Info.Id)).ToList())
+                c.Update(c.Info, settings.WowRoot);
+        }
+
+        // what it needs first (when the Outpost has it and it isn't in), then the addon itself - each through Install, with its checks
+        async Task InstallWithNeeds(AddonCard card, int depth = 0)
+        {
+            if (card == null || card.Busy || depth > 8) return;
+            foreach (var id in card.MissingNeeds.ToList())
+            {
+                var dep = cards.FirstOrDefault(c => string.Equals(c.Info.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (dep != null && (dep.State == CardState.NotInstalled || dep.State == CardState.UpdateAvailable)) await InstallWithNeeds(dep, depth + 1);
+            }
+            if (!card.Busy) card.Update(card.Info, settings.WowRoot);
+            if (card.State == CardState.NotInstalled || card.State == CardState.UpdateAvailable) await Install(card);
+        }
+
+        // the card's "Install Elan's Toolkit": installs that need; the card's own pill then turns on by itself (RefreshDependents)
+        async void NeedsInstall_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is AddonCard card) || card.NeedsBusy) return;
+            var dep = cards.FirstOrDefault(c => string.Equals(c.Info.Id, card.NeedsInstallId, StringComparison.OrdinalIgnoreCase));
+            if (dep == null || dep.Busy) return;
+            card.SetNeedsBusy(true);
+            try { await InstallWithNeeds(dep); }
+            finally
+            {
+                if (card.NeedsBusy) { card.SetNeedsBusy(false); if (!card.Busy) card.Update(card.Info, settings.WowRoot); }
+                if (dep.Failed) card.Message = $"{dep.Name} couldn't be installed - see its card.";
+            }
+        }
+
+        // 3.8.2: "Remove from WoW..." - always asked first; with a clear warning when an installed addon needs it. The folders go into the
+        // backups (Roll back puts it back), the settings (WTF) stay.
+        async void OurRemove_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is AddonCard card) || card.Busy || card.RemoveVisibility != Visibility.Visible) return;
+            await RemoveOurAddon(card);
+        }
+
+        async Task<bool> RemoveOurAddon(AddonCard card)
+        {
+            var users = cards.Where(c => c != card && AddonOrder.NeedsId(c.Info, card.Info.Id)
+                && (c.State == CardState.UpToDate || c.State == CardState.UpdateAvailable || c.State == CardState.DevCopy)).Select(c => c.Name).ToList();
+            var kept = "A copy is kept: \"Roll back\" in its details puts it back. Your settings (WTF folder) are not touched.";
+            var ok = users.Count > 0
+                ? Dialog.Confirm(this, $"Remove {card.Name}?",
+                    $"{AddonOrder.Names(users)} {(users.Count == 1 ? "needs" : "need")} {card.Name}. Without it, {AddonOrder.Names(users)} won't load in game.\n\n" +
+                    $"Remove {card.Name} anyway? {kept}", "Remove anyway", danger: true, cancelText: "Keep it")
+                : Dialog.Confirm(this, $"Remove {card.Name}?", $"{card.Name} is taken out of your AddOns folder. {kept}", "Remove", danger: true);
+            if (!ok) return false;
+            card.Message = null;
+            try
+            {
+                using (Activity.Begin("Removing " + card.Name, Activity.Kind.Save)) await Task.Run(() => Installer.Remove(settings.WowRoot, card.Info));
+                // a required addon is installed by itself after each check (automatic updates): not this version again
+                settings.SkipVersions = settings.SkipVersions ?? new Dictionary<string, string>();
+                settings.SkipVersions[card.Info.Id] = card.Info.Version;
+                SettingsStore.Save(settings);
+                card.Update(card.Info, settings.WowRoot);
+                RefreshDependents(card);
+                RefreshRailBadges();
+                card.Message = "Removed. In game, type /reload.";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                card.Update(card.Info, settings.WowRoot);
+                card.Message = "Something went wrong: " + ex.Message;
+                return false;
             }
         }
 
@@ -1265,6 +1362,7 @@ namespace ElansAddonHub
                 settings.SkipVersions[card.Info.Id] = card.Info.Version;
                 SettingsStore.Save(settings);
                 card.Update(card.Info, settings.WowRoot);
+                RefreshDependents(card);
                 RefreshRailBadges();
                 card.Message = $"Rolled back to v{b.Version}. In game, type /reload.";
             }

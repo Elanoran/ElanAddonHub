@@ -43,7 +43,7 @@ namespace ElansAddonHub.Services
             ["thirdparty"] = "other addons: scan, suggest, CurseForge, zip install/rollback, real GitHub/WoWI lookups",
             ["startup"] = "Addons page start-up: placeholders match the cards, nothing above the bottom of a list moves while the check and the scan run (cold start, slow update server, counts equal / different / first run), counts remembered",
             ["menucolors"] = "section colours of the secondary menus (Outpost 2.71.1): the Brush.Section tokens (a hue + .Tint per section, every hue as readable as Text.Secondary on the menu fill), the Atlas side navigation (group labels and rows in their section hue, the selected row's tint and 4 px bar for Items / Zones / Factions / Finds / Data sources, no Search row), the Atlas Home without a search box of its own (spacing, Ctrl+K and the title bar box open the palette from Home), the Settings menu (one hue per category, the chosen one's tint and bar), the Characters list (the class colour as the selected row's tint and bar), the Lodge sidebar (Text channels, Voice rooms, people groups, Calendar / Files / Ladder icons, the selected channel and the Calendar row), the faint menu fill behind each menu, screenshots",
-            ["addonsgrid"] = "Addons page grid: columns at 760 / 1300 / 1700 (1 / 2 / 3), equal card heights, status / source / updated chips and the button on the face, a card opening in place without reshuffling, placeholders exactly where the real cards land, the Grid | List switch and its setting, the other addons in the same columns, every button reachable",
+            ["addonsgrid"] = "Addons page grid: columns at 760 / 1300 / 1700 (1 / 2 / 3), equal card heights, status / source / updated chips and the button on the face, a card opening in place without reshuffling, placeholders exactly where the real cards land, the Grid | List switch and its setting, the other addons in the same columns, every button reachable; 3.8.2: our addons in a fixed order (required, needed by another, class helpers, the rest), what an addon needs (manifest \"needs\" or the built-in map), the faded Install pill with \"Needs ...\" and its inline install, the warning before removing what another needs",
             ["selfupdated"] = "addons that update themselves: the Self source (CurseForge / Wago id but not managed by the CurseForge app), git-describe dev builds (label, comparisons), the addon's own logo as the row icon (IconTexture, heuristic, depth / size / path limits, decode cache, no network)",
             ["viewer"] = "in-app picture viewer",
             ["voice"] = "voice effects",
@@ -178,7 +178,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Assets/Art/", "art");
             R(@"^src/Assets/[\w.-]+\.(jpe?g|png)$", "art");
             R(@"^src/Assets/(hub\.(png|ico)|logo-[\w-]+\.png)$", "addons", "addonsgrid", "art");
-            R(@"^src/(Controls/CardGrid|MainWindow\.(AddonsGrid|AddonsGridTest)|AddonCard)\.cs$", "addonsgrid", "addons", "startup", "selfupdated", "thirdparty");
+            R(@"^src/(Controls/CardGrid|MainWindow\.(AddonsGrid|AddonsGridTest(\.Needs)?)|AddonCard)\.cs$", "addonsgrid", "addons", "startup", "selfupdated", "thirdparty");
             R(@"^src/MainWindow\.(InputsTest|DesignTest\.Inputs)\.cs$", "inputs");
             R(@"^src/Assets/Data/zonelore\.json$", "zonelore", "atlasclasses");
             R(@"^src/(Assets/Data/classlore\.json|Services/Atlas/ClassLore\.cs)$", "atlasclasses");     // the class and race notes (2.81)
@@ -329,6 +329,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
             R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|CurseForgeDirect|GitHubStats)\.cs$", "thirdparty", "addons", "selfupdated");
             R(@"^src/Services/(Installer|SelfUpdater|PathSafety|ReleaseSignature|Net)\.cs$", "update", "addons");
+            R(@"^src/Services/AddonOrder\.cs$", "addonsgrid", "addons", "round3", "about");   // 3.8.2: our addons' order and needs (the Addons page, the welcome guide, the news)
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");
             R(@"^src/Services/UpdateHomes\.cs$", "update", "addons");   // 3.8.1: the update homes (GitHub fallback), never older
             R(@"^addon/", "addons");

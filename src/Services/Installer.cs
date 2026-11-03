@@ -170,6 +170,37 @@ namespace ElansAddonHub.Services
             Util.Log($"rolled back {a.Id} to {b.Version}");
         }
 
+        // 3.8.2: take an addon out of AddOns. Nothing is deleted outright: its folders go into the backups first (so "Roll back to v..." puts
+        // it back), WTF is untouched, a git checkout is never touched. Returns the version that was removed.
+        public static string Remove(string root, AddonInfo a)
+        {
+            var unsafeName = PathSafety.AddonProblem(root, BackupDir, a);
+            if (unsafeName != null) throw new InvalidOperationException($"Remove refused: {unsafeName}. Nothing on this PC was changed.");
+            if (IsDevCopy(root, a)) throw new InvalidOperationException("This is a development copy (git) - not touching it.");
+            var installed = InstalledVersion(root, a) ?? throw new InvalidOperationException("It isn't installed.");
+            var addOns = WowLocator.AddOnsDir(root, a.Flavor);
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            try
+            {
+                foreach (var f in a.Folders)
+                {
+                    var dest = Path.Combine(addOns, f);
+                    if (!Directory.Exists(dest)) continue;
+                    var backup = Path.Combine(BackupDir, a.Id, $"{installed}-{stamp}", f);
+                    if (!PathSafety.IsInside(addOns, dest) || !PathSafety.IsInside(BackupDir, backup)) throw new InvalidOperationException("Remove refused: a folder would end up outside the AddOns or backup folder.");
+                    Util.CopyDir(dest, backup);
+                    Util.DeleteDir(dest);
+                }
+            }
+            catch (Exception ex) when (!(ex is InvalidOperationException))
+            {
+                throw new IOException("Couldn't remove it (is WoW running? close it and try again). " + ex.Message);
+            }
+            PruneBackups(a.Id, 2);
+            Util.Log($"removed {a.Id} {installed} (kept in the backups)");
+            return installed;
+        }
+
         // a hostile or broken manifest cannot make the installer touch anything outside AddOns; downloads must be https from GitHub; the self-update needs a hash
         public static async Task<string> SafetySelfTest(string dir)
         {
@@ -297,7 +328,15 @@ namespace ElansAddonHub.Services
                 Rollback(root, a3, Backups(id)[0]);
                 Ck("second roll back goes further", InstalledVersion(root, a3) == "1.0.0" && Backups(id).Count == 0);
                 Ck("WTF untouched, no leftovers", File.ReadAllText(wtf) == "keep" && Directory.GetDirectories(addOns, ".elanshub-*").Length == 0);
+                // 3.8.2: remove = the folder goes into the backups, roll back puts it back
+                var removed = Remove(root, a3);
+                Ck("remove: the folder leaves AddOns and is kept as a backup", removed == "1.0.0" && InstalledVersion(root, a3) == null && !Directory.Exists(Path.Combine(addOns, id))
+                    && Backups(id).Count == 1 && Backups(id)[0].Version == "1.0.0" && File.ReadAllText(wtf) == "keep", string.Join(",", Backups(id).Select(b => b.Version)));
+                Ck("remove: removing what isn't installed is refused", ThrowsMsg(() => Remove(root, a3)).Contains("isn't installed"));
+                Rollback(root, a3, Backups(id)[0]);
+                Ck("remove: roll back puts it back", InstalledVersion(root, a3) == "1.0.0" && Backups(id).Count == 0);
                 Directory.CreateDirectory(Path.Combine(addOns, id, ".git"));
+                Ck("remove: a dev copy is refused", ThrowsMsg(() => Remove(root, a3)).Contains("development copy") && Directory.Exists(Path.Combine(addOns, id)));
                 string err = null; try { Rollback(root, a3, new BackupInfo { Path = dir }); } catch (Exception ex) { err = ex.Message; }
                 Ck("dev copy refused", err != null && err.Contains("development copy"));
                 try { Util.DeleteDir(Path.Combine(BackupDir, id)); } catch { }

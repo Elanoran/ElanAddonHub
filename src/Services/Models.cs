@@ -41,6 +41,9 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "required")] public bool Required { get; set; }
         // optional: classes (WoW class files, e.g. "PALADIN") this addon is meant for. Only a hint - never installed automatically.
         [DataMember(Name = "classes")] public List<string> Classes { get; set; }
+        // 3.8.2: optional - ids of our addons this one needs to load (its TOC's "## Dependencies"). Absent (null) = the built-in map in
+        // AddonOrder.FallbackNeeds; an empty list = needs nothing.
+        [DataMember(Name = "needs")] public List<string> Needs { get; set; }
     }
 
     [DataContract]
