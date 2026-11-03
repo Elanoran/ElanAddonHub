@@ -44,7 +44,8 @@ namespace ElansAddonHub
 
         WebView2 web;
         Task<bool> webTask;
-        string modelRel;                 // "<key>/m/<display>.m2b2" under the host
+        string modelUp;                  // 3.7: "head" or null, sent with "show"
+        string modelRel;                 // "<key>/m/<display>.m2b2" (3.7: or "<key>/m/item-<display>.m2b2") under the host
         bool pageHello, paused, disposed, frozen;
         Image freezeImg;
         ScrollViewer scroller;
@@ -79,12 +80,13 @@ namespace ElansAddonHub
 
         // ---------------------------------------------------------------- the model
         // a model file CreatureModels made (under CreatureModels.Root); the view starts when it is visible
-        public void Show(string modelPath)
+        // 3.7: up = "head" for a staff or polearm (its heavier end goes on top; otherwise the far end from the grip)
+        public void Show(string modelPath, string up = null)
         {
             if (disposed) return;
             var rel = RelOf(modelPath);
             if (rel == null) { SetState(ViewState.Failed, "the model file is not in the models folder"); return; }
-            modelRel = rel;
+            modelRel = rel; modelUp = up == "head" ? "head" : null;
             SetState(ViewState.Loading, null);
             if (pageHello) PostShow(); else MaybeStart();
         }
@@ -105,7 +107,7 @@ namespace ElansAddonHub
             UpdatePause(true);
         }
 
-        static readonly Regex RelRx = new Regex(@"^[A-Za-z0-9._-]{1,80}/m/\d{1,9}\.m2b2$", RegexOptions.CultureInvariant);
+        static readonly Regex RelRx = new Regex(@"^[A-Za-z0-9._-]{1,80}/m/(item-)?\d{1,9}\.m2b2$", RegexOptions.CultureInvariant);     // 3.7: item-<display> for an item model
         public static string RelOf(string modelPath)
         {
             try
@@ -231,7 +233,7 @@ namespace ElansAddonHub
 
         // ---------------------------------------------------------------- messages
         void Post(string json) { try { web?.CoreWebView2?.PostWebMessageAsJson(json); } catch (Exception e) { Util.Log("model view post: " + e.Message); } }
-        void PostShow() { if (modelRel != null) Post("{\"t\":\"show\",\"model\":" + Json.Write(modelRel) + "}"); UpdatePause(true); }
+        void PostShow() { if (modelRel != null) Post("{\"t\":\"show\",\"model\":" + Json.Write(modelRel) + (modelUp != null ? ",\"up\":\"" + modelUp + "\"" : "") + "}"); UpdatePause(true); }
 
         void OnMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {

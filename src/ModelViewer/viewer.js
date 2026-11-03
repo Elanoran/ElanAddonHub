@@ -6,7 +6,17 @@
    page works out each bone's matrix in model space itself, the WoW M2 way - translate(pivot) * T * R * S * translate(-pivot), times the parent's - from the
    Stand sequence's tracks (linear / slerp; hermite and bezier keys are read as linear, noted) and writes it to the bone's matrixWorld. The bind pose is the
    identity (bone inverses identity, bindMode "detached" with an identity bind matrix), so the shader's bone matrix is exactly that matrix.
-   Not done yet (noted): billboard bones (bill != 0) turn like the rest, texture animations, colour / transparency tracks after the first key, particles. */
+   Not done yet (noted): billboard bones (bill != 0) turn like the rest, texture animations, colour / transparency tracks after the first key, particles.
+   3.7: item models (a weapon, a shield: <key>/m/item-<display>.m2b2, json kind "item"). A model without bones ("static") is a plain mesh, no skeleton. A long
+   thin item (a sword, a staff, a bow, a gun: its longest side over twice the next) is framed by that side: turned so it runs up the card (the far end from
+   the grip, the model's origin, at the top), leaned towards the card's long side, seen nearly straight on, and it spins about its own length so the whole
+   of it stays in view at every turn. Anything else (a shield, an orb) is framed by its bounding sphere like a creature, seen a little from above.
+   3.7 framing: which end of a thin item is up - the far end from the grip (the model's origin) for a sword, axe, mace, dagger, gun, bow, wand; for a staff
+   or polearm (the app says so: "up":"head" with the show message, from the item's subclass) the heavier end - the one whose outer quarter along the
+   long side has the larger cross-section (more vertices when the two are within 10 %). A flat item (a shield, a flat off-hand: its thinnest side under
+   half the next) opens with its front - the side of its thin axis away from the arm, i.e. the origin - facing the camera and sways +-35 degrees instead
+   of turning all the way round; a drag still turns it freely (it then sways about where it was left). Any other item that is not long and thin (an orb,
+   a totem) has no front that can be told reliably: it opens at the usual 3/4 view and turns slowly like a creature. */
 (function () {
   'use strict';
   var wv = window.chrome && window.chrome.webview;
@@ -19,7 +29,8 @@
 
   // the state, read by the app's self-test through window.mv (EvalForTest)
   var ST = { state: 'idle', why: '', gl: false, s3tc: false, model: '', nv: 0, ni: 0, bones: 0, animated: 0, billboards: 0, batches: 0, texWanted: 0, texLoaded: 0,
-    texFailed: 0, texDecoded: 0, animMs: 0, duration: 0, frames: 0, paused: false, hidden: false, notes: [], loads: 0 };
+    texFailed: 0, texDecoded: 0, animMs: 0, duration: 0, frames: 0, paused: false, hidden: false, notes: [], loads: 0, kind: '', still: false, thin: false, tilt: 0,
+    up: '', head: null, sway: false, front: null };
   var BG = 0x16191C;            // Brush.Surface1 (DESIGN.md): the card the viewer sits in
 
   var canvas = document.getElementById('gl');
@@ -40,13 +51,24 @@
   var key = new THREE.DirectionalLight(0xfff0dc, 0.85); key.position.set(-1.2, 1.6, 1.4); camera.add(key);
   var fill = new THREE.DirectionalLight(0x9fb4d0, 0.3); fill.position.set(1.5, 0.3, 0.6); camera.add(fill);
   var rim = new THREE.DirectionalLight(0xc8d6e8, 0.25); rim.position.set(0.4, 1.0, -1.6); camera.add(rim);
-  pivot = new THREE.Group(); scene.add(pivot);
+  // 3.7: roll (an item's lean in the card's plane) > pivot (the turn) > orient (an item's longest side up) > the mesh; a creature leaves roll and orient alone
+  var roll = new THREE.Group(), orient = new THREE.Group();
+  pivot = new THREE.Group(); roll.add(pivot); pivot.add(orient); scene.add(roll);
 
   // ---------------------------------------------------------------------------------------------------------------- the view: framed, turned, zoomed
   var view = { yaw: 0, pitch: 0.26, zoom: 1, dist: 5, target: new THREE.Vector3(), spin: 0.32, dragging: false, lastX: 0, lastY: 0, idleAt: 0 };
   var YAW0 = 0.61;             // 35 degrees: a 3/4 view from the front (the creature faces +z)
+  // 3.7: where a view starts: a creature 3/4 from the front, a little from above; an item nearly straight on (a thin one leans in the card's plane, so the
+  // camera looks along -z), its turn starting at 3/4 so a blade's flat is not edge-on
+  var start = { yaw0: YAW0, yaw: 0, pitch: 0.26 };
+  // a flat item faces the camera straight on (its front is turned to +z) and sways about that; any other item that is not thin starts at 3/4 like a creature
+  function startFor(m) { return m && m.item ? { yaw0: m.thin || m.sway ? 0 : YAW0, yaw: m.thin ? 0.7 : 0, pitch: m.thin ? 0.1 : 0.18 } : { yaw0: YAW0, yaw: 0, pitch: 0.26 }; }
+  var SWAY = 0.61, SWAY_MS = 7000, sway = { center: 0, phase: 0 };          // +-35 degrees, one sway in 7 s
+  function resetView() { view.yaw = start.yaw; view.pitch = start.pitch; view.zoom = 1; sway.center = start.yaw; sway.phase = 0; }
+  function idleTurn(dt) { if (M && M.sway) swayBy(dt); else view.yaw += view.spin * dt / 1000; }
+  function swayBy(dt) { sway.phase += dt * 2 * Math.PI / SWAY_MS; view.yaw = sway.center + SWAY * Math.sin(sway.phase); }
   function placeCamera() {
-    var d = view.dist * view.zoom, p = view.pitch, y = YAW0;
+    var d = view.dist * view.zoom, p = view.pitch, y = start.yaw0;
     camera.position.set(Math.sin(y) * Math.cos(p) * d, Math.sin(p) * d, Math.cos(y) * Math.cos(p) * d).add(view.target);
     camera.lookAt(view.target);
     camera.near = Math.max(0.01, d / 200); camera.far = d * 20 + 50; camera.updateProjectionMatrix();
@@ -63,10 +85,80 @@
   function frame() {
     var mn = M.meta.min, mx = M.meta.max;
     var c = new THREE.Vector3((mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2);
+    if (M.thin) { frameThin(c); return; }
+    roll.rotation.z = 0; ST.tilt = 0;
+    if (M.front) orient.quaternion.setFromUnitVectors(new THREE.Vector3(M.front[0], M.front[1], M.front[2]), new THREE.Vector3(0, 0, 1)); else orient.quaternion.identity();
     var r = 0.5 * Math.sqrt(Math.pow(mx[0] - mn[0], 2) + Math.pow(mx[1] - mn[1], 2) + Math.pow(mx[2] - mn[2], 2));
     r = Math.max(r, 0.05);
     var vf = camera.fov * Math.PI / 360, hf = Math.atan(Math.tan(vf) * camera.aspect);
-    view.dist = r / Math.sin(Math.min(vf, hf)) * 0.86;      // the bounding sphere is generous: a little closer still leaves room to turn
+    // the bounding sphere is generous: a little closer still leaves room to turn (3.7: not for an item - a shield's rim reaches the sphere when it turns)
+    view.dist = r / Math.sin(Math.min(vf, hf)) * (M.item ? 1 : 0.86);
+    if (mesh) mesh.position.set(-c.x, -c.y, -c.z);
+    view.target.set(0, 0, 0);
+    if (!M.item && mesh) fitBox();
+    placeCamera();
+  }
+  // 3.7: a creature's bounding sphere at 0.86 cut the top and the feet off a tall, thin one (a human: the sphere is about its half height) - the card's
+  // 200 px showed it from about the shins (the self-test's screenMesh: down to -1.2 of the view). So the camera backs off until the bind pose's box,
+  // turned through the whole spin, stays within FIT of the view (room for the Stand pose); one that already fits keeps the old distance
+  var FIT = 0.9;
+  function fitBox() {
+    var mn = M.meta.min, mx = M.meta.max, v = new THREE.Vector3(), yaw = view.yaw, zoom = view.zoom;
+    view.zoom = 1;
+    for (var it = 0; it < 12; it++) {
+      var m = 0;
+      for (var s = 0; s < 12; s++) {
+        view.yaw = s * Math.PI / 6; placeCamera(); scene.updateMatrixWorld(true);
+        for (var k = 0; k < 8; k++) {
+          v.set(k & 1 ? mx[0] : mn[0], k & 2 ? mx[1] : mn[1], k & 4 ? mx[2] : mn[2]).applyMatrix4(mesh.matrixWorld).project(camera);
+          m = Math.max(m, Math.abs(v.x), Math.abs(v.y));
+        }
+      }
+      if (m <= FIT) break;
+      view.dist *= Math.min(1.5, m / FIT) * 1.01;
+    }
+    view.yaw = yaw; view.zoom = zoom;
+  }
+  // 3.7: a long thin item - its longest side turned up the card, leaned towards the card's long side (at most ~43 degrees), the camera far enough off that
+  // the side, leaned, and its thickness around it fit both ways
+  function thinAxis(meta) {
+    var mn = meta.min, mx = meta.max, e = [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]], a = 0;
+    for (var k = 1; k < 3; k++) if (e[k] > e[a]) a = k;
+    var rest = e.filter(function (v, k) { return k !== a; }), second = Math.max(rest[0], rest[1]);
+    return { axis: a, len: e[a], thick: 0.5 * Math.sqrt(rest[0] * rest[0] + rest[1] * rest[1]), thin: e[a] > 0.05 && e[a] > 2 * second,
+      tip: Math.abs(mx[a]) >= Math.abs(mn[a]) ? 1 : -1 };
+  }
+  // the heavier end of a thin item along axis a: +1 (the max end) or -1, and what decided it
+  function headOf(m, a) {
+    var mn = m.meta.min, mx = m.meta.max, L = mx[a] - mn[a], cut = 0.25 * L, b = (a + 1) % 3, c = (a + 2) % 3;
+    var E = [{ n: 0, b0: 1e9, b1: -1e9, c0: 1e9, c1: -1e9 }, { n: 0, b0: 1e9, b1: -1e9, c0: 1e9, c1: -1e9 }];
+    for (var i = 0; i < m.nv; i++) {
+      var v = m.pos[i * 3 + a], e = v >= mx[a] - cut ? E[0] : v <= mn[a] + cut ? E[1] : null;
+      if (!e) continue;
+      var pb = m.pos[i * 3 + b], pc = m.pos[i * 3 + c];
+      e.n++; e.b0 = Math.min(e.b0, pb); e.b1 = Math.max(e.b1, pb); e.c0 = Math.min(e.c0, pc); e.c1 = Math.max(e.c1, pc);
+    }
+    var x = E.map(function (e) { return e.n ? (e.b1 - e.b0) + (e.c1 - e.c0) : 0; });
+    var sign = x[0] > x[1] * 1.1 ? 1 : x[1] > x[0] * 1.1 ? -1 : E[0].n >= E[1].n ? 1 : -1;
+    return { sign: sign, hiCross: x[0], loCross: x[1], hiN: E[0].n, loN: E[1].n, by: Math.abs(x[0] - x[1]) > 0.1 * Math.max(x[0], x[1]) ? 'cross-section' : 'vertices' };
+  }
+  // the front of a flat item (a shield, a flat off-hand; mesh axes, a unit vector): its thin axis, on the side away from the origin (the arm);
+  // null = not flat (or the origin sits inside its thickness): no front is guessed
+  function frontOf(meta) {
+    var mn = meta.min, mx = meta.max, e = [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]], c = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+    var order = [0, 1, 2].sort(function (p, q) { return e[p] - e[q]; }), t = order[0];
+    if (e[t] < 0.5 * e[order[1]] && Math.abs(c[t]) > 1e-4) { var f = [0, 0, 0]; f[t] = c[t] > 0 ? 1 : -1; return f; }
+    return null;
+  }
+  function frameThin(c) {
+    var t = M.axis, dir = new THREE.Vector3(t.axis === 0 ? t.tip : 0, t.axis === 1 ? t.tip : 0, t.axis === 2 ? t.tip : 0);
+    orient.quaternion.setFromUnitVectors(dir, new THREE.Vector3(0, 1, 0));
+    var tilt = clamp(Math.atan(camera.aspect) * 0.75, 0.2, 0.75);
+    roll.rotation.z = -tilt; ST.tilt = tilt;
+    var vf = camera.fov * Math.PI / 360, hf = Math.atan(Math.tan(vf) * camera.aspect);
+    var half = t.len / 2, r = Math.max(t.thick, 0.02);
+    var hh = half * Math.cos(tilt) + r, hw = half * Math.sin(tilt) + r;
+    view.dist = Math.max(hh / Math.tan(vf), hw / Math.tan(hf)) / 0.92 + r * 0.5;
     if (mesh) mesh.position.set(-c.x, -c.y, -c.z);
     view.target.set(0, 0, 0);
     placeCamera();
@@ -85,7 +177,7 @@
     view.pitch = clamp(view.pitch + (e.clientY - view.lastY) * 0.006, -0.35, 1.2);
     view.lastX = e.clientX; view.lastY = e.clientY; placeCamera();
   });
-  function endDrag(e) { if (!view.dragging) return; view.dragging = false; view.idleAt = performance.now(); canvas.classList.remove('drag'); try { canvas.releasePointerCapture(e.pointerId); } catch (x) { } }
+  function endDrag(e) { if (!view.dragging) return; view.dragging = false; view.idleAt = performance.now(); sway.center = view.yaw; sway.phase = 0; canvas.classList.remove('drag'); try { canvas.releasePointerCapture(e.pointerId); } catch (x) { } }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('wheel', function (e) {
@@ -93,7 +185,7 @@
     view.zoom = clamp(view.zoom * Math.exp(clamp(e.deltaY, -300, 300) * 0.0012), 0.45, 2.2);
     placeCamera();
   }, { passive: false });
-  canvas.addEventListener('dblclick', function () { view.yaw = 0; view.pitch = 0.26; view.zoom = 1; placeCamera(); });
+  canvas.addEventListener('dblclick', function () { resetView(); placeCamera(); });
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   // ---------------------------------------------------------------------------------------------------------------- textures (MTX1), lifted from view3d.js oTexParse
@@ -166,9 +258,11 @@
     if (jl <= 0 || 8 + jl > buf.byteLength) return null;
     var meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jl)));
     var ds = 8 + ((jl + 3) & ~3), at = meta.at, nv = meta.nv | 0, ni = meta.ni | 0;
-    if (meta.v !== 1 || !at || ds + (at.end | 0) > buf.byteLength) return null;
+    if (meta.v !== 2 || !at || ds + (at.end | 0) > buf.byteLength) return null;
     if (nv <= 0 || nv > 2000000 || ni < 3 || ni % 3 !== 0 || !Array.isArray(meta.batches) || !Array.isArray(meta.subs) || !Array.isArray(meta.bones)) return null;
-    var m = { meta: meta, buf: buf, ds: ds, nv: nv, ni: ni };
+    if (!Array.isArray(meta.min) || !Array.isArray(meta.max) || meta.min.length !== 3 || meta.max.length !== 3) return null;
+    var m = { meta: meta, buf: buf, ds: ds, nv: nv, ni: ni, item: meta.kind === 'item', still: meta.bones.length === 0 };
+    m.axis = thinAxis(meta); m.thin = m.item && m.axis.thin;
     m.pos = new Float32Array(buf, ds + at.pos, nv * 3);
     m.nor = new Int8Array(buf, ds + at.nor, nv * 4);
     m.uv = new Float32Array(buf, ds + at.uv, nv * 2);
@@ -290,8 +384,10 @@
     g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(m.nor, 4, true));
     g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2));
-    g.setAttribute('skinIndex', new THREE.BufferAttribute(m.bi, 4));
-    g.setAttribute('skinWeight', new THREE.BufferAttribute(m.bw, 4, true));
+    if (!m.still) {
+      g.setAttribute('skinIndex', new THREE.BufferAttribute(m.bi, 4));
+      g.setAttribute('skinWeight', new THREE.BufferAttribute(m.bw, 4, true));
+    }
     g.setIndex(new THREE.BufferAttribute(m.idx, 1));
     // one group per batch, in the game's order (priority plane, then as listed): three draws the opaque ones first, the blended ones after
     var order = m.meta.batches.map(function (b, i) { return { b: b, i: i }; }).sort(function (x, y) { return ((x.b.prio | 0) - (y.b.prio | 0)) || (x.i - y.i); });
@@ -304,8 +400,10 @@
       if (o.b.tex > 0) texture(o.b.tex, o.b.wrap | 0, function (t) { if (t) { mat.map = t; mat.color.setHex(0xffffff); } else mat.color.setHex(STAND_IN); mat.needsUpdate = true; });
     });
     ST.batches = mats.length;
+    ST.kind = m.item ? 'item' : 'creature'; ST.still = m.still; ST.thin = !!m.thin; ST.sway = !!m.sway; ST.front = m.front; ST.up = m.thin ? m.upRule : ''; ST.head = m.head || null;
+    // 3.7: no bones = a still model, a plain mesh (nothing to pose)
+    if (m.still) { skel = null; boneOrder = []; world = []; ST.bones = 0; ST.animated = 0; ST.billboards = 0; var pm = new THREE.Mesh(g, mats); pm.frustumCulled = false; return pm; }
     var bones = m.bones.map(function () { var b = new THREE.Bone(); b.matrixAutoUpdate = false; b.matrixWorldNeedsUpdate = false; return b; });
-    if (bones.length === 0) { bones.push(new THREE.Bone()); m.bones.push({ p: -1, pivot: [0, 0, 0], bill: 0, t: null, r: null, s: null }); }
     skel = new THREE.Skeleton(bones, bones.map(function () { return new THREE.Matrix4(); }));
     var sm = new THREE.SkinnedMesh(g, mats);
     sm.bindMode = 'detached';
@@ -322,28 +420,29 @@
   function clear() {
     gen++;
     if (mesh) {
-      pivot.remove(mesh);
+      if (mesh.parent) mesh.parent.remove(mesh);
       try { mesh.geometry.dispose(); [].concat(mesh.material).forEach(function (x) { x.dispose(); }); } catch (e) { }
       try { if (skel) skel.dispose(); } catch (e) { }
     }
     Object.keys(texCache).forEach(function (k) { var t = texCache[k].tex; if (t) try { t.dispose(); } catch (e) { } });
     texCache = {}; mesh = null; skel = null; M = null;
     ST.nv = ST.ni = ST.bones = ST.animated = ST.billboards = ST.batches = ST.texWanted = ST.texLoaded = ST.texFailed = ST.texDecoded = 0; ST.animMs = 0; ST.duration = 0; ST.notes = [];
+    ST.kind = ''; ST.still = false; ST.thin = false; ST.tilt = 0; ST.up = ''; ST.head = null; ST.sway = false; ST.front = null;
   }
 
   // every state message names its model, so the app can tell a late answer about the look before from one about this look
   function fail(why) { ST.state = 'error'; ST.why = why; send({ t: 'state', state: 'error', why: why, model: ST.model }); }
 
-  var MODEL_RX = /^([A-Za-z0-9._-]{1,80})\/m\/(\d{1,9})\.m2b2$/;
+  var MODEL_RX = /^([A-Za-z0-9._-]{1,80})\/m\/((?:item-)?\d{1,9})\.m2b2$/;      // 3.7: item-<display> for an item
   var seq = 0;                 // the model asked for last: an older fetch that comes back later is dropped
   // show: a first model, the view set to its start (3/4 from the front, no zoom). keep (3.6 step 5, the "load" message: another look of the same
   // creature): the view stays as it is (turned, tilted, zoomed, spinning on) and the look before stays drawn until the new file is in
-  function show(path, keep) {
+  function show(path, keep, up) {
     var mm = MODEL_RX.exec(path || '');
     if (!mm) return;
     var mine = ++seq;
     if (!keep || !M) clear();
-    if (!keep) { view.yaw = 0; view.pitch = 0.26; view.zoom = 1; }
+    if (!keep) { start = { yaw0: YAW0, yaw: 0, pitch: 0.26 }; resetView(); }
     ST.model = path;
     if (!renderer) { clear(); fail('no 3D graphics here (WebGL could not start)'); return; }
     ST.state = 'loading'; ST.why = '';
@@ -354,10 +453,17 @@
       var m = parseModel(buf);
       if (!m) { clear(); fail('the model file could not be read'); return; }
       if (M) clear();
-      m.key = mm[1]; M = m;
+      m.key = mm[1];
+      // 3.7: which end of a thin item is up; a shield / off-hand item's front and its sway
+      m.upRule = 'grip';
+      if (m.thin && up === 'head') { m.head = headOf(m, m.axis.axis); m.axis.tip = m.head.sign; m.upRule = 'head'; }
+      if (m.item && !m.thin) { m.front = frontOf(m.meta); m.sway = !!m.front; }
+      M = m;
       ST.nv = m.nv; ST.ni = m.ni; ST.duration = m.duration;
+      // 3.7: an item starts where items start (a "load" keeps the view as it is: another look of the same creature)
+      if (!keep) { start = startFor(m); resetView(); }
       mesh = build(m);
-      pivot.add(mesh);
+      orient.add(mesh);
       poseBones(0);
       resize();
       ST.state = 'shown';
@@ -373,7 +479,7 @@
     if (ST.paused || ST.hidden || !M) return;
     var dt = last ? clamp(now - last, 0, 100) : 16; last = now;
     advance(dt);
-    if (!view.dragging && now - view.idleAt > 1200) { view.yaw += view.spin * dt / 1000; placeCamera(); }
+    if (!view.dragging && now - view.idleAt > 1200) { idleTurn(dt); placeCamera(); }
     render();
     raf = requestAnimationFrame(tick);
   }
@@ -387,7 +493,7 @@
   if (wv) wv.addEventListener('message', function (e) {
     var d = e.data;
     if (!d || typeof d !== 'object' || typeof d.t !== 'string') return;
-    if (d.t === 'show' && typeof d.model === 'string') show(d.model, false);
+    if (d.t === 'show' && typeof d.model === 'string') show(d.model, false, d.up === 'head' ? 'head' : null);
     else if (d.t === 'load' && typeof d.model === 'string') show(d.model, true);
     else if (d.t === 'pause') { ST.paused = d.on === true; if (ST.paused) stop(); else kick(); }
     else if (d.t === 'clear') { seq++; stop(); clear(); ST.state = 'idle'; render(); }
@@ -422,7 +528,62 @@
     },
     hermite: function () { return hermiteSeen; },
     // 3.6 step 5: the view (kept by a "load"), and a zoom set as the wheel would
-    viewOf: function () { return { yaw: view.yaw, pitch: view.pitch, zoom: view.zoom }; },
+    viewOf: function () { return { yaw: view.yaw, pitch: view.pitch, zoom: view.zoom, dist: view.dist, tilt: ST.tilt, yaw0: start.yaw0 }; },
+    // 3.7: the opening pose (where the view starts; the sway at its middle), drawn
+    // hold: no idle turn or sway until a drag or opening(false) (the self-test's pictures are taken at the opening pose)
+    opening: function (hold) { if (!M) return false; resetView(); view.idleAt = hold ? performance.now() + 1e9 : 0; placeCamera(); render(); return true; },
+    // 3.7: the sway moved on by ms as idle frames would; the turn's offset from its middle (radians)
+    sway: function (ms) { if (!M) return null; swayBy(+ms); placeCamera(); return view.yaw - sway.center; },
+    // 3.7: the idle motion moved on by ms as frames would (a sway for a flat item, else the slow turn); how far the turn moved (radians)
+    idle: function (ms) { if (!M) return null; var a = view.yaw; idleTurn(+ms); placeCamera(); return view.yaw - a; },
+    // 3.7: how squarely the model's front faces the camera (1 = straight on); null without a front
+    facing: function () {
+      if (!M || !M.front || !mesh) return null;
+      scene.updateMatrixWorld(true);
+      var q = new THREE.Quaternion(); mesh.getWorldQuaternion(q);
+      var f = new THREE.Vector3(M.front[0], M.front[1], M.front[2]).applyQuaternion(q).normalize();
+      return f.dot(camera.position.clone().sub(view.target).normalize());
+    },
+    // 3.7: the two ends of a thin item's long side on the screen (-1 .. 1): the max end and the min end along that axis of the file, through the cross-section's middle
+    ends: function () {
+      if (!M || !mesh) return null;
+      scene.updateMatrixWorld(true);
+      var a = M.axis.axis, mn = M.meta.min, mx = M.meta.max, c = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+      function P(v) { var p = c.slice(); p[a] = v; var w = new THREE.Vector3(p[0], p[1], p[2]).applyMatrix4(mesh.matrixWorld).project(camera); return { x: w.x, y: w.y }; }
+      return { axis: a, rule: M.upRule || '', tip: M.axis.tip, hi: P(mx[a]), lo: P(mn[a]) };
+    },
+    // 3.7: the model's bounds on the screen at a turn (radians; the spin's own): the 8 corners of its box through the whole scene, in -1 .. 1 of the view
+    screenBox: function (yaw) {
+      if (!M || !mesh) return null;
+      if (typeof yaw === 'number') { view.yaw = yaw; placeCamera(); }
+      scene.updateMatrixWorld(true);
+      var mn = M.meta.min, mx = M.meta.max, v = new THREE.Vector3(), b = { x0: 9, x1: -9, y0: 9, y1: -9 };
+      for (var k = 0; k < 8; k++) {
+        v.set(k & 1 ? mx[0] : mn[0], k & 2 ? mx[1] : mn[1], k & 4 ? mx[2] : mn[2]).applyMatrix4(mesh.matrixWorld).project(camera);
+        b.x0 = Math.min(b.x0, v.x); b.x1 = Math.max(b.x1, v.x); b.y0 = Math.min(b.y0, v.y); b.y1 = Math.max(b.y1, v.y);
+      }
+      return b;
+    },
+    // 3.7: the drawn mesh's bounds on the screen at a turn - every vertex in the current pose (skinned here as the shader does: the bone matrices are
+    // model space, identity bind), in -1 .. 1 of the view; tighter than screenBox (the bind pose's box)
+    screenMesh: function (yaw) {
+      if (!M || !mesh) return null;
+      if (typeof yaw === 'number') { view.yaw = yaw; placeCamera(); }
+      scene.updateMatrixWorld(true);
+      var p = M.pos, v = new THREE.Vector3(), t = new THREE.Vector3(), a = new THREE.Vector3(), mw = mesh.matrixWorld, b = { x0: 9, x1: -9, y0: 9, y1: -9 };
+      var skin = !M.still && world.length > 0;
+      for (var i = 0; i < M.nv; i++) {
+        v.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        if (skin) {
+          a.set(0, 0, 0);
+          for (var k = 0; k < 4; k++) { var w = M.bw[i * 4 + k]; if (!w) continue; var bm = world[M.bi[i * 4 + k]]; if (!bm) continue; a.addScaledVector(t.copy(v).applyMatrix4(bm), w / 255); }
+          v.copy(a);
+        }
+        v.applyMatrix4(mw).project(camera);
+        if (v.x < b.x0) b.x0 = v.x; if (v.x > b.x1) b.x1 = v.x; if (v.y < b.y0) b.y0 = v.y; if (v.y > b.y1) b.y1 = v.y;
+      }
+      return b;
+    },
     zoom: function (z) { view.zoom = clamp(+z, 0.45, 2.2); placeCamera(); return view.zoom; }
   };
 

@@ -27,9 +27,19 @@ namespace ElansAddonHub.Services.Models3d
     // Bone indices: a vertex's four bone indices are the model's own bone numbers (checked on the five sample models: every index < the bone count, and the
     // skin's per-section bone lists through the bone lookup table give the same bones), so they are written as they are.
     // Geosets: the default look, after wow.export: skinSectionId 0, any id ending in "01" (the first variant of a group) and the 32xx group; never 17xx
-    // (eye glow) or 35xx. Nothing left = every sub-mesh (noted). The game's own CreatureGeosetData is not read yet.
+    // (eye glow) or 35xx. Nothing left = every sub-mesh (noted). The game's own CreatureGeosetData is not read: in 1.60.1.70707 only 5 CreatureModelData rows
+    // name one and CreatureDisplayInfoGeosetData has 3 rows. Format 2 (3.7): the old character-like creature models (HUMSCitizenMid, DeathGuard,
+    // ScarletCrusaderHeavy, HighElfFemale_Mage, TwinEmperor ...) have groups with no x01 variant at all - boots only as 502 / 504, a robe only as 1302 - so
+    // the rule above dropped their feet or legs (up to 40 % of the height); the children (HumanMaleKid / HumanFemaleKid: Aiden, display 262) have their
+    // shins in 501 and their feet in 503. FeetGeosets: while the shown mesh stops more than 5 % of the model's height above the lowest sub-mesh, the lowest
+    // hidden sub-mesh (not 0xx / 17xx / 35xx) is shown when its group has nothing shown (then that group's lowest variant) or when it lies below what is
+    // shown of its group (its top within 5 % of the shown variant's bottom: the rest of the leg, not a second version of a part such as a tail). Noted.
     // Textures: type 0 -> the TXID FileDataID; 11 / 12 / 13 (monster skins 1 - 3) -> the display's TextureVariationFileDataID[0 / 1 / 2]; any other type
     // (character skin, hair, cape ...) -> none, a stand-in, noted.
+    // 3.7: items (a weapon, a shield) are built here too (Kind "item"): texture type 2 ("object skin") -> the item display's skin (ModelData.ForItem: its
+    // ModelMaterialResourcesID -> TextureFileData), type 0 -> TXID, any other -> a stand-in, noted. A model without bones is a still mesh ("static": true;
+    // the viewer draws a plain mesh); one with bones and a Stand (a glowing or turning part) plays it like a creature. Geosets: the same default rule
+    // (wow.export's M2 renderer uses it for every model; a weapon's sub-meshes are id 0). File m\item-{displayInfoId}.m2b2.
     // Axes: like M2Mesh, WoW (x, y, z) -> (y, z, x) (a rotation, so the winding stays): positions, normals, pivots, translations, scales and the quaternions'
     // (x, y, z) all get it (w stays). Up is +y, the creature faces +z.
     //
@@ -43,7 +53,8 @@ namespace ElansAddonHub.Services.Models3d
     //     cylindrical about WoW's x / y / z), t, r, s: [offset into data, keys, interpolation, global sequence] or null }],
     //     anim: { index, id, sub, duration, flags, loop, speed, external (the .anim fdid, 0 = in the .m2), keys, problem }, globalLoops: [ms],
     //     (loop is always true: the client repeats Stand; the M2 has no plain loop flag, the sequence's own flags are in flags)
-    //     geosets: { raw, shown, ids, hidden }, notes: [text] }
+    //     geosets: { raw, shown, ids, hidden }, notes: [text], kind ("creature" / "item", 3.7), static (3.7: no bones), second (3.7: an item display's
+    //     second model, not shown; 0 = none) }
     // ============================================================================================================================
     public sealed class CmSub { public int Id, I0, N; }
     public sealed class CmBatch
@@ -62,12 +73,14 @@ namespace ElansAddonHub.Services.Models3d
 
     public sealed class CreatureModel
     {
-        public const int FormatVersion = 1;            // the json's "v"; a new value is a new cache folder (CreatureModels.KeyFor)
+        public const int FormatVersion = 2;            // the json's "v"; a new value is a new cache folder (CreatureModels.KeyFor). 2 (3.7): FeetGeosets
         public static readonly byte[] Magic = { (byte)'M', (byte)'2', (byte)'B', (byte)'2' };
 
         public bool Ok;
         public string Problem;
         public string Name = "";
+        public string Kind = "creature";                // 3.7: "item" for a weapon / shield (texture type 2 = the item's skin)
+        public int SecondModel;                         // 3.7: an item display's second model file (not shown, noted)
         public int Version, ModelFdid, SkinFdid, DisplayId;
         public float Scale = 1;
         public int Nv;
@@ -137,16 +150,63 @@ namespace ElansAddonHub.Services.Models3d
             return id == 0 || s.EndsWith("01", StringComparison.Ordinal) || s.StartsWith("32", StringComparison.Ordinal);
         }
 
+        // 3.7 (format 2): the default geosets plus the groups that carry the model's lowest part when they have no default variant. ids, low, high per
+        // sub-mesh (low / high = its lowest / highest vertex height, NaN = no triangles). Gives what is shown; notes say what was added and why.
+        public const double FeetGap = 0.05;            // of the model's height: a shown mesh stopping higher than this above the lowest sub-mesh is missing its bottom
+        public static bool NoFeetForTest;              // the self-test's "before" pictures only: the format-1 rule (x01 alone)
+        public static bool[] FeetGeosets(IList<int> ids, IList<float> low, IList<float> high, List<string> notes = null)
+        {
+            int n = ids.Count;
+            var shown = new bool[n];
+            for (int s = 0; s < n; s++) shown[s] = DefaultGeoset(ids[s]);
+            if (!shown.Any(b => b) || NoFeetForTest) return shown;
+            float rawMin = float.MaxValue, rawMax = float.MinValue;
+            for (int s = 0; s < n; s++) if (!float.IsNaN(low[s])) { rawMin = Math.Min(rawMin, low[s]); rawMax = Math.Max(rawMax, high[s]); }
+            double h = rawMax - rawMin;
+            if (!(h > 0)) return shown;
+            for (int round = 0; round < 8; round++)
+            {
+                float shownMin = float.MaxValue;
+                for (int s = 0; s < n; s++) if (shown[s] && !float.IsNaN(low[s])) shownMin = Math.Min(shownMin, low[s]);
+                if (shownMin == float.MaxValue || shownMin - rawMin <= FeetGap * h) break;
+                // the lowest hidden sub-mesh that is either in a group with nothing shown, or sits below what is shown of its group (the rest of the leg,
+                // not another version of the part: its top no higher than the shown variant's bottom, give or take FeetGap)
+                int pick = -1; bool below = false;
+                for (int s = 0; s < n; s++)
+                {
+                    int id = ids[s], g = id / 100;
+                    if (shown[s] || float.IsNaN(low[s]) || !(low[s] < shownMin) || id < 100 || g == 17 || g == 35) continue;      // it must reach below the shown bottom
+                    float groupMin = float.MaxValue;
+                    for (int k = 0; k < n; k++) if (shown[k] && ids[k] / 100 == g && !float.IsNaN(low[k])) groupMin = Math.Min(groupMin, low[k]);
+                    bool under = groupMin != float.MaxValue;
+                    if (under && !(high[s] <= groupMin + FeetGap * h && low[s] < groupMin)) continue;
+                    if (pick < 0 || low[s] < low[pick]) { pick = s; below = under; }
+                }
+                if (pick < 0) break;
+                int grp = ids[pick] / 100, add = ids[pick];
+                if (!below) { add = int.MaxValue; for (int s = 0; s < n; s++) if (ids[s] / 100 == grp && ids[s] >= 100 && !float.IsNaN(low[s])) add = Math.Min(add, ids[s]); }
+                for (int s = 0; s < n; s++) if (ids[s] == add) shown[s] = true;
+                notes?.Add("geoset group " + grp + "xx " + (below ? "has its lowest part in another variant" : "has no default variant and holds the model's lowest part") + " ("
+                    + ((shownMin - rawMin) / h * 100).ToString("0", CultureInfo.InvariantCulture) + " % of the height missing): " + add + " is shown");
+            }
+            return shown;
+        }
+
         // a compressed quaternion component (wowdev M2 "M2CompQuat"): int16 -> -1 .. 1 (0x7FFF = 0, -1 = 1, 0 = -1)
         public static float Quat(short s) => s < 0 ? (s + 32768) / 32767f : (s - 32767) / 32767f;
 
-        // the texture a batch's texture slot shows: type 0 = the file's own (TXID), 11 / 12 / 13 = the display's skins 1 - 3; 0 = none (a stand-in)
-        public static int TextureFor(int type, int index, IList<int> txid, IList<int> variations)
+        // the texture a batch's texture slot shows: type 0 = the file's own (TXID), 11 / 12 / 13 = the display's skins 1 - 3, (3.7) 2 = an item's skin; 0 = none
+        // (a stand-in)
+        public static int TextureFor(int type, int index, IList<int> txid, IList<int> variations, int itemSkin = 0)
         {
             if (type == 0) return index >= 0 && txid != null && index < txid.Count && txid[index] > 0 ? txid[index] : 0;
             if (type >= 11 && type <= 13) { int k = type - 11; return variations != null && k < variations.Count && variations[k] > 0 ? variations[k] : 0; }
+            if (type == 2) return itemSkin > 0 ? itemSkin : 0;
             return 0;
         }
+
+        // 3.7: the texture types a model of this kind fills: a creature's 0 and 11 - 13, an item's 0 and 2
+        public static bool KnownTextureType(int type, bool item) => type == 0 || (item ? type == 2 : type >= 11 && type <= 13);
 
         // the sequence the viewer plays: Stand (id 0) variation 0, else the first Stand, else the first sequence; an alias leads to the one it names
         public static int StandIndex(IList<(int Id, int Sub, int Flags, int AliasNext)> seqs)
@@ -251,8 +311,15 @@ namespace ElansAddonHub.Services.Models3d
         // ---------------------------------------------------------------------------------------------------------------- the build
         // root = the .m2, skin = its first .skin (Chunks.Skins[0]), variations = the display's TextureVariationFileDataID[], readAnim = an .anim file by fdid
         public static CreatureModel Parse(byte[] root, byte[] skin, IList<int> variations, float scale, Func<int, byte[]> readAnim, int displayId = 0, int sequence = -1)
+            => Parse(root, skin, variations, scale, readAnim, displayId, sequence, false, 0);
+
+        // 3.7: an item's model - displayId = its ItemDisplayInfoID, itemSkin = the texture its type-2 slot takes (0 = none: a stand-in)
+        public static CreatureModel ParseItem(byte[] root, byte[] skin, int itemSkin, Func<int, byte[]> readAnim, int displayId)
+            => Parse(root, skin, null, 1, readAnim, displayId, -1, true, itemSkin);
+
+        static CreatureModel Parse(byte[] root, byte[] skin, IList<int> variations, float scale, Func<int, byte[]> readAnim, int displayId, int sequence, bool item, int itemSkin)
         {
-            var m = new CreatureModel { DisplayId = displayId, Scale = scale > 0 && float.IsFinite(scale) ? scale : 1 };
+            var m = new CreatureModel { DisplayId = displayId, Scale = scale > 0 && float.IsFinite(scale) ? scale : 1, Kind = item ? "item" : "creature" };
             try
             {
                 var c = Chunks.Parse(root);
@@ -321,11 +388,27 @@ namespace ElansAddonHub.Services.Models3d
                 foreach (var g in trackIssues.GroupBy(x => x)) m.Notes.Add(g.Key + (g.Count() > 1 ? " (" + g.Count() + " times)" : ""));
 
                 // ---- the default geosets
-                var shown = new bool[nsub];
+                // each sub-mesh's lowest and highest vertex (height, WoW z) over its triangles: FeetGeosets
+                var gids = new int[nsub]; var glow = new float[nsub]; var ghigh = new float[nsub];
                 for (int s = 0; s < nsub; s++)
                 {
-                    int id = U16(sk, subO + s * 48);
-                    shown[s] = DefaultGeoset(id);
+                    int q = subO + s * 48, level = U16(sk, q + 2), istart = U16(sk, q + 8) | (level << 16), icount = U16(sk, q + 10);
+                    gids[s] = U16(sk, q); float lo = float.MaxValue, hi = float.MinValue;
+                    for (int i = istart; i + 2 < istart + icount && i + 2 < si; i += 3)      // the triangles as they are built below
+                        for (int j = 0; j < 3; j++)
+                        {
+                            int v = U16(sk, sio + (i + j) * 2); if (v >= sv) v = 0;
+                            int gv = U16(sk, svo + v * 2); if (gv >= nv) gv = 0;
+                            float z = F(d, md + vo + gv * 48 + 8);
+                            if (float.IsFinite(z)) { if (z < lo) lo = z; if (z > hi) hi = z; }
+                        }
+                    if (lo > hi) { lo = float.NaN; hi = float.NaN; }
+                    glow[s] = lo; ghigh[s] = hi;
+                }
+                var shown = FeetGeosets(gids, glow, ghigh, m.Notes);
+                for (int s = 0; s < nsub; s++)
+                {
+                    int id = gids[s];
                     if (shown[s]) { m.ShownSubs++; if (!m.ShownIds.Contains(id)) m.ShownIds.Add(id); } else if (!m.HiddenIds.Contains(id)) m.HiddenIds.Add(id);
                 }
                 if (m.ShownSubs == 0 && nsub > 0) { for (int s = 0; s < nsub; s++) shown[s] = true; m.ShownSubs = nsub; m.Notes.Add("no sub-mesh is a default geoset; all are shown"); }
@@ -363,6 +446,8 @@ namespace ElansAddonHub.Services.Models3d
                     double len = Math.Sqrt(nx * nx + ny * ny + nz * nz); if (!(len > 1e-6) || double.IsNaN(len)) { nx = 0; ny = 1; nz = 0; len = 1; }
                     m.Nor[i * 4] = (sbyte)Math.Round(nx / len * 127); m.Nor[i * 4 + 1] = (sbyte)Math.Round(ny / len * 127); m.Nor[i * 4 + 2] = (sbyte)Math.Round(nz / len * 127);
                     m.Uv[i * 2] = Fin(F(d, o + 32)); m.Uv[i * 2 + 1] = Fin(F(d, o + 36));
+                    // 3.7: a model without bones is a still mesh - every vertex on the one stand-in bone, nothing put right
+                    if (nb == 0) { m.Bw[i * 4] = 255; continue; }
                     // weights and bones as they are; an index past the bone table, or weights that do not add up to 255, are put right (and counted)
                     int sum = 0;
                     for (int k = 0; k < 4; k++)
@@ -420,8 +505,8 @@ namespace ElansAddonHub.Services.Models3d
                         int ti = U16(d, md + lutO + combo * 2);
                         cb.TexIndex = ti;
                         if (ti < ntex && In(texO + ti * 16L, 8, ms)) { cb.TexType = I(d, md + texO + ti * 16); cb.Wrap = I(d, md + texO + ti * 16 + 4) & 3; }
-                        cb.Tex = TextureFor(cb.TexType, ti, c.Textures, variations);
-                        if (cb.TexType != 0 && (cb.TexType < 11 || cb.TexType > 13)) unknownTypes.Add(cb.TexType);
+                        cb.Tex = TextureFor(cb.TexType, ti, c.Textures, variations, item ? itemSkin : 0);
+                        if (!KnownTextureType(cb.TexType, item)) unknownTypes.Add(cb.TexType);
                         else if (cb.Tex == 0) noSkin++;
                     }
                     if (weightCombo < ntlut && In(tlutO + weightCombo * 2L, 2, ms))
@@ -433,8 +518,9 @@ namespace ElansAddonHub.Services.Models3d
                     if (cb.Tex > 0 && !m.Textures.Contains(cb.Tex)) m.Textures.Add(cb.Tex);
                     m.Batches.Add(cb);
                 }
-                if (unknownTypes.Count > 0) m.Notes.Add("texture type " + string.Join(", ", unknownTypes) + " is not a creature skin; a stand-in is shown");
+                if (unknownTypes.Count > 0) m.Notes.Add("texture type " + string.Join(", ", unknownTypes) + (item ? " is not the item's skin" : " is not a creature skin") + "; a stand-in is shown");
                 if (noSkin > 0) m.Notes.Add(noSkin + (noSkin == 1 ? " batch has" : " batches have") + " no texture (the display or the model gives none)");
+                if (item && nb == 0) m.Notes.Add("no bones: a still model");
 
                 // ---- bounds
                 for (int k = 0; k < 3; k++) { m.Min[k] = float.MaxValue; m.Max[k] = float.MinValue; }
@@ -510,6 +596,7 @@ namespace ElansAddonHub.Services.Models3d
                 ["globalLoops"] = GlobalLoops.Select(x => (object)(long)x).ToList(),
                 ["geosets"] = new Dictionary<string, object> { ["raw"] = RawSubs, ["shown"] = ShownSubs, ["ids"] = ShownIds.Cast<object>().ToList(), ["hidden"] = HiddenIds.Cast<object>().ToList() },
                 ["notes"] = Notes.Cast<object>().ToList(),
+                ["kind"] = Kind, ["static"] = Bones.Count == 0, ["second"] = SecondModel,
             };
             var js = Encoding.UTF8.GetBytes(Json.Write(meta));
             var ms = new MemoryStream(); var o2 = new BinaryWriter(ms);

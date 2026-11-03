@@ -2178,19 +2178,32 @@ window is narrow). Beasts, elementals, dragons and bosses; humanoid NPCs (the HD
   highest chance). The chances follow the Classic dump's own rule (update z2823; the importer applies it with `creature_model_info`,
   `ClassicDisplayChances`): in this dump that leaves one look for 2- and 3-display creatures and 25 % each for 4-display ones.
 - **Model build** (`Services/Models3d/`): the M2 and its first skin become an "M2B2" file - positions, normals, uvs, bone weights and
-  indices, the default geosets (id 0, x01, 32xx; after wow.export, MIT), batches with their blend and flags, skin textures resolved
+  indices, the default geosets (id 0, x01, 32xx; after wow.export, MIT; 3.7 `FeetGeosets`: when the shown mesh stops over 5 % of the height above
+  the lowest sub-mesh, the lowest hidden part is added if its group has nothing shown or it lies below the shown variant - old character-like
+  creatures with boots only as 502/504 or a robe only as 1302, the children's feet in 503; 9 models in 70707), batches with their blend and flags, skin textures resolved
   (type 0 from TXID, 11/12/13 from the display), the bones with pivots and the Stand animation (inline or from an `.anim` file).
-  Textures are packed like the world map's (MTX1, at most 1024 px). Cached per game build under `atlas\models\<build>_m1\`.
+  Textures are packed like the world map's (MTX1, at most 1024 px). Cached per game build under `atlas\models\<build>_m<format>\` (format 2 since 3.7, so 3.6.0's `_m1` caches are rebuilt).
 - **Viewer** (`Controls/ModelView.cs`, `ModelViewer/viewer.html + viewer.js`, three.js r149): a sandboxed WebView2 on its own host
   `models.outpost.local` (read-only, only `viewer.html` may load, everything else 403, messages validated). Bones are posed every frame
-  (pivot, translation, rotation, scale, parent first) and skin one mesh. Drag to turn, wheel to zoom, a slow spin.
+  (pivot, translation, rotation, scale, parent first) and skin one mesh. Drag to turn, wheel to zoom, a slow spin. A creature is framed by its
+  bounding sphere, then backed off until its box stays within 90 % of the view through the whole spin (3.7: tall humanoids lost their feet below the card).
 - **Airspace**: the HWND WebView2 clips itself to the visible part of the card (`SetWindowRgn`) while the page scrolls, and is swapped
   for a snapshot while the Ctrl+K palette is open. (`WebView2CompositionControl` needs the Windows SDK projection, which the app does
   not target.) Rendering pauses when the card is out of view; the view is released when the page is left.
-- **Not yet**: billboarded bones, texture animations, particles, colour / alpha tracks after the first key; item models.
+- **Item models** (*Outpost 3.7*): item pages of weapons, shields and held-in-off-hand items (inventory types 13, 14, 15, 17, 21, 22, 23, 25,
+  26 in the game's item data) get the same card; armour and everything else get none. The chain (after wow.export's DBItemModels, MIT):
+  `ItemModifiedAppearance` (the default appearance: modifier 0, else the lowest; the lowest OrderIndex) -> `ItemAppearance.ItemDisplayInfoID` ->
+  `ItemDisplayInfo.ModelResourcesID[0]` -> `ModelFileData` (the resource's first row) and `ModelMaterialResourcesID[0]` -> `TextureFileData` (the
+  first UsageType-0 row), read into the same index as the creature tables (`ModelData.ForItem`). The M2 is built as M2B2 kind "item" (texture type 2
+  = that skin) under `m\item-<display>.m2b2`; a model without bones is a still mesh. A long thin item is framed by its longest side, leaned in the
+  card and turning about its own length; the far end from the grip goes on top, except for staves, polearms and spears (subclass 10 / 6 / 17,
+  sent as `"up":"head"`): there the end whose outer quarter has the larger cross-section does. A flat item (a shield, a flat off-hand) opens with its
+  front facing the camera and sways +-35 degrees; any other item that is not long and thin opens at 3/4 and turns slowly, no front guessed. A second model of a display (`ModelResourcesID[1]`) is noted, not shown; no look switch for items.
+- **Not yet**: billboarded bones, texture animations, particles, colour / alpha tracks after the first key; armour and shoulder models.
 - Tests: `models` (synthetic tables, model files, viewer protocol, card placement) and `modelsreal` (real files: the Timber Wolf,
   Stonetusk Boar, Rock Elemental, Scalding Whelp and Ragnaros build and animate; the page's bone matrices match an independent C#
-  calculation; the Reef Shark's looks switch).
+  calculation; the Reef Shark's looks switch). 3.7: item tables, chain and card on synthetic tables (`models`); Thunderfury and a common sword, shield,
+  bow, gun, staff and wand built, viewed and on their pages, the Hearthstone without a card (`modelsreal`).
 
 ### Foundation the layers share
 

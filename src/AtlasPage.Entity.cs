@@ -102,7 +102,7 @@ namespace ElansAddonHub
 
             PlanTabs(m);
             factsCard = FactsFor(m);
-            modelCard = ModelCardFor(m);          // 3.6: an NPC's 3D model (AtlasPage.Model.cs)
+            modelCard = ModelCardFor(m);          // 3.6: an NPC's 3D model (3.7: a weapon's or shield's too; AtlasPage.Model.cs)
             var want = AtlasTabs.TabOf(history.Current);
             if (!AtlasTabs.SamePage(history.Current, m.Id) || !tabsShown.Contains(want)) want = "";
             tabNow = want.Length > 0 ? want : tabsShown.Contains(tabDefault) ? tabDefault : AtlasTabs.Overview;

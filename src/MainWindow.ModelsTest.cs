@@ -44,11 +44,13 @@ namespace ElansAddonHub
             return SdBuild(ModelTables.ModelInfo.TableHash, layout, fs, rows, new[] { 43, 66, 7661, 1551 });
         }
 
-        static SpellRaw MdRaw(byte[] displays = null, byte[] models = null, bool noDisplays = false)
+        // 3.7: with the five item tables too (MainWindow.ModelsTest.Items.cs) unless noItems
+        static SpellRaw MdRaw(byte[] displays = null, byte[] models = null, bool noDisplays = false, bool noItems = false)
         {
             var raw = new SpellRaw();
             if (!noDisplays) raw.Tables[ModelTables.DisplayInfo.Name] = displays ?? MdDisplays();
             raw.Tables[ModelTables.ModelInfo.Name] = models ?? MdModels();
+            if (!noItems) MiAdd(raw);
             return raw;
         }
 
@@ -169,7 +171,7 @@ SET sql_safe_updates=1;
 
                 // ---- the tables
                 var set = ModelSet.Parse(MdRaw());
-                Check("parse: both tables in the 1.60.1.70707 layouts, no problems (5 displays, 4 models)", set.Displays?.Count == 5 && set.Models?.Count == 4 && set.Problems.Count == 0
+                Check("parse: both creature tables in the 1.60.1.70707 layouts, no problems (5 displays, 4 models; 3.7: the item tables beside them)", set.Displays?.Count == 5 && set.Models?.Count == 4 && set.Problems.Count == 0
                     && set.LayoutsSeen[ModelTables.DisplayInfo.Name] == 0x7275F5F6 && set.LayoutsSeen[ModelTables.ModelInfo.Name] == 0x0F5449F8, string.Join("; ", set.Problems.Values));
                 var d604 = set.Displays?.GetValueOrDefault(604);
                 Check("parse: the inline id, ModelID, the scale float and the 4 texture variations of a display; FileDataID, Flags and ModelScale of a model",
@@ -221,9 +223,9 @@ SET sql_safe_updates=1;
                 var cf = ModelData.CacheFile;
                 bool wrote = ModelIndexFile.TryWrite(cf, "wowf|1.60.1.70707|abc", set);
                 var back = ModelIndexFile.TryRead(cf);
-                Check("index: the two tables survive a save (displays, textures, scales, models, layouts) for the build they were read from",
+                Check("index: the creature tables survive a save (displays, textures, scales, models, layouts) for the build they were read from",
                     wrote && back != null && back.Build == "wowf|1.60.1.70707|abc" && back.Format == ModelData.FormatVersion && back.Set.Displays.Count == 5 && back.Set.Displays[8570].Textures.SequenceEqual(set.Displays[8570].Textures)
-                    && back.Set.Models[43].FileId == 126487 && Math.Abs(back.Set.Displays[604].Scale - 0.71f) < 1e-6 && back.Set.LayoutsSeen.Count == 2 && ModelData.Resolve(back.Set, L((604, 1)), 1).ModelFileId == 126487);
+                    && back.Set.Models[43].FileId == 126487 && Math.Abs(back.Set.Displays[604].Scale - 0.71f) < 1e-6 && back.Set.LayoutsSeen.Count == ModelTables.All.Length && ModelData.Resolve(back.Set, L((604, 1)), 1).ModelFileId == 126487);
                 int reads = 0;
                 var same = ModelData.Obtain(back, "wowf|1.60.1.70707|abc", cf, () => { reads++; return set; }, out var from1);
                 var other = ModelData.Obtain(back, "wowf|1.60.1.70800|def", cf, () => { reads++; return newLayout; }, out var from2);
@@ -316,8 +318,12 @@ SET sql_safe_updates=1;
                 ClassicAtlas.Use(null);
                 Check("for npc: no Classic baseline and no cache = 'no display id' with that said", ModelData.ForNpc(69).Reason.Contains("no Classic baseline"), ModelData.ForNpc(69).Reason);
 
+                // ---- 3.7: the item chain (MainWindow.ModelsTest.Items.cs)
+                try { ModelItemDataChecks(work, set, Check); } catch (Exception e) { Check("item model data checks crashed", false, e.ToString()); }
+
                 // ---- 3.6 step 2: the model build (MainWindow.ModelsTest.Build.cs)
                 try { await ModelBuildChecks(work, Check); } catch (Exception e) { Check("model build checks crashed", false, e.ToString()); }
+                try { await ModelItemBuildChecks(work, ModelSet.Parse(MdRaw()), Check); } catch (Exception e) { Check("item model build checks crashed", false, e.ToString()); }
 
                 // ---- 3.6 steps 3 + 4: the viewer and the NPC page's Model card (MainWindow.ModelsTest.View.cs)
                 try { await ModelViewChecks(work, Check, b3, notes); } catch (Exception e) { Check("model view checks crashed", false, e.ToString()); }

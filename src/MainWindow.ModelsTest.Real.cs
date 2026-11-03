@@ -35,7 +35,8 @@ namespace ElansAddonHub
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var set = await Task.Run(() => ModelSet.Parse(ModelData.ReadCasc(real, flv)));
+                var raw = await Task.Run(() => ModelData.ReadCasc(real, flv));
+                var set = ModelSet.Parse(raw);
                 long ms = sw.ElapsedMilliseconds;
                 var build = ItemData.GameBuild(real, flv);
                 if (set.Problems.Values.Any(p => p.StartsWith("game updated")))
@@ -43,7 +44,7 @@ namespace ElansAddonHub
                     notes.Add("skip real game files: " + string.Join("; ", set.Problems.Values) + " (build " + build + "; this Outpost does not know that layout - nothing was guessed; Tools\\layoutwatch.ps1 shows the new fields)");
                     return;
                 }
-                Check("real game files: CreatureDisplayInfo and CreatureModelData read in the layouts this Outpost knows (" + (set.Displays?.Count ?? 0).ToString("N0", I) + " displays, " + (set.Models?.Count ?? 0).ToString("N0", I) + " models, " + ms + " ms)",
+                Check("real game files: CreatureDisplayInfo and CreatureModelData read in the layouts this Outpost knows (" + (set.Displays?.Count ?? 0).ToString("N0", I) + " displays, " + (set.Models?.Count ?? 0).ToString("N0", I) + " models; 3.7: with the item tables, " + ms + " ms)",
                     set.Problems.Count == 0 && set.Displays?.Count > 10000 && set.Models?.Count > 1000 && set.LayoutsSeen.GetValueOrDefault("CreatureDisplayInfo") == 0x7275F5F6 && set.LayoutsSeen.GetValueOrDefault("CreatureModelData") == 0x0F5449F8,
                     string.Join("; ", set.Problems.Values) + " " + string.Join(",", set.LayoutsSeen.Select(kv => kv.Key + "=" + kv.Value.ToString("X8", I))));
                 if (set.Displays == null || set.Models == null) return;
@@ -64,6 +65,10 @@ namespace ElansAddonHub
 
                 // ---- 3.6 step 2: the five built into M2B2 from the real files (into the scratch folder)
                 try { await ModelsRealBuildChecks(real, flv, work, set, Check, notes); } catch (Exception e) { Check("real model build checks crashed", false, e.ToString()); }
+
+                // ---- 3.7: item models - the tables, real items end to end, their pages (MainWindow.ModelsTest.Real.Items.cs)
+                try { await ModelsRealItemChecks(real, flv, work, raw, set, Check, notes); } catch (Exception e) { Check("real item model checks crashed", false, e.ToString()); }
+                ModelData.SetForTest(set);
 
                 // ---- npc entries through the Classic baseline (the client's cache left out: these check the baseline path)
                 var cdir = Environment.GetEnvironmentVariable("ELANSHUB_CLASSICDB");
@@ -91,6 +96,9 @@ namespace ElansAddonHub
                 var res = npcs.Select(n => (n, m: ModelData.ForNpc(n.Item1))).ToList();
                 Check("real Classic baseline: npc entries resolve through their display ids - Timber Wolf 69, Stonetusk Boar 113, Rock Elemental 92, Scalding Whelp 2725, Ragnaros 11502 (" + fromWhat + ")",
                     res.All(r => r.m.Ok && r.m.From == "classic" && r.m.DisplayId == r.n.Item2 && r.m.ModelFileId == r.n.Item3), string.Join(" | ", res.Select(r => r.n.Item4 + ": " + D(r.m))));
+                var aiden = ModelData.ForNpc(11902);
+                Check("real Classic baseline: Aiden (npc 11902, a Stormwind child - the reported model without shins and feet) is display 262 of the boy's model 124495, shown (not a character model)",
+                    aiden.Ok && aiden.DisplayId == 262 && aiden.ModelFileId == 124495 && !aiden.Humanoid, D(aiden));
                 var g68 = ModelData.ForNpc(68);
                 Check("real Classic baseline: Stormwind City Guard (68) is flagged humanoid", g68.Humanoid && g68.Reason == ModelData.HumanoidReason, D(g68) + " considered " + string.Join(", ", g68.Considered));
 
@@ -215,6 +223,10 @@ namespace ElansAddonHub
                 (int display, int fdid, int afid)? found = null;
                 (int display, int fdid, string ids)? variants = null;
                 int looked = 0, withAfid = 0, withVariants = 0, extSeqs = 0; var sw2 = System.Diagnostics.Stopwatch.StartNew();
+                // 3.7 (format 2): the feet survey - per model the shown mesh's bottom against its lowest sub-mesh, the x01 rule and FeetGeosets
+                var feetChanged = new List<(int display, int fdid, string name, string added, double before, double after)>();
+                var feetLeft = new List<string>(); int feetBadBefore = 0, feetBadAfter = 0;
+                (int[] ids, float[] low, float[] high)? variantH = null;
                 CreatureModel wa = null; bool waChunked = false;
                 using (var lease = CascShared.Open(real, flv))
                 {
@@ -251,12 +263,26 @@ namespace ElansAddonHub
                         int nsub = BitConverter.ToInt32(sk, 28), subO = BitConverter.ToInt32(sk, 32);
                         if (nsub <= 0 || subO < 0 || (long)subO + nsub * 48L > sk.Length) continue;
                         var ids = Enumerable.Range(0, nsub).Select(s => (int)BitConverter.ToUInt16(sk, subO + s * 48)).ToList();
-                        if (ids.Any(x => !CreatureModel.DefaultGeoset(x))) { withVariants++; if (variants == null) variants = (d.Id, mi.FileId, string.Join("/", ids.Distinct())); }
+                        var hh = SubHeights(rb, sk);
+                        if (ids.Any(x => !CreatureModel.DefaultGeoset(x))) { withVariants++; if (variants == null) { variants = (d.Id, mi.FileId, string.Join("/", ids.Distinct())); variantH = hh; } }
+                        if (hh.ids.Length == 0) continue;
+                        bool[] ob = OldGeosets(hh.ids), nb2 = NewGeosets(hh);
+                        double g0 = BottomGap(hh, ob), g1 = BottomGap(hh, nb2);
+                        if (g0 > CreatureModel.FeetGap) feetBadBefore++;
+                        if (g1 > CreatureModel.FeetGap) feetLeft.Add(d.Id + " " + mi.FileId + " " + (g1 * 100).ToString("0", I) + " %");
+                        if (g1 > CreatureModel.FeetGap) feetBadAfter++;
+                        if (!ob.SequenceEqual(nb2)) feetChanged.Add((d.Id, mi.FileId, M2Name(rb), string.Join("/", hh.ids.Where((x, i) => nb2[i] && !ob[i]).Distinct()), g0, g1));
                     }
                 }
                 notes.Add("info real model build: the wolf has " + wolfSeq + " sequences, " + wolfExt + " with their data in .anim files; its Stand is " + (wolfStandExt ? "one of them" : "in the .m2")
                     + "; looked through " + looked + " creature models in " + sw2.ElapsedMilliseconds + " ms: " + withAfid + " name .anim files (" + extSeqs + " sequences), a Stand in an .anim: " + (found == null ? "none" : "display " + found.Value.display + " (model " + found.Value.fdid + ", .anim " + found.Value.afid + ")")
                     + "; " + withVariants + " have geoset variants (first: " + (variants == null ? "none" : "display " + variants.Value.display + ", model " + variants.Value.fdid + ", ids " + variants.Value.ids) + ")");
+                notes.Add("info real model build (format 2): feet survey of " + looked + " creature models - the shown mesh stops more than " + (CreatureModel.FeetGap * 100).ToString("0", I) + " % of the height above the lowest sub-mesh on "
+                    + feetBadBefore + " with the x01 rule, " + feetBadAfter + " with FeetGeosets (" + string.Join(", ", feetLeft) + "); FeetGeosets changes " + feetChanged.Count + ": "
+                    + string.Join("; ", feetChanged.Select(x => x.name + " (display " + x.display + ", model " + x.fdid + ") +" + x.added + " " + (x.before * 100).ToString("0", I) + " % -> " + (x.after * 100).ToString("0", I) + " %")));
+                Check("real model build (format 2): FeetGeosets over " + looked + " creature models changes " + feetChanged.Count + " - the " + FeetModels.Length + " that lost their feet or legs, each now whole - and no other (short at the bottom: " + feetBadBefore + " -> " + feetBadAfter + ", those left keep a shown variant of that group)",
+                    looked > 500 && feetChanged.Count == FeetModels.Length && FeetModels.All(f => feetChanged.Any(x => x.name == f.model && x.added == f.adds.ToString(I) && x.before > 0.05 && x.after < 0.01)) && feetBadAfter < feetBadBefore,
+                    string.Join(" | ", feetChanged.Select(x => x.name + " +" + x.added + " " + x.before.ToString("0.000", I) + "->" + x.after.ToString("0.000", I))) + " | still: " + string.Join(", ", feetLeft));
                 Check("real model build: the .anim path on a real file - the wolf's sequence " + wolfAnimSeq + " (.anim " + wolfAnimFdid + ", " + (waChunked ? "chunked" : "raw") + ") read in place of Stand gives keys, unit quaternions, times within its duration",
                     wa != null && wa.Ok && wa.AnimExternal == wolfAnimFdid && wa.AnimProblem == null && wa.AnimKeys > 0 && wa.Bones.Any(b => b.R.Keys > 1)
                     && wa.Bones.All(b => b.R.Keys == 0 || b.R.Gs >= 0 || (Enumerable.Range(0, b.R.Keys).All(k => Math.Abs(Math.Sqrt(Enumerable.Range(0, 4).Sum(j => (double)b.R.Values[k * 4 + j] * b.R.Values[k * 4 + j])) - 1) < 1e-3) && b.R.Times.All(t => t <= wa.AnimDuration))),
@@ -267,10 +293,39 @@ namespace ElansAddonHub
                 {
                     var vr = await CreatureModels.EnsureAsync(variants.Value.display);
                     var vm = vr.Model;
-                    Check("real model build: a model with geoset variants (display " + variants.Value.display + ", ids " + variants.Value.ids + ") is built with fewer sub-meshes than its skin has, only default ids shown",
-                        vr.Ok && vm != null && vm.ShownSubs < vm.RawSubs && vm.HiddenIds.Count > 0 && vm.ShownIds.All(CreatureModel.DefaultGeoset) && vm.Subs.All(s => CreatureModel.DefaultGeoset(s.Id)) && vm.Nv < vm.RawVertices,
+                    var vsh = variantH == null ? null : NewGeosets(variantH.Value);
+                    var want = vsh == null ? new List<int>() : variantH.Value.ids.Where((x, i) => vsh[i]).Distinct().ToList();
+                    Check("real model build: a model with geoset variants (display " + variants.Value.display + ", ids " + variants.Value.ids + ") is built with fewer sub-meshes than its skin has, the default ids and FeetGeosets' additions shown (" + string.Join("/", want) + ")",
+                        vr.Ok && vm != null && vm.ShownSubs < vm.RawSubs && vm.HiddenIds.Count > 0 && want.Count > 0 && vm.ShownIds.OrderBy(x => x).SequenceEqual(want.OrderBy(x => x)) && vm.Subs.All(s => want.Contains(s.Id)) && vm.Nv < vm.RawVertices,
                         vr.Ok ? Info((variants.Value.display, "variants", vr, new FileInfo(vr.Path).Length, 0)) : vr.Reason);
                     if (vm != null) notes.Add("info real model build: " + Info((variants.Value.display, "geoset variants", vr, new FileInfo(vr.Path).Length, 0)));
+                }
+                // ---- 3.7 (format 2): the models that lost their feet, built - the shown mesh's bottom is the model's bottom again
+                {
+                    var rows = new List<string>(); bool allOk = true;
+                    using (var lease = CascShared.Open(real, flv))
+                    {
+                        var src = new CascModelSource(lease);
+                        foreach (var f in FeetModels)
+                        {
+                            var fr = await CreatureModels.EnsureAsync(f.display);
+                            // read from the file (an earlier check may have built this display already: then the result has no parsed model)
+                            var fm = fr.Ok ? CreatureModel.ReadMeta(File.ReadAllBytes(fr.Path), out _) : null;
+                            if (fm == null || !set.Displays.TryGetValue(f.display, out var dd) || !set.Models.TryGetValue(dd.ModelId, out var fmi)) { allOk = false; rows.Add(f.model + " " + f.display + ": " + (fr.Reason ?? "the file does not read back")); continue; }
+                            var rb = src.Read(fmi.FileId); var hh = SubHeights(rb, src.Read(CreatureModel.Chunks.Parse(rb).Skins[0]));
+                            float rmin = hh.low.Where(x => !float.IsNaN(x)).Min(), rmax = hh.high.Where(x => !float.IsNaN(x)).Max();
+                            double fmin = Convert.ToDouble(fm.List("min")[1], I), fmax = Convert.ToDouble(fm.List("max")[1], I);
+                            var gs = fm.Child("geosets"); var sids = gs.List("ids").Select(x => Convert.ToInt32(x, I)).ToList(); var hids = gs.List("hidden").Select(x => Convert.ToInt32(x, I)).ToList();
+                            var fnotes = fm.List("notes").Select(x => x as string ?? "").ToList();
+                            double gap = (fmin - rmin) / (rmax - rmin);
+                            bool ok = fm.Str("name") == f.model && sids.Contains(f.adds) && gap < 0.01 && Math.Abs(fmax - rmax) < 0.05 * (rmax - rmin) && fnotes.Any(n => n.Contains("geoset group " + (f.adds / 100).ToString(I) + "xx"));
+                            allOk &= ok;
+                            rows.Add((f.model.Length > 0 ? f.model : "model " + fmi.FileId) + " " + f.display + ": shown " + string.Join("/", sids) + " hidden " + string.Join("/", hids) + ", bottom " + fmin.ToString("0.000", I) + " of " + rmin.ToString("0.000", I) + " .. " + rmax.ToString("0.000", I) + " (" + (gap * 100).ToString("0.0", I) + " %)" + (ok ? "" : " WRONG"));
+                        }
+                    }
+                    Check("real model build (format 2): the " + FeetModels.Length + " creature models that stood without feet or legs (Stormwind citizens, Death Guard, Scarlet Crusader, Scholomance students, the Twin Emperors, the children such as Aiden ...) are built with them - the shown bottom within 1 % of the model's lowest vertex, noted",
+                        allOk, string.Join(" | ", rows));
+                    foreach (var r in rows) notes.Add("info real model build (feet): " + r);
                 }
                 if (found == null) notes.Add("skip real .anim Stand: no creature model of this install has its Stand in an .anim file (" + looked + " models looked at); the .anim path is checked on the wolf's other sequence above");
                 else
@@ -288,6 +343,63 @@ namespace ElansAddonHub
                 CreatureModels.RootOverride = savedRoot; CreatureModels.SourceForTest = savedSrc; CreatureModels.BuildForTest = savedBuild; CreatureModels.ResetForTest();
             }
         }
+
+        // 3.7 (format 2): every sub-mesh's id and lowest / highest vertex height (WoW z) over its triangles, read here apart from the builder
+        static (int[] ids, float[] low, float[] high) SubHeights(byte[] root, byte[] skin)
+        {
+            var none = (new int[0], new float[0], new float[0]);
+            if (root == null) return none;
+            var c = CreatureModel.Chunks.Parse(root);
+            if (!c.Ok || skin == null || skin.Length < 48) return none;
+            int md = c.Md, nv = BitConverter.ToInt32(root, md + 0x3C), vo = BitConverter.ToInt32(root, md + 0x40);
+            int sv = BitConverter.ToInt32(skin, 4), svo = BitConverter.ToInt32(skin, 8), si = BitConverter.ToInt32(skin, 12), sio = BitConverter.ToInt32(skin, 16), nsub = BitConverter.ToInt32(skin, 28), subO = BitConverter.ToInt32(skin, 32);
+            if (nsub <= 0 || subO < 0 || (long)subO + nsub * 48L > skin.Length) return none;
+            var ids = new int[nsub]; var lo = new float[nsub]; var hi = new float[nsub];
+            for (int s = 0; s < nsub; s++)
+            {
+                int q = subO + s * 48, start = BitConverter.ToUInt16(skin, q + 8) | (BitConverter.ToUInt16(skin, q + 2) << 16), n = BitConverter.ToUInt16(skin, q + 10);
+                ids[s] = BitConverter.ToUInt16(skin, q); float a = float.MaxValue, b = float.MinValue;
+                for (int i = start; i + 2 < start + n && i + 2 < si; i += 3)
+                    for (int j = 0; j < 3; j++)
+                    {
+                        int v = BitConverter.ToUInt16(skin, sio + (i + j) * 2); if (v >= sv) v = 0;
+                        int gv = BitConverter.ToUInt16(skin, svo + v * 2); if (gv >= nv) gv = 0;
+                        float z = BitConverter.ToSingle(root, md + vo + gv * 48 + 8);
+                        if (float.IsFinite(z)) { a = Math.Min(a, z); b = Math.Max(b, z); }
+                    }
+                lo[s] = a > b ? float.NaN : a; hi[s] = a > b ? float.NaN : b;
+            }
+            return (ids, lo, hi);
+        }
+        // how far above the model's lowest sub-mesh the shown ones stop, as a part of its height (0 = the feet are there)
+        static double BottomGap((int[] ids, float[] low, float[] high) h, bool[] shown)
+        {
+            double rmin = double.MaxValue, rmax = double.MinValue, smin = double.MaxValue;
+            for (int s = 0; s < h.ids.Length; s++)
+            {
+                if (float.IsNaN(h.low[s])) continue;
+                rmin = Math.Min(rmin, h.low[s]); rmax = Math.Max(rmax, h.high[s]);
+                if (shown[s]) smin = Math.Min(smin, h.low[s]);
+            }
+            if (rmax <= rmin) return 0;
+            return smin == double.MaxValue ? 1 : (smin - rmin) / (rmax - rmin);
+        }
+        static bool[] OldGeosets(int[] ids) { var a = ids.Select(CreatureModel.DefaultGeoset).ToArray(); return a.Any(b => b) ? a : ids.Select(_ => true).ToArray(); }
+        static bool[] NewGeosets((int[] ids, float[] low, float[] high) h) { var a = CreatureModel.FeetGeosets(h.ids, h.low, h.high); return a.Any(b => b) ? a : h.ids.Select(_ => true).ToArray(); }
+        static string M2Name(byte[] rb)
+        {
+            var c = CreatureModel.Chunks.Parse(rb); if (!c.Ok) return "";
+            int n = BitConverter.ToInt32(rb, c.Md + 8), o = BitConverter.ToInt32(rb, c.Md + 12);
+            return n > 0 && n < 256 && c.Md + o + n <= rb.Length ? System.Text.Encoding.ASCII.GetString(rb, c.Md + o, n).TrimEnd((char)0) : "";
+        }
+        // 3.7: the creature models of 70707 that lost their feet or legs to the x01 rule (display, model name, what the fix adds)
+        static readonly (int display, string model, int adds)[] FeetModels =
+        {
+            (21, "HUMSCitizenMid", 502), (1021, "DeathGuard", 502), (1025, "ScarletCrusaderHeavy", 504), (11161, "HighElfFemale_Mage", 1302),
+            (15761, "TwinEmperor", 1202), (164, "HumanMaleGuard", 502), (93, "HumanFemaleBlacksmith", 502),
+            // the children: shins in 501 (shown), feet in 503 below them - Aiden (npc 11902) is display 262 of the boy's model (124495, no name in its header)
+            (262, "", 503), (252, "HumanFemaleKid", 503)
+        };
 
         // 3.6 step 5: the beast whose looks the real checks switch between (Reef Shark: four displays at 25 % each in the Classic dump, two shark models)
         const int LookNpc = 12123;

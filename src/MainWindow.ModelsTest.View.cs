@@ -150,7 +150,7 @@ namespace ElansAddonHub
                 Check("viewer: the Stand loop - duration 2000 ms", D(st, "duration") == 2000, Json.Write(st));
                 double changed = await MvNum(mv, "(function(){ mv.snap(); mv.step(250); return mv.changed(); })()");
                 double adv = await MvNum(mv, "(function(){ var a = mv.st.animMs; mv.step(100); return mv.st.animMs - a; })()");
-                Check("viewer: the clock moves on (100 ms step = 100 ms) and bone 0's matrix changes between two frames 250 ms apart", adv == 100 && changed >= 1, "advanced " + adv + " changed " + changed);
+                Check("viewer: the clock moves on (100 ms step = 100 ms) and bone 0's matrix changes between two frames 250 ms apart", Math.Abs(adv - 100) < 1e-6 && changed >= 1, "advanced " + adv + " changed " + changed);
                 Check("viewer: the shader's bone matrices are the page's own (identity bind pose and inverses)", (await mv.EvalForTest("mv.boneTexOk()")) == "true", null);
                 var file = File.ReadAllBytes(CreatureModels.ModelPath(CreatureModels.KeyFor("wowf|1.60.1.70707|2417084bcafe"), 604));
                 var cmp = new List<string>(); double worst = 0;
@@ -222,6 +222,8 @@ namespace ElansAddonHub
 
                 // ---- 3.6 step 5: the look switch
                 await MvLookChecks(work, Check, notes);
+                // ---- 3.7: the item pages' Model card (MainWindow.ModelsTest.Items.cs)
+                try { await MvItemChecks(work, set, Check, notes); } catch (Exception e) { Check("item view checks crashed", false, e.ToString()); }
                 mv = await MvBackToWolf(mv);
                 if (mv == null) { Check("looks: back on the Timber Wolf's page its model is shown again", false, null); return; }
 
@@ -437,6 +439,91 @@ namespace ElansAddonHub
             SelfTestClock.ShotsTaken++;
         }
 
+        // 3.7 (format 2): Aiden's boy model (262), HUMSCitizenMid (21), the Scholomance students' HighElfFemale_Mage (11161), DeathGuard (1021) and the Twin Emperors (15761, 6.8 units
+        // tall) in a 340 x 200 viewer: every vertex of the drawn mesh, posed at four times of the Stand loop and turned to eight angles, inside the view; the
+        // model's bottom is its feet. Pictures (models-feet-*-after.png; with the format-1 rule, models-feet-*-before.png) when pictures are on.
+        async Task ModelsRealFeetViewChecks(string shots, CheckFn Check, List<string> notes)
+        {
+            var I = CultureInfo.InvariantCulture;
+            var feet = new[] { (262, "aiden"), (21, "citizen"), (11161, "scholomance"), (1021, "deathguard"), (15761, "twinemperor") };
+            var v = new ModelView { Width = 340, Height = 200 };
+            var host = new Window { Width = 360, Height = 220, Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, Content = v, Title = "feet test" };
+            host.Show();
+            try
+            {
+                var rows = new List<string>(); bool allFit = true, allShown = true;
+                foreach (var (display, slug) in feet)
+                {
+                    var r = await CreatureModels.EnsureAsync(display);
+                    if (!r.Ok) { allShown = false; rows.Add(slug + ": " + r.Reason); continue; }
+                    v.Show(r.Path);
+                    bool ok = await Until(() => v.State == ModelView.ViewState.Shown || v.State == ModelView.ViewState.Failed || v.State == ModelView.ViewState.NoWebView, 30000) && v.State == ModelView.ViewState.Shown;
+                    Dictionary<string, object> st = null; var tw = System.Diagnostics.Stopwatch.StartNew();
+                    while (ok && tw.ElapsedMilliseconds < 15000) { st = await MvState(v); if (st?.Str("model") == v.ModelForTest && D(st, "texLoaded") + D(st, "texFailed") >= D(st, "texWanted")) break; await Task.Delay(100); }
+                    if (!ok || st?.Str("state") != "shown") { allShown = false; rows.Add(slug + ": " + v.State + " " + v.Reason); continue; }
+                    double dur = D(st, "duration"), x0 = 9, x1 = -9, y0 = 9, y1 = -9, bx0 = 9, by0 = 9, by1 = -9;
+                    foreach (var t in new[] { 0.0, dur * 0.25, dur * 0.5, dur * 0.75 })
+                    {
+                        await v.EvalForTest("mv.pose(" + t.ToString("0", I) + ")");
+                        foreach (var yaw in new[] { 0.0, 0.8, 1.6, 2.4, 3.2, 4.0, 4.8, 5.6 })
+                        {
+                            var b = Json.Obj(await v.EvalForTest("mv.screenMesh(" + yaw.ToString(I) + ")") ?? "null");
+                            var bb = Json.Obj(await v.EvalForTest("mv.screenBox(" + yaw.ToString(I) + ")") ?? "null");
+                            if (b == null || bb == null) { x0 = -99; continue; }
+                            x0 = Math.Min(x0, D(b, "x0")); x1 = Math.Max(x1, D(b, "x1")); y0 = Math.Min(y0, D(b, "y0")); y1 = Math.Max(y1, D(b, "y1"));
+                            bx0 = Math.Min(bx0, D(bb, "x0")); by0 = Math.Min(by0, D(bb, "y0")); by1 = Math.Max(by1, D(bb, "y1"));
+                        }
+                    }
+                    bool fit = x0 >= -1 && x1 <= 1 && y0 >= -1 && y1 <= 1 && y1 - y0 > 1.0;
+                    allFit &= fit;
+                    rows.Add(slug + " " + display + ": drawn mesh x " + x0.ToString("0.00", I) + " .. " + x1.ToString("0.00", I) + ", y " + y0.ToString("0.00", I) + " .. " + y1.ToString("0.00", I)
+                        + " (bind box y " + by0.ToString("0.00", I) + " .. " + by1.ToString("0.00", I) + ")" + (fit ? "" : " NOT IN VIEW"));
+                    if (SelfTestClock.ShotsOn)
+                    {
+                        await v.EvalForTest("mv.pose(0)"); await v.EvalForTest("mv.opening(true)");
+                        await Task.Delay(300);
+                        var png = await v.CaptureForTest(); if (png != null) File.WriteAllBytes(Path.Combine(shots, "models-feet-" + slug + "-after.png"), png);
+                    }
+                }
+                Check("real viewer (format 2): tall character-like creatures and a child (Aiden, citizen, Scholomance student, Death Guard, Twin Emperor) in the card's 340 x 200 - every drawn vertex inside the view at 8 turns x 4 Stand times",
+                    allShown && allFit, string.Join(" | ", rows));
+                foreach (var r in rows) notes.Add("info real viewer (feet framing): " + r);
+
+                // the "before" pictures: the same displays built with the format-1 rule into a folder of their own
+                if (SelfTestClock.ShotsOn)
+                {
+                    var savedRoot = CreatureModels.RootOverride;
+                    try
+                    {
+                        CreatureModel.NoFeetForTest = true;
+                        CreatureModels.ResetForTest();
+                        CreatureModels.RootOverride = savedRoot + "-before";
+                        // a web view of its own: a view maps its folder (CreatureModels.Root) once, when it starts
+                        try { v.Dispose(); host.Close(); } catch (Exception) { }
+                        v = new ModelView { Width = 340, Height = 200 };
+                        host = new Window { Width = 360, Height = 220, Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false, WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, Content = v, Title = "feet test (before)" };
+                        host.Show();
+                        foreach (var (display, slug) in feet.Take(2))
+                        {
+                            var r = await CreatureModels.EnsureAsync(display);
+                            if (!r.Ok) continue;
+                            v.Show(r.Path);
+                            if (!await Until(() => v.State == ModelView.ViewState.Shown || v.State == ModelView.ViewState.Failed, 30000)) continue;
+                            var tw = System.Diagnostics.Stopwatch.StartNew();
+                            while (tw.ElapsedMilliseconds < 15000) { var st = await MvState(v); if (st?.Str("model") == v.ModelForTest && D(st, "texLoaded") + D(st, "texFailed") >= D(st, "texWanted")) break; await Task.Delay(100); }
+                            await v.EvalForTest("mv.pose(0)"); await v.EvalForTest("mv.opening(true)");
+                            await Task.Delay(300);
+                            var bm = Json.Obj(await v.EvalForTest("mv.st") ?? "null");
+                            notes.Add("info real viewer (feet, before): " + slug + " " + bm?.Str("model") + " nv " + D(bm, "nv"));
+                            var png = await v.CaptureForTest(); if (png != null) File.WriteAllBytes(Path.Combine(shots, "models-feet-" + slug + "-before.png"), png);
+                        }
+                    }
+                    finally { CreatureModel.NoFeetForTest = false; CreatureModels.ResetForTest(); CreatureModels.RootOverride = savedRoot; }
+                }
+            }
+            finally { try { v.Dispose(); host.Close(); } catch (Exception) { } }
+        }
+
         // where the model pictures go: ELANSHUB_MODELS_SHOTS=<folder>, else the section's scratch folder
         static string ModelShots(string work)
         {
@@ -491,7 +578,7 @@ namespace ElansAddonHub
                     double dur = D(st, "duration");
                     foreach (var t in new[] { 0.0, 333, dur * 0.5, dur - 1, dur * 1.7 + 41 }) { var c = await MvComparePose(v, file, t); worst = Math.Max(worst, c.worst); nbp = c.bones; cmp.Add(t.ToString("0", I) + ": " + c.worst.ToString("0.0e0", I) + " " + c.detail); }
                     Check("real viewer: " + name + " - the Stand clock moves (120 ms), " + changed + " of " + nb + " bone matrices change between two frames 200 ms apart, the shader's matrices are the page's",
-                        adv == 120 && changed >= 1 && (await v.EvalForTest("mv.boneTexOk()")) == "true", "advanced " + adv + " changed " + changed);
+                        Math.Abs(adv - 120) < 1e-6 && changed >= 1 && (await v.EvalForTest("mv.boneTexOk()")) == "true", "advanced " + adv + " changed " + changed);
                     Check("real viewer: " + name + " - every bone's matrix at five times of the Stand loop (" + dur.ToString("0", I) + " ms) is the M2 rule worked out in C# from the file (worst " + worst.ToString("0.0e0", I) + ")",
                         nbp == nb && worst < 1e-3, string.Join(" | ", cmp));
                     await v.EvalForTest("mv.pose(" + (dur * 0.3).ToString("0", I) + ")");
@@ -502,6 +589,10 @@ namespace ElansAddonHub
                     if (SelfTestClock.ShotsOn) { var png = await v.CaptureForTest(); if (png != null) File.WriteAllBytes(Path.Combine(shots, "models-viewer-" + slug + ".png"), png); }
                 }
                 v.Dispose(); host.Close(); host = null;
+
+                // ---- 3.7 (format 2): tall character-like creatures in the card's own size (340 x 200): the whole drawn mesh on the screen at every turn and
+                // through the Stand loop (hypothesis "the framing cuts the feet off" - checked, the feet were missing geosets); pictures with their feet
+                try { await ModelsRealFeetViewChecks(shots, Check, notes); } catch (Exception e) { Check("real feet view checks crashed", false, e.ToString()); }
 
                 // ---- on their NPC pages
                 ResetAtlasForTest();

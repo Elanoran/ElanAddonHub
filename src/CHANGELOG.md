@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.7.0
+- **Weapons and shields in 3D.** An item's Atlas page now shows the weapon, shield or off-hand item from your game files: swords, axes, maces, daggers, staves, polearms, bows, guns, wands and shields. Long weapons stand upright, shields face you and sway gently.
+- **Creature models show their feet.** Some older character-style creatures (Stormwind citizens, guards, children such as Aiden, Scholomance students, the Twin Emperors) were drawn without boots or the lower legs, and tall creatures could be cut off at the bottom of the card. Both are fixed; the models are rebuilt once.
+
 ## 3.6.0
 - **Creatures in 3D.** A creature's Atlas page now shows its model from your game files, animated, in a card beside the facts: drag to turn it, scroll to zoom. Beasts, elementals, dragons and bosses for now; humanoid NPCs come later.
 - **Looks.** A creature that can appear in several looks gets a Look switch on its model card, with how often each look is seen.

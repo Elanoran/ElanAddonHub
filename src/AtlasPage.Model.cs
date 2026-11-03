@@ -24,6 +24,10 @@ namespace ElansAddonHub
     //           "Look" and a Segment 1 | 2 | 3 in the card header, each with its chance as a tooltip; the highest chance is shown first. Choosing another
     //           builds that display (CreatureModels.EnsureAsync) and hands it to the same viewer ("load": no new web view, the view keeps its turn and
     //           zoom, no "Loading model..." line over the look before). The card remembers nothing between pages.
+    //   items   (3.7) an item page gets the same card, in the same places, when the item is a weapon, a shield or held in the off hand (its inventory type in
+    //           the game's item data, ModelTables.ItemSlotsShown); armour and everything else get none. Its model is the default appearance's
+    //           (ModelData.ForItem), built per item display (CreatureModels.EnsureItemAsync). No look switch: an item shows one appearance (one with
+    //           several default appearances is only noted in the log).
     public partial class AtlasPage
     {
         public const double ModelCardHeight = 260, ModelViewHeight = 200;
@@ -33,7 +37,7 @@ namespace ElansAddonHub
         ModelView modelView;
         TextBlock modelStatus, modelHint;
         DockPanel modelHead;
-        int modelGen, modelEntry;
+        int modelGen, modelEntry, modelItem;
         List<NpcLook> modelLooks = new List<NpcLook>();
         int modelLook = -1;                 // 3.6 step 5: the look shown (index into modelLooks)
         bool modelSwitching;                // a look after the first is being loaded: no status line over the one before
@@ -46,7 +50,9 @@ namespace ElansAddonHub
         public string ModelStatusForTest => modelStatus != null && modelStatus.Visibility == Visibility.Visible ? modelStatus.Text : "";
         public bool ModelCardInRailForTest => modelCard != null && railStack != null && railStack.Children.IndexOf(modelCard) == 0;
         public int ModelCardOverviewIndexForTest => modelCard != null && tabContent.TryGetValue(AtlasTabs.Overview, out var ov) && ov is StackPanel sp ? sp.Children.IndexOf(modelCard) : -1;
-        public int ModelEntryForTest => modelEntry;        public Task ModelResolveForTest { get; private set; } = Task.CompletedTask;
+        public int ModelEntryForTest => modelEntry;
+        public int ModelItemForTest => modelItem;
+        public Task ModelResolveForTest { get; private set; } = Task.CompletedTask;
         public Task ModelSwitchForTest { get; private set; } = Task.CompletedTask;
         public int LookCountForTest => lookButtons.Count;
         public int LookIndexForTest => modelLook;
@@ -65,14 +71,34 @@ namespace ElansAddonHub
             return int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : 0;
         }
 
-        // the card, or null (not an npc, no display id known, a character model)
+        // 3.7: the item of an item page (0 = not one)
+        public static int ItemIdOf(AtlasPageModel m)
+        {
+            if (m == null || m.NotFound || m.Kind != "item" || string.IsNullOrEmpty(m.Id) || !m.Id.StartsWith("item:", StringComparison.Ordinal)) return 0;
+            var s = m.Id.Substring(5); int q = s.IndexOf('?'); if (q >= 0) s = s.Substring(0, q);
+            return int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : 0;
+        }
+
+        // the card, or null (not an npc, no display id known, a character model; 3.7: an item that is not a weapon, shield or off-hand item)
         Border ModelCardFor(AtlasPageModel m)
         {
+            int item = ItemIdOf(m);
+            if (item > 0)
+            {
+                if (!ModelData.ItemWanted(item)) return null;
+                modelItem = item;
+                return ModelCard(m, "the item");
+            }
             int entry = NpcEntryOf(m);
             if (entry <= 0) return null;
             if (ModelData.DisplaysOf(entry).Count == 0) return null;
             if (ModelData.Ready && ModelData.ForNpc(entry).Humanoid && ModelData.LooksOf(entry).Count == 0) return null;
             modelEntry = entry;
+            return ModelCard(m, "the creature");
+        }
+
+        Border ModelCard(AtlasPageModel m, string what)
+        {
             var g = new Grid();
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -97,7 +123,7 @@ namespace ElansAddonHub
             mv.PaletteRequested += () => Dispatcher.BeginInvoke(new Action(() => { if (IsVisible && mv == modelView) _ = OpenPalette(); }));     // Ctrl+K inside the viewer
             var card = Card(g);
             card.Height = ModelCardHeight; card.Tag = ModelCardTag;
-            System.Windows.Automation.AutomationProperties.SetName(card, "Model of " + (m.Title ?? "the creature"));
+            System.Windows.Automation.AutomationProperties.SetName(card, "Model of " + (m.Title ?? what));
             return card;
         }
 
@@ -127,22 +153,48 @@ namespace ElansAddonHub
         {
             if (modelCard == null) return;
             int gen = ++modelGen, entry = modelEntry;
-            ModelResolveForTest = ResolveModel(entry, gen);
+            ModelResolveForTest = modelItem > 0 ? ResolveItemModel(modelItem, gen) : ResolveModel(entry, gen);
+        }
+
+        // the model tables, read here the first time; false (with the calm line said) when they cannot be used
+        async Task<bool> ModelDataUsable(int gen)
+        {
+            if (ModelData.Status == ModelData.State.NotStarted) ModelData.Start();
+            if (ModelData.Status == ModelData.State.Loading) await WaitModelData(gen);
+            if (gen != modelGen || modelCard == null) return false;
+            switch (ModelData.Status)
+            {
+                case ModelData.State.Disabled: ModelSay("Game data is switched off in Settings, so the model cannot be shown."); return false;
+                case ModelData.State.Unavailable: ModelSay(Sentence("The game's model data is not available" + (string.IsNullOrEmpty(ModelData.Reason) ? "" : " (" + ModelData.Reason + ")"))); return false;
+                case ModelData.State.NotStarted: ModelSay("The game's model data is not read."); return false;
+            }
+            return true;
+        }
+
+        // 3.7: an item's model - its default appearance's display, built once per display
+        async Task ResolveItemModel(int item, int gen)
+        {
+            try
+            {
+                if (!await ModelDataUsable(gen)) return;
+                var im = ModelData.ForItem(item);
+                if (!im.Ok) { ModelSay("There is no model for this item in this game build."); Util.Log("atlas model: item " + item + ": " + im.Reason); return; }
+                foreach (var n in im.Notes) Util.Log("atlas model: item " + item + ": " + n);
+                ModelSay("Loading model...");
+                var r = await CreatureModels.EnsureItemAsync(im.DisplayInfoId);
+                if (gen != modelGen || modelView == null) return;
+                if (!r.Ok) { ModelSay(Sentence("The model cannot be shown: " + r.Reason)); Util.Log("atlas model: item " + item + " display " + im.DisplayInfoId + ": " + r.Reason); return; }
+                modelView.Show(r.Path, ModelData.ItemUpRule(item));
+                ModelViewState();
+            }
+            catch (Exception e) { Util.Log("atlas model: " + e); if (gen == modelGen) ModelSay("The model cannot be shown."); }
         }
 
         async Task ResolveModel(int entry, int gen)
         {
             try
             {
-                if (ModelData.Status == ModelData.State.NotStarted) ModelData.Start();
-                if (ModelData.Status == ModelData.State.Loading) await WaitModelData(gen);
-                if (gen != modelGen || modelCard == null) return;
-                switch (ModelData.Status)
-                {
-                    case ModelData.State.Disabled: ModelSay("Game data is switched off in Settings, so the model cannot be shown."); return;
-                    case ModelData.State.Unavailable: ModelSay(Sentence("The game's model data is not available" + (string.IsNullOrEmpty(ModelData.Reason) ? "" : " (" + ModelData.Reason + ")"))); return;
-                    case ModelData.State.NotStarted: ModelSay("The game's model data is not read."); return;
-                }
+                if (!await ModelDataUsable(gen)) return;
                 var nm = ModelData.ForNpc(entry);
                 var looks = ModelData.LooksOf(entry);
                 if (looks.Count == 0 && nm.Humanoid) { HideModelCard(); return; }          // a character model: not shown yet
@@ -233,7 +285,7 @@ namespace ElansAddonHub
         {
             modelGen++;
             try { modelView?.Dispose(); } catch (Exception) { }
-            modelView = null; modelCard = null; modelStatus = null; modelHint = null; modelEntry = 0;
+            modelView = null; modelCard = null; modelStatus = null; modelHint = null; modelEntry = 0; modelItem = 0;
             modelHead = null; modelLooks = new List<NpcLook>(); modelLook = -1; modelSwitching = false; lookButtons.Clear();
         }
     }

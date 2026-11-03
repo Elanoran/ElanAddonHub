@@ -147,6 +147,40 @@ namespace ElansAddonHub
             // ---- the rules
             Check("build rules: default geosets after wow.export - 0, x01 and 32xx shown; 1, 102, 17xx (eye glow, also 1701) and 35xx not",
                 new[] { 0, 101, 201, 1001, 2301, 3200, 3201 }.All(CreatureModel.DefaultGeoset) && !new[] { 1, 2, 102, 1701, 1702, 3501, 3500, 1100 }.Any(CreatureModel.DefaultGeoset), null);
+            // 3.7 (format 2): FeetGeosets - a group with no default variant that holds the model's lowest part is shown with its lowest variant
+            {
+                float N = float.NaN;
+                bool[] FG(int[] ids, float[] lo, float[] hi, List<string> nt = null) => CreatureModel.FeetGeosets(ids, lo, hi, nt);
+                string Sh(int[] ids, bool[] sh) => string.Join("/", ids.Where((x, i) => sh[i]));
+                var nt1 = new List<string>();
+                // HUMSCitizenMid (display 21) as in 70707: boots only as 502, the feet 27 % of the height below the rest
+                var cit = new[] { 0, 702, 2, 701, 401, 502 };
+                var fg1 = FG(cit, new[] { 0.55f, 1.84f, 1.83f, 1.84f, 0.72f, 0f }, new[] { 1.9f, 1.95f, 2.03f, 1.9f, 1.3f, 0.6f }, nt1);
+                // the boy (124495, Aiden): shins in 501 (shown), the feet in 503 below them - 503 is added to 501
+                var boy = new[] { 0, 401, 501, 503 };
+                var nt2 = new List<string>();
+                var fg2 = FG(boy, new[] { 0.32f, 0.41f, 0.11f, 0.01f }, new[] { 1.29f, 0.78f, 0.38f, 0.13f }, nt2);
+                // a second version of a part (tails 3801 / 3803 from the same root): reaches lower, but overlaps the shown one - left out; so is a head part
+                var tails = new[] { 0, 3801, 3803, 201, 203 };
+                var fg9 = FG(tails, new[] { 0.5f, -0.14f, -0.42f, 2.7f, 2.63f }, new[] { 2.9f, 0.9f, 0.9f, 2.77f, 2.76f });
+                // the group's LOWEST variant is shown, not the sub-mesh that reaches lowest (504 lowest, 503 shown)
+                var low3 = new[] { 0, 504, 503 };
+                var fg3 = FG(low3, new[] { 0.6f, 0f, 0.02f }, new[] { 2f, 0.5f, 0.5f });
+                // a second round: group 5's lowest variant (503) still stops high, so the next lowest group with nothing shown (1302) is added too
+                var two = new[] { 0, 504, 503, 1302 };
+                var fg4 = FG(two, new[] { 1.0f, 0f, 0.5f, 0.3f }, new[] { 2f, 1.0f, 0.6f, 1.2f });      // 504 is a taller boot over 503, not below it
+                // left alone: hair (group 0), eye glow (17xx), 35xx, within 5 %, an empty sub-mesh, nothing default at all
+                var fg5 = FG(new[] { 0, 2, 1702, 3502 }, new[] { 0.5f, 0f, 0f, 0f }, new[] { 2f, 2f, 2f, 2f });
+                var fg6 = FG(new[] { 0, 502 }, new[] { 0.04f, 0f }, new[] { 1f, 0.5f });
+                var fg7 = FG(new[] { 0, 502 }, new[] { 0.5f, N }, new[] { 1f, N });
+                var fg8 = FG(new[] { 2, 502 }, new[] { 0.5f, 0f }, new[] { 1f, 0.5f });
+                Check("build rules (format 2): feet geosets - the citizen's 502 is added (0/701/401/502, noted 5xx); the boy (Aiden) keeps 501 and gets 503 below it; a group gives its lowest variant (503, not 504); a second group when that one still stops high",
+                    Sh(cit, fg1) == "0/701/401/502" && nt1.Count == 1 && nt1[0].Contains("group 5xx") && nt1[0].Contains("502 is shown") && Sh(boy, fg2) == "0/401/501/503" && nt2.Count == 1 && nt2[0].Contains("another variant")
+                    && Sh(low3, fg3) == "0/503" && Sh(two, fg4) == "0/503/1302",
+                    Sh(cit, fg1) + " " + string.Join(";", nt1) + " | " + Sh(boy, fg2) + " " + string.Join(";", nt2) + " | " + Sh(low3, fg3) + " | " + Sh(two, fg4));
+                Check("build rules (format 2): feet geosets leave alone hair variants (0xx), 17xx, 35xx, a second tail that overlaps the shown one, a part that does not reach lower, a gap within 5 % of the height, an empty sub-mesh, and a skin with no default id (all shown later)",
+                    Sh(new[] { 0, 2, 1702, 3502 }, fg5) == "0" && Sh(tails, fg9) == "0/3801/201" && Sh(new[] { 0, 502 }, fg6) == "0" && Sh(new[] { 0, 502 }, fg7) == "0" && !fg8.Any(b => b), null);
+            }
             Check("build rules: a compressed quaternion component: 0x7FFF = 0, -1 = 1, 0 = -1, -13108 = 0.6, -6554 = 0.8",
                 Near(CreatureModel.Quat(32767), 0) && Near(CreatureModel.Quat(-1), 1) && Near(CreatureModel.Quat(0), -1) && Near(CreatureModel.Quat(-13108), 0.6f) && Near(CreatureModel.Quat(-6554), 0.8f),
                 string.Join(" ", new short[] { 32767, -1, 0, -13108, -6554 }.Select(s => CreatureModel.Quat(s).ToString("0.####"))));
@@ -264,13 +298,15 @@ namespace ElansAddonHub
                 ModelData.SetForTest(set);
                 var key = CreatureModels.KeyFor(build);
                 var stale = Path.Combine(CreatureModels.Root, "1.60.1.70338-aaaaaaaa_m1"); Directory.CreateDirectory(Path.Combine(stale, "m"));
+                // 3.7: a 3.6.0 cache of the same build (format 1, before FeetGeosets) is another folder and goes too
+                var staleFormat = Path.Combine(CreatureModels.Root, "1.60.1.70707-2417084b_m1"); Directory.CreateDirectory(Path.Combine(staleFormat, "m"));
                 var t1 = CreatureModels.EnsureAsync(604); var t2 = CreatureModels.EnsureAsync(604);
                 var r1 = await t1; var r2 = await t2;
-                Check("cache: two calls at once share one build; the file is <root>\\1.60.1.70707-2417084b_m1\\m\\604.m2b2 with t\\5001.mtx and t\\6001.mtx (MTX1)",
-                    ReferenceEquals(t1, t2) && r1.Ok && r1.Built && CreatureModels.BuildCountForTest == 1 && key == "1.60.1.70707-2417084b_m1" && r1.Path == Path.Combine(CreatureModels.Root, key, "m", "604.m2b2")
+                Check("cache: two calls at once share one build; the file is <root>\\1.60.1.70707-2417084b_m2\\m\\604.m2b2 with t\\5001.mtx and t\\6001.mtx (MTX1)",
+                    ReferenceEquals(t1, t2) && r1.Ok && r1.Built && CreatureModels.BuildCountForTest == 1 && key == "1.60.1.70707-2417084b_m2" && r1.Path == Path.Combine(CreatureModels.Root, key, "m", "604.m2b2")
                     && File.Exists(r1.Path) && File.Exists(CreatureModels.TexturePath(key, 5001)) && File.Exists(CreatureModels.TexturePath(key, 6001))
                     && Encoding.ASCII.GetString(File.ReadAllBytes(CreatureModels.TexturePath(key, 5001)), 0, 4) == "MTX1", r1.ToString());
-                Check("cache: the folder of another game build is removed the first time a model is made", !Directory.Exists(stale), null);
+                Check("cache: the folder of another game build, and the same build's format-1 folder (3.6.0), are removed the first time a model is made", !Directory.Exists(stale) && !Directory.Exists(staleFormat), null);
                 var fm = CreatureModel.ReadMeta(File.ReadAllBytes(r1.Path), out _);
                 Check("cache: the file names model 126487, display 604, the display's scale 0.71", fm != null && fm.Int("fdid") == 126487 && fm.Int("display") == 604 && Math.Abs((double)fm["scale"] - 0.71) < 1e-3, null);
                 int reads = src.Reads;
@@ -290,8 +326,17 @@ namespace ElansAddonHub
                 var r5 = await CreatureModels.EnsureAsync(604);
                 var fm5 = r5.Ok ? CreatureModel.ReadMeta(File.ReadAllBytes(r5.Path), out _) : null;
                 Check("cache: a new game build = a new folder (the old one removed); a texture that cannot be read is a stand-in (the batch's tex 0, noted, not listed)",
-                    r5.Ok && r5.Path.Contains("1.60.1.70800-0badc0de_m1") && !Directory.Exists(Path.Combine(CreatureModels.Root, key)) && r5.MissingTextures.SequenceEqual(new[] { 6001 })
-                    && fm5 != null && fm5.List("textures").Count == 1 && fm5.List("notes").Any(n => (n as string)?.Contains("could not be read") == true), r5.ToString());
+                    r5.Ok && r5.Path.Contains("1.60.1.70800-0badc0de_m2") && !Directory.Exists(Path.Combine(CreatureModels.Root, key)) && r5.MissingTextures.SequenceEqual(new[] { 6001 })
+                    && fm5 != null && fm5.List("textures").Count == 1 && fm5.List("notes").Any(n => (n as string)?.Contains("could not be read") == true),
+                    r5 + " | the old folder: " + (Directory.Exists(Path.Combine(CreatureModels.Root, key)) ? "still there (" + string.Join(", ", Directory.GetFileSystemEntries(Path.Combine(CreatureModels.Root, key), "*", SearchOption.AllDirectories).Select(Path.GetFileName)) + ")" : "gone")
+                    + " | folders: " + string.Join(", ", Directory.GetDirectories(CreatureModels.Root).Select(Path.GetFileName)));
+                // 3.7: the old folder is moved aside before it is deleted (a scanner holding a file once left part of it behind after a "successful" delete):
+                // whatever is left of it is under a _gone- name, never under the old build key, and it goes with the next clean-up
+                Directory.CreateDirectory(Path.Combine(CreatureModels.Root, "_gone-leftover", "t"));
+                int gone = CreatureModels.RemoveOtherBuilds(CreatureModels.KeyFor(build));
+                Check("cache: a folder left aside by an earlier clean-up (_gone-...) is removed by the next one, the build's own folder and the viewer's page stay",
+                    gone >= 1 && !Directory.GetDirectories(CreatureModels.Root).Any(d => Path.GetFileName(d).StartsWith("_gone-", StringComparison.Ordinal)) && Directory.Exists(Path.Combine(CreatureModels.Root, CreatureModels.KeyFor(build))),
+                    "removed " + gone + " | folders: " + string.Join(", ", Directory.GetDirectories(CreatureModels.Root).Select(Path.GetFileName)));
             }
             finally
             {
