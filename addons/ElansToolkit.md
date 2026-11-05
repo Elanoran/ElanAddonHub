@@ -32,7 +32,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 | Command | |
 |---|---|
 | `/etk` | open the window |
-| `/etk hud on\|off` | the HUD · `/etk bars`: the center bars on or off (the cast bar then hangs between their tips) · `/etk flight on\|off`: the flight timer · `/etk layout`: move the HUD |
+| `/etk hud on\|off` | the HUD · `/etk bars`: the center bars on or off (the cast bar then hangs centered below them) · `/etk flight on\|off`: the flight timer · `/etk layout`: move the HUD |
 | `/etk way <zone> <x> <y> [title]` | set a waypoint (zone name or map id; x and y from 0 to 100) |
 | `/etk way list`, `way next`, `way prev`, `way clear` | your waypoints |
 | `/etk trip <stop>; <stop>; ...` | a trip of up to 10 stops (`[fly] <zone> <x> <y> [title]` each) |
