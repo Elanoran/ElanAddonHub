@@ -22,7 +22,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Your cooldowns** on the HUD: Prayer of Mending, Penance, Fear Ward, racial spells and more, from your own casts.
 - **Five-second rule**: how long until your mana regenerates again, and when the next mana tick lands. With
   [Elan's Toolkit](ElansToolkit.md) it shows on the shared cast bar, and during a cast the ticks are marked on the cast itself.
-  Without it, it is a bar of its own.
+  It can show on the Toolkit's center bars instead, or on both: a thin arc that drains in gold, turns soft blue while you
+  regenerate, and carries a glint up the curve at every mana tick. Without the Toolkit, it is a bar of its own.
 - **Buff manager** (Buffs tab): who in your groups is missing Fortitude, Spirit or Shadow Protection. Pick the raid groups
   you buff; other priests with the addon see your groups and you see theirs. A **Buff next** button casts the right buff
   on the next player who needs it (the Prayer version when enough need it and you carry a candle).
