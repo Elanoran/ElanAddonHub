@@ -18,7 +18,7 @@ Works on its own, and comes with [Elan's Outpost](../README.md).
   guild bank are only saved after you open them once.
 - **Your map position** for the Outpost's world map: off by default; only on when you turn it on.
 - **Emote wheel**: a small icon that opens a ring of 6, 8 or 10 emotes (Thank, Cheer, Wave, Hello, Bow, Laugh, Applaud,
-  Dance, or your own choice). It can be bound to a key (hold, release on the emote).
+  Dance, or your own choice). It can be bound to a key (hold, release on the emote). Right-click the icon to unlock it, drag it to move it, and right-click again to lock it.
 - **`/rl`** for `/reload`, when no other addon already has it.
 - Other Elan addons share their data through it (for example Elan's Bags reads your other characters from it).
 

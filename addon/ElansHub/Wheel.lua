@@ -362,6 +362,8 @@ end
 function EHUB.WheelOpen(opts)
   if not ring or not db().enabled then return end
   opts = opts or {}
+  -- unlocked = moving the icon: the icon must not open the ring, it would cover the icon (the key binding still opens at the mouse)
+  if not db().locked and not opts.cursor and not opts.holding then return end
   if ring:IsShown() and st.anim ~= "close" then
     if opts.holding then st.holding = true st.holdT = 0 end
     return
@@ -585,7 +587,10 @@ local function buildRing()
   end)
   ring:SetScript("OnMouseUp", function(_, b)
     clearPressed()
-    if b == "RightButton" then EHUB.WheelCollapse() return end
+    if b == "RightButton" then
+      if wheel and wheel:IsMouseOver() then EHUB.ToggleWheelMove() else EHUB.WheelCollapse() end
+      return
+    end
     if b == "LeftButton" then
       local btn = st.sector and buttons[st.sector]
       if btn and btn.token then perform(btn.token) else EHUB.WheelCollapse() end
@@ -633,6 +638,7 @@ function EHUB.ApplyWheel()
     UI.SetBorder(wheel, C.border)
   else
     UI.SetBorder(wheel, C.good)
+    if ring and ring:IsShown() and not st.holding then EHUB.WheelCollapse(true) end
   end
   if ring and ring:IsShown() then st.scale = w.scale or 1 end
 end
@@ -640,6 +646,13 @@ end
 function EHUB.SetWheelLocked(v)
   db().locked = v and true or false
   EHUB.ApplyWheel()
+end
+
+-- right-click on the icon: move mode on / off (green border = it can be dragged)
+function EHUB.ToggleWheelMove()
+  EHUB.SetWheelLocked(not db().locked)
+  chat("emote wheel " .. (db().locked and "locked" or "unlocked - drag the icon to move it, right-click it to lock"))
+  if EHUB.RefreshSettings then EHUB.RefreshSettings() end
 end
 
 function EHUB.SetWheelSlots(n)
@@ -665,7 +678,7 @@ function EHUB.WheelCommand(arg)
     return
   else chat("emote wheel: /ehub wheel on|off|lock|unlock|reset|open (open = at the mouse; also a key binding in the game's Key Bindings, under AddOns)") return end
   EHUB.ApplyWheel()
-  chat("emote wheel: " .. (w.enabled and "on" or "off") .. ", " .. (w.locked and "locked" or "unlocked (drag the centre icon)"))
+  chat("emote wheel: " .. (w.enabled and "on" or "off") .. ", " .. (w.locked and "locked" or "unlocked (drag the icon, right-click it to lock)"))
 end
 
 -- key binding (Bindings.xml): hold to open at the mouse, release to do the emote under it
@@ -698,14 +711,19 @@ local function initWheel()
     if not ring:IsShown() then
       UI.Tip.Begin(self, "ANCHOR_TOP")
       UI.Tip.Title("Emote wheel")
-      UI.Tip.Action("Click", "open")
-      UI.Tip.Action("Drag", db().locked and "locked" or "move")
+      if db().locked then
+        UI.Tip.Action("Click", "open")
+        UI.Tip.Action("Right-click", "unlock to move")
+      else
+        UI.Tip.Action("Drag", "move")
+        UI.Tip.Action("Right-click", "lock")
+      end
       UI.Tip.Show()
     end
   end)
   wheel:SetScript("OnLeave", function() if not ring:IsShown() then GameTooltip:Hide() end end)
   wheel:SetScript("OnClick", function(_, button)
-    if button == "RightButton" then EHUB.WheelCollapse() return end
+    if button == "RightButton" then EHUB.ToggleWheelMove() return end
     if ring:IsShown() and st.anim ~= "close" then EHUB.WheelCollapse() else EHUB.WheelOpen() end
   end)
   wheel:SetScript("OnDragStart", function(self) if not db().locked then self:StartMoving() end end)

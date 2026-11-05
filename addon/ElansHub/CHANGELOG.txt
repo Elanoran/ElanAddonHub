@@ -54,3 +54,5 @@
 1.18.1 A calmer settings page: under "Share my map position with Elan's Outpost" there is now one short line, and the full explanation is in the tooltip when you point at the check. The long text no longer runs over the note below it. Nothing else changes. A /reload is enough for this update.
 
 1.18.2 Only the description of "Share my map position with Elan's Outpost" changed (the tooltip on the settings page): it said sharing with your Lodge "does not exist yet". Elan's Outpost can now share your position with your Lodge, but that is the Outpost's own switch (Settings > General > Share my map position with the Lodge), off until you turn it on, and it lets you pick who sees it (everyone or officers only). The addon itself still sends nothing anywhere - it only draws your position into its status strip for the Outpost on this PC. Nothing else changes. A /reload is enough for this update.
+
+1.18.3 Emote wheel: right-click the icon to unlock or lock it. While unlocked the ring no longer opens from the icon, so nothing covers it and it can be dragged.

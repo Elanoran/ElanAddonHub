@@ -39,7 +39,7 @@ local function initMinimap()
     if button == "RightButton" then
       local w = EHUB.DB().wheel
       EHUB.SetWheelLocked(not w.locked)
-      print("|cffabd473Elan's Hub|r: emote wheel " .. (w.locked and "locked" or "unlocked - drag its centre icon to move it"))
+      print("|cffabd473Elan's Hub|r: emote wheel " .. (w.locked and "locked" or "unlocked - drag the icon to move it, right-click it to lock"))
       if EHUB.RefreshSettings then EHUB.RefreshSettings() end
     else
       EHUB.OpenSettings()
