@@ -27,7 +27,7 @@ Needs [Elan's Toolkit](ElansToolkit.md); get both with [Elan's Outpost](../READM
   next to the world map.
 
 **Combat** (shown on Elan's Toolkit's HUD)
-- **Distance strip**: melee, dead zone or in range.
+- **Distance strip**: melee, dead zone or in range. With the Toolkit's center bars on, it's a small pill beside the right arc.
 - **Auto Shot timer** on the cast bar: "Reload - free to move" and "Aiming - don't move".
 - A warning when Aspect of the Cheetah or Pack may daze you, and a **post-fight summary** (clipped shots, damage, tips).
 
