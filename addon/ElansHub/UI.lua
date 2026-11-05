@@ -98,6 +98,18 @@ function Tip.Note(text, color)
   local c = C[color or "textDim"]
   GameTooltip:AddLine(text, c[1], c[2], c[3], true)
 end
+function Tip.Gap() GameTooltip:AddLine(" ") end
+-- the same words as ElansLib's Tip
+function Tip.ShiftDetails(lines)
+  if IsShiftKeyDown and IsShiftKeyDown() then
+    Tip.Gap()
+    for _, l in ipairs(lines) do Tip.Note(l) end
+    return true
+  end
+  local f = C.textFaint or C.textDim
+  GameTooltip:AddLine("Hold Shift for details", f[1], f[2], f[3])
+  return false
+end
 function Tip.Show() GameTooltip:Show() end
 
 -- ------------------------------------------------------------ widgets
