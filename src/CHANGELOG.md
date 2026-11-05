@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.8.3
+- **Ready for game patch 1.60.1.70790.** The patch reworked many talents, most of all for Paladin and Rogue, with changes for Warrior, Shaman, Druid, Priest and Hunter too. The recommended builds are rewritten for the new trees; each one lays 51 legal points, and they have not been tested in play yet.
+- Talents Forever links made before the patch are refused for Paladin, Rogue, Druid and Shaman until the site updates them.
+- **Race notes:** the patch gave dwarves Artisan's Precision instead of Earth Fury, and orcs Command instead of Savage; the race pages' notes now say so.
+- **Game patches page:** new talents show their real names, and the spell count no longer jumps when the game's data could only be read on one side of the comparison.
+
 ## 3.8.2
 - **Addons in a clear order.** The Addons page now lists Elan's Hub first, then the Toolkit, then the class helpers and Bags.
 - **Needed addons first.** An addon that needs another one (Hunter Helper needs Elan's Toolkit) shows a faded Install button and "Needs Elan's Toolkit", with a button to install the Toolkit right there. The welcome guide installs needed addons first.

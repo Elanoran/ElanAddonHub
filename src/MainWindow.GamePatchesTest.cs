@@ -27,7 +27,7 @@ namespace ElansAddonHub
             void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "gamepatches");
-            var savedFile = GameBuilds.FilePath; var savedNow = GameBuilds.Now; var savedCurrent = SettingsPage.CurrentGameBuild; var savedName = GameBuilds.TalentName;
+            var savedFile = GameBuilds.FilePath; var savedNow = GameBuilds.Now; var savedCurrent = SettingsPage.CurrentGameBuild; var savedName = GameBuilds.TalentName; var savedSpellBuild = GameBuilds.SpellBuild;
             var savedAtlas = SettingsPage.OpenAtlas; var savedW = Width; var savedH = Height; var savedGet = PatchNotes.Get; var savedLoad = settings.PatchNotesLoad;
             const string A = "wow_classic_beta|1.60.1.70450|84bea4233331e390fda8724c6f91ffa5", B = "wow_classic_beta|1.60.1.70532|ad1802f4455e427ed8b7769aab25b0c0", C = "wow_classic_beta|1.60.1.70600|0123456789abcdef0123456789abcdef";
             try
@@ -68,6 +68,14 @@ namespace ElansAddonHub
                     ds != null && ds.Added == 1 && ds.Modified == 1 && ds.Removed == 0 && ds.Rows.Any(r => r.Id == 10 && r.Detail.Contains("cast time 3500 → 3000") && r.Detail.Contains("effect 1")) && ds.Rows.All(r => r.Id != 11),
                     ds == null ? "null" : string.Join(" | ", ds.Rows.Select(r => r.Id + " " + r.Detail)));
                 Check("spells: without spell tables on either side there is nothing to compare (null, not 'everything removed')", GameBuilds.DiffSpells(new AtlasSet(), Spells(Spell(1, "x", "", 0, 0))) == null);
+                // SpellDuration could not be read at 70707 (a new layout): every duration was 0 on that side, 15001 spells "changed". The reader, not the patch.
+                SpellInfo Timed(int id, int ms, int cast) { var s = Spell(id, "Spell " + id, "Text.", cast, 1); s.DurationMs = ms; return s; }
+                var dd = GameBuilds.DiffSpells(Spells(Timed(20, 8000, 1500), Timed(21, 30000, 1500)), Spells(Timed(20, 0, 1500), Timed(21, 0, 1000)));
+                Check("spells: a table read on one side only (every duration 0 there) is not compared: only the real change (cast time) counts, and the other way round too",
+                    dd.Modified == 1 && dd.Rows[0].Id == 21 && dd.Rows[0].Detail == "cast time 1500 → 1000" && GameBuilds.DiffSpells(Spells(Timed(20, 0, 1500)), Spells(Timed(20, 8000, 1500))).Total == 0,
+                    string.Join(" | ", dd.Rows.Select(r => r.Id + " " + r.Detail)));
+                var dd2 = GameBuilds.DiffSpells(Spells(Timed(20, 8000, 1500), Timed(21, 30000, 1500)), Spells(Timed(20, 0, 1500), Timed(21, 30000, 1500)));
+                Check("spells: a duration that really changed to 0 while the table is read on both sides still counts", dd2.Modified == 1 && dd2.Rows[0].Detail == "duration 8000 → 0", dd2.Rows.FirstOrDefault()?.Detail);
 
                 GameBuilds.TalentName = n => n.SpellId == 500 ? "Improved Aspect" : n.SpellId == 501 ? "Lightning Reflexes" : null;
                 TalentSet Trees(int ranks, bool extra)
@@ -82,6 +90,27 @@ namespace ElansAddonHub
                     dt.Added == 1 && dt.Modified == 1 && dt.Rows.Any(r => r.Name == "Hunter: Lightning Reflexes" && r.Op == GameBuilds.Added && r.Link == "spell:501")
                     && dt.Rows.Any(r => r.Name == "Hunter: Improved Aspect" && r.Detail == "ranks 5 → 3"), string.Join(" | ", dt.Rows.Select(r => r.Name + ": " + r.Detail)));
                 Check("talents: the same trees = nothing", GameBuilds.DiffTalents(Trees(5, true), Trees(5, true)).Total == 0);
+                // the talent reader is done first: the spell data in hand is the previous build's and knows no spell that is new in this build
+                {
+                    var spellsAt = A; var oldTree = Trees(5, false); var newTree = Trees(5, true);
+                    oldTree.Trees[0].Nodes.Add(new TalentNode { Id = 102, Spec = 0, Row = 0, Col = 2, Entries = { new TalentEntry { SpellId = 502, MaxRanks = 1 } } });
+                    var named = GameBuilds.TalentName;
+                    GameBuilds.SpellBuild = () => spellsAt;
+                    GameBuilds.TalentName = n => n.SpellId == 500 ? "Improved Aspect" : n.SpellId == 501 && spellsAt == B ? "Lightning Reflexes" : n.SpellId == 502 && spellsAt == A ? "Old Trick" : null;
+                    GameBuilds.CompareTalents(A, B, oldTree, newTree);
+                    var early = GameBuilds.Find(B).Of("talents");
+                    Check("talents: compared before this build's spells are read, the new talent is kept at once with a stand-in name and its spell link, the removed one with its old name",
+                        early.Added == 1 && early.Removed == 1 && early.Rows.Any(r => r.Name == "Hunter: talent 101" && r.Link == "spell:501") && early.Rows.Any(r => r.Name == "Hunter: Old Trick" && r.Op == GameBuilds.Removed), string.Join(" | ", early.Rows.Select(r => r.Name)));
+                    GameBuilds.SpellsArrived();
+                    Check("talents: the spell data still being the previous build's, nothing is compared again", GameBuilds.Find(B).Of("talents").Rows.Any(r => r.Name == "Hunter: talent 101"));
+                    spellsAt = B;
+                    GameBuilds.SpellsArrived();
+                    var late = GameBuilds.Find(B).Of("talents");
+                    Check("talents: when the spells of this build arrive the talents are compared again: the new talent has its real name, the removed one keeps the name only the old spells knew, same counts",
+                        late.Added == 1 && late.Removed == 1 && late.Rows.Any(r => r.Name == "Hunter: Lightning Reflexes" && r.Link == "spell:501") && late.Rows.Any(r => r.Name == "Hunter: Old Trick") && late.Rows.All(r => !r.Name.Contains("talent 10")), string.Join(" | ", late.Rows.Select(r => r.Name)));
+                    GameBuilds.TalentName = named; GameBuilds.SpellBuild = savedSpellBuild;
+                    File.Delete(GameBuilds.FilePath); GameBuilds.ResetForTest();
+                }
 
                 MapSet Maps(bool dalaran)
                 {
@@ -198,7 +227,7 @@ namespace ElansAddonHub
             catch (Exception e) { Check("no exception", false, e.ToString()); }
             finally
             {
-                GameBuilds.FilePath = savedFile; GameBuilds.Now = savedNow; GameBuilds.TalentName = savedName; GameBuilds.ResetForTest();
+                GameBuilds.FilePath = savedFile; GameBuilds.Now = savedNow; GameBuilds.TalentName = savedName; GameBuilds.SpellBuild = savedSpellBuild; GameBuilds.ResetForTest();
                 PatchNotes.Get = savedGet; settings.PatchNotesLoad = savedLoad;
                 SettingsPage.CurrentGameBuild = savedCurrent; SettingsPage.OpenAtlas = savedAtlas; SettingsPage.PickPatchForTest(null);
                 Width = savedW; Height = savedH;

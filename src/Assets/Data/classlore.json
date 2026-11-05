@@ -250,7 +250,7 @@
     "The Dark Iron dwarves of Blackrock Depths are the dwarves' bitter enemies",
     "In Forever dwarves can be shaman, the only Alliance shaman among the Classic races"
    ],
-   "foreverNotes": "Forever adds the Dwarf shaman. The client gives dwarves Stoneform, Find Treasure and two new passives, Earth Fury and Big Game Hunter (more damage against beasts); Blizzard's race page names Mace Specialization where the client has Earth Fury. Dwarf priests learn Desperate Prayer and the new Chastise; Fear Ward is for every priest now.",
+   "foreverNotes": "Forever adds the Dwarf shaman. The client gives dwarves Stoneform, Find Treasure and two new passives, Artisan's Precision (more hit chance with all spells and attacks) and Big Game Hunter (more damage against beasts); Blizzard's race page names Mace Specialization where the client has Artisan's Precision. Dwarf priests learn Desperate Prayer and the new Chastise; Fear Ward is for every priest now.",
    "sources": [ "https://warcraft.wiki.gg/wiki/Dwarf", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
@@ -313,7 +313,7 @@
     "The Burning Blade cult still serves the Legion in the hills of Durotar",
     "Orcs can be mages in Forever, one of its new race and class pairs"
    ],
-   "foreverNotes": "Forever adds the Orc mage. The client lists Blood Fury (attack power and spell power now), Hardiness, Savage (more critical strike chance with all spells and abilities) and the new Shatter Curse, which removes curses and banes; Blizzard's race page names Axe Specialization where the client has Savage.",
+   "foreverNotes": "Forever adds the Orc mage. The client lists Blood Fury (attack power and spell power now), Hardiness, Command (more damage from Hunter and Warlock pets) and the new Shatter Curse, which removes curses and banes; Blizzard's race page names Axe Specialization where the client has Command.",
    "sources": [ "https://warcraft.wiki.gg/wiki/Orc", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {

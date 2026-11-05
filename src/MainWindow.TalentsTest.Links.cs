@@ -251,10 +251,17 @@ namespace ElansAddonHub
                 bool mage707 = mageT != null && mageT.Nodes.All(n => nameOf(n) != "Arcane Focus");
                 bool OldMage(string c) => mage707 && c.StartsWith("mage/");
                 bool RefusedAsOther(BuildLinks.Decoded d) => !d.Ok && (d.Error ?? "").Contains("different talent trees");
+                // 1.60.1.70790 reworked more trees (Paladin: Twist of Light gone; Rogue: Thousand Cuts -> Death Mark; Druid: Berserk -> Primal Bite; Shaman: Lava Burst ->
+                // Call of Thunder): the site's links were made for the trees before it. A rank no longer fits there, so they must be refused, never guessed.
+                bool Gone(string cls, string talent) { var t = set.ForClassFile(cls); return t != null && t.Nodes.All(n => nameOf(n) != talent); }
+                bool pal790 = Gone("PALADIN", "Twist of Light"), rog790 = Gone("ROGUE", "Thousand Cuts"), dru790 = Gone("DRUID", "Berserk"), sha790 = Gone("SHAMAN", "Lava Burst");
+                bool Old790(string c) => pal790 && c.StartsWith("paladin/") || rog790 && c.StartsWith("rogue/") || dru790 && c.StartsWith("druid/");
+                bool RefusedAsOld(BuildLinks.Decoded d) => !d.Ok && ((d.Error ?? "").Contains("does not fit this game version") || (d.Error ?? "").Contains("different talent trees"));
                 var bad7 = siteV7.Select(c => (c, d: BuildLinks.Decode("https://talentsforever.com/" + c + "?b=70425&d=261016", set, nameOf)))
-                    .Where(x => OldMage(x.c) ? !RefusedAsOther(x.d) : !(x.d.Ok && x.d.State.Total == x.c.Split('/')[2].Where(char.IsDigit).Sum(ch => ch - '0') - 7 && x.d.State.Total > 30)).Select(x => x.c + ": " + x.d.Error).ToList();
+                    .Where(x => OldMage(x.c) ? !RefusedAsOther(x.d) : Old790(x.c) ? !RefusedAsOld(x.d) : !(x.d.Ok && x.d.State.Total == x.c.Split('/')[2].Where(char.IsDigit).Sum(ch => ch - '0') - 7 && x.d.State.Total > 30)).Select(x => x.c + ": " + x.d.Error).ToList();
                 if (mage707) notes.Add("real game files, links: the Mage trees are 70707's; the site's older Mage links are expected to be refused");
-                Check("real game files, links: a -7 Talents Forever build of each of the nine classes (from the site) reads as a legal build with every point on the game's trees", bad7.Count == 0, string.Join(" | ", bad7));
+                if (pal790 || rog790 || dru790 || sha790) notes.Add("real game files, links: the trees of 70790 (Paladin, Rogue, Druid, Shaman): the site's links from before it are expected to be refused where a rank no longer fits");
+                Check("real game files, links: a -7 Talents Forever build of each of the nine classes (from the site) reads as a legal build with every point on the game's trees; on trees a patch reworked it is refused as made for other trees", bad7.Count == 0, string.Join(" | ", bad7));
 
                 // the talents build 70425 added sit where the site counts them: a -7 rank lands on the talent the site names
                 Func<string, string, int, string> at = (c, link, tr) =>
@@ -282,15 +289,21 @@ namespace ElansAddonHub
                 foreach (var (v7, v6) in pairs)
                 {
                     if (OldMage(v7)) continue;   // made for the Mage trees before 70707
+                    if (sha790 && v7.StartsWith("shaman/"))     // made for the Shaman trees before 70790: both forms are refused alike
+                    {
+                        var oldV7 = BuildLinks.Decode("https://talentsforever.com/" + v7, set, nameOf); var oldV6 = BuildLinks.Decode("https://talentsforever.com/" + v6, set, nameOf);
+                        if (!RefusedAsOld(oldV7) || !RefusedAsOld(oldV6)) badPairs.Add(v6 + ": expected a refusal on the trees of 70790: " + oldV7.Error + " / " + oldV6.Error);
+                        continue;
+                    }
                     var a = BuildLinks.Decode("https://talentsforever.com/" + v7, set, nameOf); var b = BuildLinks.Decode("https://talentsforever.com/" + v6, set, nameOf);
                     bool same = a.Ok && b.Ok && a.State.Total > 0 && a.State.SameAs(b.State) && (a.Order == null) == (b.Order == null) && b.OrderNote == a.OrderNote
                         && (a.Order == null || a.Order.Steps.Select(x => x.NodeId).SequenceEqual(b.Order.Steps.Select(x => x.NodeId)));
                     if (!same) badPairs.Add(v6 + ": " + a.Error + b.Error + " " + a.OrderNote + " " + b.OrderNote);
                 }
-                Check("real game files, links: the same build as a -6 and as a -7 Talents Forever link imports to the same talents (Priest, Shaman, Mage and Warlock moved; with the leveling order too)",
+                Check("real game files, links: the same build as a -6 and as a -7 Talents Forever link imports to the same talents (Priest, Warlock and Hunter; with the leveling order too), and on trees a patch reworked both are refused alike",
                     badPairs.Count == 0, string.Join(" | ", badPairs));
-                var withOrder = BuildLinks.Decode("https://talentsforever.com/" + pairs[5].Item2, set, nameOf);
-                Check("real game files, links: the -6 Shaman link's leveling order is used (no note)", withOrder.Ok && withOrder.Order != null && withOrder.OrderNote == null, withOrder.Error + " " + withOrder.OrderNote);
+                var withOrder = BuildLinks.Decode("https://talentsforever.com/" + (sha790 ? pairs[6] : pairs[5]).Item2, set, nameOf);
+                Check("real game files, links: the leveling order of a -6 link is used (no note): the Priest's, the Shaman's until 70790 reworked its trees", withOrder.Ok && withOrder.Order != null && withOrder.OrderNote == null, withOrder.Error + " " + withOrder.OrderNote);
                 var gone = BuildLinks.Decode("https://talentsforever.com/priest/60/--00000000002-6", set, nameOf);
                 Check("real game files, links: a -6 link with points in a talent build 70425 removed (Improved Fade) is refused with its name, not guessed", !gone.Ok && gone.Error.Contains("Improved Fade") && gone.Error.Contains("no longer"), gone.Error);
             }

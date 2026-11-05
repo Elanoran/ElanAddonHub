@@ -187,7 +187,7 @@ namespace ElansAddonHub.Services
         public static Func<DateTime> Now = () => DateTime.Now;      // self-test: a fixed day
         static string Today() => Now().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-        public static void ResetForTest() { lock (gate) { cache = null; cachePath = null; } }
+        public static void ResetForTest() { lock (gate) { cache = null; cachePath = null; talentsAgain = null; talentsTo = null; } }
 
         static List<Entry> Load()
         {
@@ -250,6 +250,7 @@ namespace ElansAddonHub.Services
         {
             public int Id;
             public string Name = "", Link;
+            public bool NameKnown = true;                 // false: a stand-in ("talent 113629"): no "renamed from" with such a name on either side
             public readonly List<KeyValuePair<string, string>> List = new List<KeyValuePair<string, string>>();
             public Facts Add(string label, object v) { List.Add(new KeyValuePair<string, string>(label, Text(v))); return this; }
         }
@@ -277,7 +278,7 @@ namespace ElansAddonHub.Services
                 if (!a.TryGetValue(kv.Key, out var old)) { res.Added++; added.Add(new Row { Op = Added, Id = kv.Key, Name = kv.Value.Name, Link = kv.Value.Link }); continue; }
                 var what = new List<string>();
                 var oldFacts = old.List.ToDictionary(p => p.Key, p => p.Value);
-                if (old.Name != kv.Value.Name) what.Add("renamed from " + old.Name);
+                if (old.Name != kv.Value.Name && old.NameKnown && kv.Value.NameKnown) what.Add("renamed from " + old.Name);
                 foreach (var p in kv.Value.List)
                 {
                     if (!oldFacts.TryGetValue(p.Key, out var was)) { if (p.Value.Length > 0) what.Add(p.Key + " " + Short(p.Value)); continue; }
@@ -315,15 +316,37 @@ namespace ElansAddonHub.Services
         }
 
         // ---- spells: the shipped spell tables (the server's hotfix rows are laid over later and differ per client)
-        public static KindChanges DiffSpells(AtlasSet before, AtlasSet after) =>
-            before?.Spells == null || after?.Spells == null ? null : Diff(SpellFacts(before.Spells), SpellFacts(after.Spells));
+        public static KindChanges DiffSpells(AtlasSet before, AtlasSet after)
+        {
+            if (before?.Spells == null || after?.Spells == null) return null;
+            var unread = UnreadOnOneSide(before.Spells, after.Spells);
+            return Diff(SpellFacts(before.Spells, unread), SpellFacts(after.Spells, unread));
+        }
 
-        static IEnumerable<Facts> SpellFacts(SpellSnapshot s)
+        // a small lookup table this Outpost could not read leaves its number 0 on every spell of that side (SpellDuration's new layout in 70707: "15001 spells
+        // changed", then 15129 in 70790 when it could be read again). That is the reader, not the patch: the number is not compared between those two builds.
+        static HashSet<string> UnreadOnOneSide(SpellSnapshot a, SpellSnapshot b)
+        {
+            var res = new HashSet<string>();
+            void Look(string label, Func<SpellInfo, bool> has)
+            {
+                if (a.Spells.Values.Any(has) == b.Spells.Values.Any(has)) return;
+                res.Add(label);
+                Util.Log("game builds: spell " + label + " could be read on one side only: not compared for this patch");
+            }
+            Look("cast time", s => s.CastMs != 0); Look("duration", s => s.DurationMs != 0); Look("range", s => s.RangeMax != 0);
+            return res;
+        }
+
+        static IEnumerable<Facts> SpellFacts(SpellSnapshot s, HashSet<string> unread)
         {
             foreach (var sp in s.Spells.Values)
             {
                 var f = new Facts { Id = sp.Id, Name = string.IsNullOrEmpty(sp.Rank) ? sp.Name ?? "" : sp.Name + " (" + sp.Rank + ")", Link = AtlasIds.Spell(sp.Id) };
-                f.Add("description", sp.Desc).Add("aura text", sp.Aura).Add("icon", sp.IconId).Add("cast time", sp.CastMs).Add("duration", sp.DurationMs).Add("range", sp.RangeMax);
+                f.Add("description", sp.Desc).Add("aura text", sp.Aura).Add("icon", sp.IconId);
+                if (!unread.Contains("cast time")) f.Add("cast time", sp.CastMs);
+                if (!unread.Contains("duration")) f.Add("duration", sp.DurationMs);
+                if (!unread.Contains("range")) f.Add("range", sp.RangeMax);
                 foreach (var e in sp.Effects ?? SpellInfo.NoEffects)
                     f.Add("effect " + (e.Index + 1), e.Effect + "/" + e.Aura + " " + Text(e.Points) + (e.PeriodMs > 0 ? " every " + e.PeriodMs : "") + (e.Coef != 0 ? " x" + Text(e.Coef) : "") + (e.Radius != 0 ? " r" + Text(e.Radius) : ""));
                 yield return f;
@@ -333,17 +356,56 @@ namespace ElansAddonHub.Services
         // ---- talents: the nodes of each class's trees (id = the node), named after their spell
         public static Func<TalentNode, string> TalentName = n => { try { return TalentData.NodeName(n); } catch { return null; } };
 
-        public static KindChanges DiffTalents(TalentSet before, TalentSet after) => Diff(TalentFacts(before), TalentFacts(after));
+        public static KindChanges DiffTalents(TalentSet before, TalentSet after) => Diff(TalentFacts(before, null), TalentFacts(after, null));
 
-        static IEnumerable<Facts> TalentFacts(TalentSet s)
+        // A patch's new talents sit on spells only the new spell tables know, and the talent reader is usually done first while the spell data in hand is still the
+        // previous build's. So the comparison is kept at once with the names known now (the Outpost may be closed before the spells are read), and made again with
+        // the real names when the spells of this build are there. The names of the old trees are taken now: only the previous build's spells know a removed one.
+        public static Func<string> SpellBuild = () => SpellData.Ready && !SpellData.Stale ? SpellData.Build : null;      // self-test: which build the spell names are of
+        static Action talentsAgain;
+        static string talentsTo;
+        static bool spellsHooked;
+
+        public static void CompareTalents(string from, string to, TalentSet old, TalentSet fresh)
+        {
+            if (old == null || fresh == null) return;
+            var named = new Dictionary<int, string>();
+            foreach (var t in old.Trees)
+                foreach (var n in t.Nodes) { var x = TalentName(n); if (!string.IsNullOrEmpty(x)) named[n.Id] = x; }
+            void Go() => Compare("talents", from, to, old, fresh, (a, b) => Diff(TalentFacts(a, named), TalentFacts(b, null)));
+            Go();
+            if (SpellBuild() == to) return;
+            lock (gate)
+            {
+                talentsAgain = Go; talentsTo = to;
+                if (!spellsHooked) { spellsHooked = true; SpellData.Changed += SpellsArrived; }
+            }
+            SpellsArrived();
+        }
+
+        // the spell data changed: the talents that waited for this build's names are compared again (once)
+        public static void SpellsArrived()
+        {
+            Action go;
+            lock (gate)
+            {
+                if (talentsAgain == null || SpellBuild() != talentsTo) return;
+                go = talentsAgain; talentsAgain = null; talentsTo = null;
+            }
+            go();
+        }
+
+        static IEnumerable<Facts> TalentFacts(TalentSet s, Dictionary<int, string> names)
         {
             foreach (var t in s.Trees)
                 foreach (var n in t.Nodes)
                 {
-                    var name = TalentName(n);
-                    if (string.IsNullOrEmpty(name)) name = "talent " + n.Id;
+                    string name = null;
+                    if (names == null || !names.TryGetValue(n.Id, out name)) name = TalentName(n);
+                    bool known = !string.IsNullOrEmpty(name);
+                    if (!known) name = "talent " + n.Id;
                     var spec = n.Spec >= 0 && n.Spec < t.SpecNames.Length ? t.SpecNames[n.Spec] : "tree " + (n.Spec + 1);
-                    var f = new Facts { Id = n.Id, Name = (string.IsNullOrEmpty(t.ClassName) ? "" : t.ClassName + ": ") + name, Link = n.SpellId > 0 ? AtlasIds.Spell(n.SpellId) : null };
+                    var f = new Facts { Id = n.Id, Name = (string.IsNullOrEmpty(t.ClassName) ? "" : t.ClassName + ": ") + name, NameKnown = known, Link = n.SpellId > 0 ? AtlasIds.Spell(n.SpellId) : null };
                     f.Add("tree", spec).Add("place", "row " + (n.Row + 1) + " column " + (n.Col + 1)).Add("ranks", n.MaxRanks).Add("spell", n.SpellId)
                      .Add("needs", string.Join(",", t.Incoming(n.Id).Where(e => e.Type != TalentEdge.Visual).Select(e => e.From).OrderBy(x => x)) + "|" + string.Join(",", n.Conds.Select(c => c.Type + ":" + c.Spent).OrderBy(x => x, StringComparer.Ordinal)))
                      .Add("rank amounts", string.Join(";", (n.Entry?.Curves ?? new List<EffectCurve>()).Select(c => c.EffectIndex + "=" + string.Join(",", c.ByRank.Select(v => Text(v))))));

@@ -161,13 +161,13 @@ namespace ElansAddonHub
                 var racial = d.PlayableRaces().ToDictionary(r => r.Name, r => AtlasQuery.Build(AtlasIds.Race(r.Id)).Section("racial")?.Rows.Select(x => x.Title).ToList() ?? new List<string>());
                 var named = new Dictionary<string, string[]>
                 {
-                    ["Human"] = new[] { "Perception", "The Human Spirit", "Ruthless", "Will to Survive" }, ["Dwarf"] = new[] { "Stoneform", "Find Treasure", "Earth Fury", "Big Game Hunter" },
+                    ["Human"] = new[] { "Perception", "The Human Spirit", "Ruthless", "Will to Survive" }, ["Dwarf"] = new[] { "Stoneform", "Find Treasure", "Artisan's Precision", "Big Game Hunter" },
                     ["Night Elf"] = new[] { "Elune's Light", "Shadowmeld", "Quickness", "Wisp Spirit" }, ["Gnome"] = new[] { "Expansive Mind", "Eureka!" },
-                    ["Orc"] = new[] { "Blood Fury", "Hardiness", "Savage", "Shatter Curse" }, ["Undead"] = new[] { "Touch of the Grave" }, ["Tauren"] = new[] { "Plainsrunning" },
+                    ["Orc"] = new[] { "Blood Fury", "Hardiness", "Command", "Shatter Curse" }, ["Undead"] = new[] { "Touch of the Grave" }, ["Tauren"] = new[] { "Plainsrunning" },
                     ["Troll"] = new[] { "Rapid Regeneration", "Regeneration", "Berserking", "Beast Slaying" },
                 };
                 var missingRacial = named.SelectMany(kv => kv.Value.Where(n => !racial[kv.Key].Contains(n) || Note(ClassLore.ForRace(kv.Key)).IndexOf(n, StringComparison.Ordinal) < 0).Select(n => kv.Key + ":" + n)).ToList();
-                claims.Add(new KeyValuePair<string, bool>("the racials the race notes name are on that race's page [" + string.Join(",", missingRacial) + "]", missingRacial.Count == 0));
+                claims.Add(new KeyValuePair<string, bool>("the racials the race notes name are on that race's page [" + string.Join(",", missingRacial) + "] pages: " + string.Join(" | ", missingRacial.Select(x => x.Split(':')[0]).Distinct().Select(r => r + ": " + string.Join(", ", racial[r]))), missingRacial.Count == 0));
                 claims.Add(new KeyValuePair<string, bool>("Read Leyline is the High Order's only, Skysight the Windshapers' only, the other three shared",
                     racial["High Order Skyborne"].Contains("Read Leyline") && !racial["High Order Skyborne"].Contains("Skysight") && racial["Windshaper Skyborne"].Contains("Skysight") && !racial["Windshaper Skyborne"].Contains("Read Leyline")
                     && new[] { "Walk on Air", "Wind Blessed", "Elemental Insight" }.All(n => racial["High Order Skyborne"].Contains(n) && racial["Windshaper Skyborne"].Contains(n))));
