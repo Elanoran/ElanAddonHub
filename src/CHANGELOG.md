@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.8.4
+- **Old talent links can't land on the wrong talents.** A Talents Forever link made before a patch moved its class's talents is now refused and says why, for Warrior, Paladin, Hunter, Rogue, Shaman, Druid and Mage. New links from the site read again by themselves once it has updated.
+- The Shaman build Lava Caller is now called Thunder Caller: patch 70790 replaced Lava Burst with Call of Thunder.
+
 ## 3.8.3
 - **Ready for game patch 1.60.1.70790.** The patch reworked many talents, most of all for Paladin and Rogue, with changes for Warrior, Shaman, Druid, Priest and Hunter too. The recommended builds are rewritten for the new trees; each one lays 51 legal points, and they have not been tested in play yet.
 - Talents Forever links made before the patch are refused for Paladin, Rogue, Druid and Shaman until the site updates them.

@@ -270,7 +270,7 @@ Builds = {
       },
     },
     {
-      id = "lava", name = "Lava Caller",
+      id = "lava", name = "Thunder Caller",
       roles = { "Dungeon", "Raid" },
       desc = "Elemental casting: Concussion and Elemental Alacrity, Elemental Focus at 20, Call of Thunder at 30, Lightning Overload and Elemental Fury, Lightning Mastery at 40. Enhancement for Ancestral Knowledge and Thundering Strikes.",
       stats = "Spell Power > Hit > Crit > Intellect",

@@ -244,9 +244,17 @@ namespace ElansAddonHub.Services.Talents
         // ============================================================================================================================ talentsforever.com
         // https://talentsforever.com/hunter/60/5555-0-2-7      or with the order: .../hunter/60/55-5-23-AB2C-7   (legacy segments are three more between)
         // The last segment is the generation of the site's trees the digits count on. -7 (15 Oct 2026) counts on the trees of build 70425; -6 on the trees
-        // before it, which differ for the Priest, Shaman, Mage and Warlock only. A ?b=<build>&d=<date> query may follow; it is not part of the build.
+        // before it, which differ for the Priest, Shaman, Mage and Warlock only. A ?b=<build>&d=<date> query may follow: the game build the site made it on (TfTreesMoved).
         static readonly Regex TfPath = new Regex(@"([a-z]+)/(\d+)/([0-9A-Za-z-]*)$", RegexOptions.IgnoreCase);
         const int TfNow = 7;
+
+        // 3.8.4: the game build that last moved talents in a class's tree. The digits count talents in the site's order, so on moved trees an older link can
+        // still read as legal with its ranks on other talents. A link that names an older build is refused, never guessed; one from the site's updated trees
+        // reads again by itself. A link without ?b= can't be dated and reads as before. Patches that only change amounts or names don't belong here.
+        static readonly Dictionary<string, int> TfTreesMoved = new Dictionary<string, int>
+        {
+            { "WARRIOR", 70790 }, { "PALADIN", 70790 }, { "HUNTER", 70790 }, { "ROGUE", 70790 }, { "SHAMAN", 70790 }, { "DRUID", 70790 }, { "MAGE", 70707 },
+        };
 
         // -6 -> -7: where each talent of a -6 tree sits in the -7 trees (tree * 100 + index in the site's order), or the name of a talent build 70425 removed;
         // "=" is a tree that did not change. Read from the site's own tables (TALENT_ORDER_V6 against its current trees, renames followed), October 2026.
@@ -306,6 +314,8 @@ namespace ElansAddonHub.Services.Talents
             if (!ClassFiles.TryGetValue(cls, out var file)) return Fail(TfName, "The Talents Forever link does not name a class this game has.");
             var tree = find(file);
             if (tree == null) return NoTree(TfName, cls);
+            if (TfTreesMoved.TryGetValue(file, out var moved) && Query(u).TryGetValue("b", out var madeOn) && int.TryParse(madeOn, out var made) && made < moved)
+                return Fail(TfName, "The " + TfName + " link was made for different talent trees than this game has (game build " + made + "; a patch moved these talents in build " + moved + "). Open the site once it has updated, and copy the link again.");
             var all = m.Groups[3].Value.Split('-').ToList();
             int nt = tree.SpecCount;
             // the last segment is the version of the site's trees when there is one more segment than trees

@@ -121,8 +121,13 @@ namespace ElansAddonHub
             Check("links: Talents Forever legacy segments (three after the trees) are skipped, not mistaken for an order", tf9.Ok && tf9.State.SameAs(want) && tf9.Order == null, tf9.Error);
             // since 15 Oct 2026 the site writes -7 (the trees of build 70425); the Hunter's trees did not change, so -6 and -7 are the same build
             var tf10 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-7", set, nm);
-            var tf11 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-ABCDEG-7?b=70425&d=261016", set, nm);
-            Check("links: Talents Forever '-7' links decode to the same build as '-6' (with and without an order; the ?b=70425&d=261016 the site adds is ignored)",
+            var tf11 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-ABCDEG-7?b=70790&d=261105", set, nm);
+            var tfOld = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-ABCDEG-7?b=70425&d=261016", set, nm);
+            var tfOldest = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-6?b=69000", set, nm);
+            var tfNoB = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-ABCDEG-7", set, nm);
+            Check("links: a Talents Forever link naming a game build before its class's trees last moved is refused, whatever its form, and says why; one without a build can't be dated and still reads",
+                !tfOld.Ok && (tfOld.Error ?? "").Contains("different talent trees") && (tfOld.Error ?? "").Contains("70425") && !tfOldest.Ok && tfNoB.Ok, tfOld.Error + " | " + tfOldest.Error + " | " + tfNoB.Error);
+            Check("links: Talents Forever '-7' links decode to the same build as '-6' (with and without an order; with the ?b=70790&d=261105 the site adds)",
                 tf10.Ok && tf10.Site == "Talents Forever" && tf10.State.SameAs(want) && tf10.Order == null && tf11.Ok && tf11.State.SameAs(want) && tf11.Order != null && tf2.Order != null
                 && tf11.Order.Steps.Select(x => x.NodeId).SequenceEqual(tf2.Order.Steps.Select(x => x.NodeId)), tf10.Error + " " + tf11.Error);
             var tf12 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-8", set, nm);
@@ -255,7 +260,8 @@ namespace ElansAddonHub
                 // Call of Thunder): the site's links were made for the trees before it. A rank no longer fits there, so they must be refused, never guessed.
                 bool Gone(string cls, string talent) { var t = set.ForClassFile(cls); return t != null && t.Nodes.All(n => nameOf(n) != talent); }
                 bool pal790 = Gone("PALADIN", "Twist of Light"), rog790 = Gone("ROGUE", "Thousand Cuts"), dru790 = Gone("DRUID", "Berserk"), sha790 = Gone("SHAMAN", "Lava Burst");
-                bool Old790(string c) => pal790 && c.StartsWith("paladin/") || rog790 && c.StartsWith("rogue/") || dru790 && c.StartsWith("druid/");
+                // 3.8.4: these links name build 70425 (below), so every class whose talents 70790 moved refuses them by the build, Warrior, Hunter and Shaman too
+                bool Old790(string c) => pal790 && c.StartsWith("paladin/") || rog790 && c.StartsWith("rogue/") || dru790 && c.StartsWith("druid/") || c.StartsWith("warrior/") || c.StartsWith("hunter/") || c.StartsWith("shaman/");
                 bool RefusedAsOld(BuildLinks.Decoded d) => !d.Ok && ((d.Error ?? "").Contains("does not fit this game version") || (d.Error ?? "").Contains("different talent trees"));
                 var bad7 = siteV7.Select(c => (c, d: BuildLinks.Decode("https://talentsforever.com/" + c + "?b=70425&d=261016", set, nameOf)))
                     .Where(x => OldMage(x.c) ? !RefusedAsOther(x.d) : Old790(x.c) ? !RefusedAsOld(x.d) : !(x.d.Ok && x.d.State.Total == x.c.Split('/')[2].Where(char.IsDigit).Sum(ch => ch - '0') - 7 && x.d.State.Total > 30)).Select(x => x.c + ": " + x.d.Error).ToList();
