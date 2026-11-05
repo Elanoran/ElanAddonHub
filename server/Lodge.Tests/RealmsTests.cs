@@ -165,6 +165,11 @@ public sealed class RealmsTests
         Assert.True(t.M.Available);
         Assert.Equal(new[] { "Hogger", "Nethergarde" }, t.M.Current.Select(r => r.Name).ToArray());
         Assert.All(t.M.Current, r => Assert.Equal("dynamic-wowf-eu", r.Namespace));
+        // the later polls keep them too (they only refresh what the first one found)
+        t.R.Clock.Advance(TimeSpan.FromMinutes(5));
+        await t.Poll();
+        Assert.True(t.M.Available);
+        Assert.Equal(new[] { "Hogger", "Nethergarde" }, t.M.Current.Select(r => r.Name).ToArray());
         Assert.True(RealmsModule.ForeverOnly("dynamic-forever-us"));
         Assert.False(RealmsModule.ForeverOnly("dynamic-classic-eu"));
     }
@@ -454,7 +459,7 @@ public sealed class RealmsTests
         Assert.Contains("realms", on.R.Hub.FeatureList());
         var (m, _) = (on.R.Join("Mia", "member"), 0);
         Assert.Contains("realms", ((JsonArray)on.R.Hub.Welcome(m)["features"]!).Select(x => (string)x!));
-        Assert.Equal("2.37.2", LodgeHub.Version);
+        Assert.Equal("2.37.3", LodgeHub.Version);
     }
 
     [Fact]

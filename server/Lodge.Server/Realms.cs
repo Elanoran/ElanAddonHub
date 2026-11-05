@@ -336,7 +336,7 @@ public sealed class RealmsModule : IModule
                 catch (RealmsHttpException e) when (e.Status is 404 or 400) { continue; }   // one odd realm must not stop the probe; 401 / 429 / 5xx do
                 if (c == null) continue;
                 foreach (var r in c.Realms) if (seen.Count < 80) seen.Add(r.Name + (r.Category.Length > 0 ? " [" + r.Category + "]" : ""));
-                var hits = ForeverOnly(ns) ? c.Realms.ToList() : c.Realms.Where(RealmsParse.IsForever).ToList();
+                var hits = Hits(ns, c);
                 if (hits.Count == 0) continue;
                 forever += hits.Count;
                 keep.Add((ns, id));
@@ -361,7 +361,7 @@ public sealed class RealmsModule : IModule
             try
             {
                 var c = RealmsParse.ConnectedRealm(await Api(ns, "connected-realm/" + id, tok, ct));
-                if (c != null) { foreach (var r in c.Realms.Where(RealmsParse.IsForever)) result.Add(ToEntry(ns, c, r)); okCount++; }
+                if (c != null) { foreach (var r in Hits(ns, c)) result.Add(ToEntry(ns, c, r)); okCount++; }
             }
             catch (RealmsHttpException e) { last = e; if (e.Status is 401 or 429) throw; }
         }
@@ -374,6 +374,9 @@ public sealed class RealmsModule : IModule
         }
         return result.OrderBy(r => RealmsParse.RulesetRank(r.Ruleset)).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Take(MaxRealms).ToList();
     }
+
+    // the Forever realms of a connected realm, the same rule for the first poll and every later one
+    static List<RealmsParse.RealmInfo> Hits(string ns, RealmsParse.Connected c) => ForeverOnly(ns) ? c.Realms.ToList() : c.Realms.Where(RealmsParse.IsForever).ToList();
 
     static RealmEntry ToEntry(string ns, RealmsParse.Connected c, RealmsParse.RealmInfo r) => new()
     {
