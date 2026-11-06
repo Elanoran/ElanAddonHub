@@ -13,7 +13,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   Weakened Soul, Prayer of Mending and Fear Ward with the seconds left. A tile shows "REZ name" when another priest with
   this addon is already resurrecting that player.
 - **Click-casting**: nine clicks (left, right, Shift, Ctrl, middle, mouse buttons 4 and 5), each with a spell *and a
-  rank*, so you can downrank. The **Smart** click resurrects a dead player out of combat, buffs a missing Fortitude (not in
+  rank*, so you can downrank. The **Smart** click resurrects a dead player out of combat, buffs a missing or running-out Fortitude (not in
   the first 20 seconds after a fight, and you can turn this off), and otherwise heals (Flash Heal unless you choose another). Defaults: left = Smart, right = Renew, Shift+left = Greater Heal,
   Shift+right = Power Word: Shield, middle = Dispel or Cure Disease.
 - **Ready cues on the tiles**: Renew goes red and pulses in its last 3 seconds, the shield says GO when Weakened Soul ends, and
