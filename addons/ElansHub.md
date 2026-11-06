@@ -39,7 +39,7 @@ reads it. Your Lodge only gets what the Outpost shares, and each kind of sharing
 | `/ehub position on\|off` | share your map position with the Outpost (off by default) |
 | `/ehub calendar on\|off` | save the in-game calendar for the Outpost |
 | `/ehub wheel` | emote wheel settings · `wheel on\|off\|lock\|unlock\|reset\|open` |
-| `/ehub copy` | show the last 200 chat lines in a box you can copy from (nothing is saved) |
+| `/ehub copy` | pick from the last 200 chat lines (click, Shift-click, drag or search), then copy only those (nothing is saved) |
 
 `/elanshub` works too.
 

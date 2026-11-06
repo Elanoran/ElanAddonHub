@@ -58,3 +58,5 @@
 1.18.3 Emote wheel: right-click the icon to unlock or lock it. While unlocked the ring no longer opens from the icon, so nothing covers it and it can be dragged.
 
 1.18.4 The minimap button's tooltip has the same layout as Elan's other addons
+
+1.18.5 /ehub copy lets you pick lines: click one, Shift-click for a range or drag across them. They stay picked while you scroll or search, and Copy picked shows only those
