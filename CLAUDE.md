@@ -41,4 +41,4 @@ Tuning the 3D map or its pages: use `Tools\devoutpost.ps1` with the `outpost-dev
 - `string.GetHashCode` changes per process on .NET 10: anything shared across processes needs a stable hash, like the private `StableHash` in `App.xaml.cs`.
 - Lodge invite codes go only in the `X-Lodge-Code` header, never in URLs.
 - Server changes aren't live after a push. Deploy only when asked.
-- Releases run from `../ElansHunterHelper` with `Tools/release.py`, on its `main` branch. Parallel agents each get their own worktree.
+- Releases run from `../ElansHunterHelper` with `Tools/release.py`, on its `main` branch; its `CLAUDE.md` has how we work in bundles: dev, then test, then promote. Parallel agents each get their own worktree.
