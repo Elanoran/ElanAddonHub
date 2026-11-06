@@ -12,7 +12,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **HUD**: one movable block with a **cast bar** (spell name, icon, time), a **threat bar** and a **flight path
   countdown** that learns how long each route takes ("~" marks an estimate). Elan's class addons add their own pieces to it.
 - **Center bars** (off by default, `/etk bars`): curved health and power bars around your character, you on the left and your
-  target on the right, with a label beside the right arc: level badge, name and range.
+  target on the right, with a label beside the right arc: level badge, name and range. In combat a thin arc inside the right arc
+  shows your threat, and the label says who holds aggro, like Pet tanking.
 - **Tooltip** (`/etk tooltip`, everything off by default): choose where each kind of tooltip goes (world units, world objects, unit
   frames, buttons): the corner, the mouse, next to it or a spot you drag, with offsets. Also a dark background with a border by class, reaction or item quality, the name in that colour, Horde and Alliance as icons, who it is targeting (YOU when it is you), a mana, rage or energy bar, a slim health bar, and the item ID on
   Shift. Each switch works by itself.
