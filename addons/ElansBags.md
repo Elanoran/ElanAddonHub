@@ -18,7 +18,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **New items** have a gold ring until you hover them.
 - **Bag bar** in the window: hover a bag to see its slots, drop a bag on it to swap.
 - **Bank**: on WoW Forever's tabbed bank it opens next to the game's bank and lists every tab with the same search.
-- **Mailbox list**: next to the mailbox, your other characters on this realm and faction, and your friends. Click a name to
+- **Mailbox list**: next to the mailbox, your other characters on this realm and faction, and your friends: this character's, your other characters' and
+  Battle.net friends online here. Click a name to
   put it in the To: field. Your other characters need [Elan's Hub](ElansHub.md) and one login each.
 - **Junk seller**: Alt+right-click an item to mark it as junk. At a merchant a **Sell junk** button sells grey and marked
   items; selling automatically is a setting (off by default).
