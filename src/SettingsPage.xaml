@@ -816,6 +816,27 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="New pinned messages" Tag="In channels you can see. Off by default.">
                 <CheckBox x:Name="ToastPinBox" Style="{StaticResource Switch}" Click="Overlay_Click" />
               </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Every new message" Tag="A card for every message in your channels, not only mentions and replies. Off by default.">
+                <CheckBox x:Name="ToastMessagesBox" Style="{StaticResource Switch}" Click="Overlay_Click" AutomationProperties.Name="A toast for every new message" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="A friend comes online" Tag="A card when someone connects to the Lodge, or a note from the tray when no card would show. To choose people, click them in the member list and pick Tell me when they come online. Off by default. Someone who appears offline is never mentioned.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="ToastFriendsOff" Style="{StaticResource Segment}" Content="Off" GroupName="tfriends" Checked="Overlay_Click" />
+                    <RadioButton x:Name="ToastFriendsAll" Style="{StaticResource Segment}" Content="Everyone" GroupName="tfriends" Checked="Overlay_Click" />
+                    <RadioButton x:Name="ToastFriendsChosen" Style="{StaticResource Segment}" Content="Chosen people" GroupName="tfriends" Checked="Overlay_Click" />
+                  </StackPanel>
+                </Border>
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Only when they start playing WoW" Tag="Instead of when they connect. Only for people who share what they play.">
+                <CheckBox x:Name="ToastFriendsPlayingBox" Style="{StaticResource Switch}" Click="Overlay_Click" AutomationProperties.Name="Only tell me when friends start playing WoW" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Play a sound when a friend comes online" Tag="Off by default. Never during a fight, and the Sounds switch under Voice turns it off too.">
+                <CheckBox x:Name="ToastFriendSoundBox" Style="{StaticResource Switch}" Click="Overlay_Click" AutomationProperties.Name="Play a sound when a friend comes online" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Wait until I'm out of a dungeon" Tag="All cards wait until you leave the dungeon or raid, as they already do during a fight, and arrive as one summary. Off by default.">
+                <CheckBox x:Name="ToastHoldInstanceBox" Style="{StaticResource Switch}" Click="Overlay_Click" AutomationProperties.Name="Hold toasts until I'm out of a dungeon" />
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Outpost update ready">
                 <CheckBox x:Name="ToastUpdateBox" Style="{StaticResource Switch}" Click="Overlay_Click" />
               </HeaderedContentControl>

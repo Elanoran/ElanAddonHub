@@ -860,6 +860,7 @@ namespace ElansAddonHub.Lodge
             PopVolumeArea.Visibility = m.Offline || m.IsMe ? Visibility.Collapsed : Visibility.Visible;
             PopModArea.Visibility = !m.Offline && Session.CanModerateMember(m) ? Visibility.Visible : Visibility.Collapsed;
             PopMute.Content = m.ServerMuted ? "Unmute for everyone" : "Mute for everyone";
+            UpdatePopFriend(m);
             PopMention.Visibility = m.IsMe ? Visibility.Collapsed : Visibility.Visible;
             bool joinable = !m.Offline && m.Room != null && m.Room != Session.MyRoom && Session.Me != null;
             PopJoin.Visibility = joinable ? Visibility.Visible : Visibility.Collapsed;
@@ -888,6 +889,20 @@ namespace ElansAddonHub.Lodge
             PopDeviceLink.Visibility = m != null && !m.IsMe && !m.Guest
                 && InviteRanks.CanSendDeviceLink(Session.MyRole, Session.CanInvite, Session.SupportsTokens, theirRole ?? m.Role, m.Guest)
                 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // "Tell me when they come online": not for myself or a guest (a guest's name isn't theirs next time), and with "everyone" chosen there is nothing to choose
+        void UpdatePopFriend(MemberVM m)
+        {
+            PopFriend.Visibility = m.IsMe || m.Guest || Session.Settings.ToastFriends == "all" ? Visibility.Collapsed : Visibility.Visible;
+            PopFriend.Content = Session.IsChosenFriend(m.Name) && Session.Settings.ToastFriends == "chosen" ? "Stop telling me when they come online" : "Tell me when they come online";
+        }
+
+        void PopFriend_Click(object sender, RoutedEventArgs e)
+        {
+            if (popMember == null) return;
+            Session.SetChosenFriend(popMember.Name, !(Session.IsChosenFriend(popMember.Name) && Session.Settings.ToastFriends == "chosen"));
+            UpdatePopFriend(popMember);
         }
 
         void PopDeviceLink_Click(object sender, RoutedEventArgs e)

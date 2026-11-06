@@ -167,6 +167,7 @@ namespace ElansAddonHub.Lodge
             Toasts = new ToastCenter(Settings)
             {
                 InCombat = () => Presence.Current != null && Presence.Current.InCombat,
+                InInstance = () => Presence.Current != null && Presence.Current.InInstance,
                 ChannelOnScreen = ch => Selected != null && Selected.Id == ch && (IsShownToUser?.Invoke() ?? false) && (IsAtBottom?.Invoke() ?? true),
             };
         }
@@ -390,6 +391,7 @@ namespace ElansAddonHub.Lodge
                     SyncRooms(joined: j);
                     StatusText = OnlineText;
                     Changed?.Invoke();
+                    FriendJoined(j);
                     break;
                 case LeaveMsg.Type:
                     int goneId = LeaveMsg.Read(new LodgeJsonFields(m)).Id;
@@ -398,6 +400,7 @@ namespace ElansAddonHub.Lodge
                     {
                         DropLivePos(gone);
                         if (gone.Room != null && gone.Room == MyRoom) Sounds.Leave();
+                        FriendLeft(gone);
                         Members.Remove(gone);
                         RefreshAuthorAvatars(gone.Name);
                     }
@@ -421,7 +424,9 @@ namespace ElansAddonHub.Lodge
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
                     mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
                     if (mem.Invisible && !mem.IsMe && !CanSeeInvisible) DropLivePos(mem);   // never a dot for someone I can't see
+                    bool wasPlaying = mem.Playing;
                     ApplyGame(mem, uv.Game);
+                    FriendGameChanged(mem, wasPlaying);
                     Remember(mem);
                     if (mem.BadgeKey != oldBadge) RefreshAuthorAvatars(mem.Name);
                     if (!mem.Voice) voice?.RemovePeer(mem.Id);
@@ -1042,6 +1047,8 @@ namespace ElansAddonHub.Lodge
             if (vm.Mentioned) toasted = ToastFor(ToastKind.Mention, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
             else if (Me != null && vm.ReplyFrom != null && string.Equals(vm.ReplyFrom, Me.Name, StringComparison.OrdinalIgnoreCase))
                 toasted = ToastFor(ToastKind.Reply, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
+            else if (!vm.Mine && Settings.ToastMessages)
+                toasted = ToastFor(ToastKind.Message, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
             var mode = Settings.NotifyMode ?? "mentions";
             if (vm.Mentioned && mode != "none") Sounds.Mention();
             // one notification per message: when a toast is on screen the tray balloon stays quiet

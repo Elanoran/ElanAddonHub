@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.9.0
+- **Know when a friend comes online.** A small card over the game when someone connects to your Lodge, or only when they start playing WoW. Choose everyone or chosen people: click someone in the member list and pick "Tell me when they come online". Off by default, with an optional sound (Settings > Lodge > Toasts and notifications). Someone who appears offline is never mentioned, and a connection that drops and comes back stays quiet.
+- **A card for every new message**, not only mentions and replies. Off by default.
+- **Wait until I'm out of a dungeon**: cards can now also wait for the end of a dungeon or raid, as they already do for a fight, and arrive as one summary. Off by default.
+
 ## 3.8.4
 - **Old talent links can't land on the wrong talents.** A Talents Forever link made before a patch moved its class's talents is now refused and says why, for Warrior, Paladin, Hunter, Rogue, Shaman, Druid and Mage. New links from the site read again by themselves once it has updated.
 - The Shaman build Lava Caller is now called Thunder Caller: patch 70790 replaced Lava Burst with Call of Thunder.

@@ -183,6 +183,12 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "toastRepliesOff")] public bool ToastRepliesOff { get; set; }
         [DataMember(Name = "toastReactions")] public bool ToastReactions { get; set; }  // default off
         [DataMember(Name = "toastPins")] public bool ToastPins { get; set; }            // default off
+        [DataMember(Name = "toastMessages")] public bool ToastMessages { get; set; }    // default off: a toast for every message, not only mentions and replies
+        [DataMember(Name = "toastFriends")] public string ToastFriends { get; set; }    // a friend comes online: off (default) | all | chosen
+        [DataMember(Name = "toastFriendNames")] public List<string> ToastFriendNames { get; set; } // the chosen people, by login name
+        [DataMember(Name = "toastFriendsPlaying")] public bool ToastFriendsPlaying { get; set; }   // only when they start playing WoW, not when they connect
+        [DataMember(Name = "toastFriendSound")] public bool ToastFriendSound { get; set; }         // default off
+        [DataMember(Name = "toastHoldInstance")] public bool ToastHoldInstance { get; set; }       // default off: toasts also wait until I'm out of a dungeon or raid
         [DataMember(Name = "toastUpdateOff")] public bool ToastUpdateOff { get; set; }
         [DataMember(Name = "toastHealthOff")] public bool ToastHealthOff { get; set; }      // default on: "Elan's Bags: 2 new errors"
         [DataMember(Name = "realmStatusOff")] public bool RealmStatusOff { get; set; }          // default on: realm dots at the top (needs a Lodge with the realms feature)

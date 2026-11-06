@@ -10,7 +10,7 @@ namespace ElansAddonHub.Lodge
 {
     // What a toast is about. Reminders (events with a time) come later: add a kind here, give it a setting in
     // ToastCenter.Enabled and call Push - nothing else needs to change.
-    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event, Realms, Security }
+    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event, Realms, Security, Friend, Message }
 
     public class ToastItem
     {
@@ -42,7 +42,8 @@ namespace ElansAddonHub.Lodge
         public double Opacity { get => opacity; set => Set(ref opacity, value); }
         public string KickerText { get; set; }
         public string Kicker => KickerText ?? (Kind == ToastKind.Mention ? "Mention" : Kind == ToastKind.Reply ? "Reply" : Kind == ToastKind.Reaction ? "Reaction"
-            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : Kind == ToastKind.Event ? "Group" : "Summary");
+            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : Kind == ToastKind.Event ? "Group"
+            : Kind == ToastKind.Friend ? "Friend" : Kind == ToastKind.Message ? "Message" : "Summary");
         public string Glyph => Kind == ToastKind.Mention ? "@" : Kind == ToastKind.Reply ? "" : Kind == ToastKind.Reaction ? ""
             : Kind == ToastKind.Pin ? "" : Kind == ToastKind.Update ? "" : "";
         public bool GlyphIsText => Kind == ToastKind.Mention;
@@ -68,9 +69,9 @@ namespace ElansAddonHub.Lodge
     }
 
     // The in-game toasts: small cards over WoW (click-through, never taking focus - see ToastWindow).
-    // Rules: a global switch and one per kind; nothing is shown while I'm in combat (they wait and arrive as ONE summary after
-    // the fight); nothing when the Lodge window is focused on that very channel; at most 3 on screen; a burst of the same kind in
-    // the same channel becomes one card ("3 new mentions in #general"). Pure logic with an injectable clock.
+    // Rules: a global switch and one per kind; nothing is shown while I'm in combat, or in a dungeon if I asked for that (they wait
+    // and arrive as ONE summary afterwards); nothing when the Lodge window is focused on that very channel; at most 3 on screen; a
+    // burst of the same kind in the same channel becomes one card ("3 new mentions in #general"). Pure logic with an injectable clock.
     public class ToastCenter
     {
         public static readonly TimeSpan Stay = TimeSpan.FromSeconds(6);
@@ -82,6 +83,10 @@ namespace ElansAddonHub.Lodge
         readonly Settings settings;
         public Func<DateTime> Clock = () => DateTime.UtcNow;
         public Func<bool> InCombat = () => false;
+        public Func<bool> InInstance = () => false;
+        // toasts wait right now (and arrive as one summary afterwards)
+        public bool Holding => InCombat() || (settings.ToastHoldInstance && InInstance());
+        bool heldForInstance;                                      // something waited for the dungeon, not only for a fight
         public Func<string, bool> ChannelOnScreen = ch => false;   // the Lodge window is focused and shows this channel
         public readonly ObservableCollection<ToastVM> Visible = new ObservableCollection<ToastVM>();
         readonly List<ToastItem> held = new List<ToastItem>();
@@ -95,13 +100,15 @@ namespace ElansAddonHub.Lodge
         {
             if (settings.ToastsOff) return false;
             // "Notifications: Nothing" silences the chat toasts too
-            if (settings.NotifyMode == "none" && (k == ToastKind.Mention || k == ToastKind.Reply || k == ToastKind.Reaction || k == ToastKind.Pin)) return false;
+            if (settings.NotifyMode == "none" && (k == ToastKind.Mention || k == ToastKind.Reply || k == ToastKind.Reaction || k == ToastKind.Pin || k == ToastKind.Message || k == ToastKind.Friend)) return false;
             switch (k)
             {
                 case ToastKind.Mention: return !settings.ToastMentionsOff;
                 case ToastKind.Reply: return !settings.ToastRepliesOff;
                 case ToastKind.Reaction: return settings.ToastReactions;   // default off
                 case ToastKind.Pin: return settings.ToastPins;             // default off
+                case ToastKind.Message: return settings.ToastMessages;     // default off
+                case ToastKind.Friend: return settings.ToastFriends == "all" || settings.ToastFriends == "chosen";   // default off
                 case ToastKind.Update: return !settings.ToastUpdateOff;
                 case ToastKind.Health: return !settings.ToastHealthOff;
                 case ToastKind.Realms: return settings.RealmsBackNotice && !settings.RealmStatusOff;   // default off
@@ -114,7 +121,13 @@ namespace ElansAddonHub.Lodge
         {
             if (!Enabled(it.Kind)) return false;
             if (it.ChannelId != null && ChannelOnScreen(it.ChannelId)) return false;
-            if (InCombat()) { held.Add(it); if (held.Count > 60) held.RemoveAt(0); return true; }
+            if (Holding)
+            {
+                if (!InCombat()) heldForInstance = true;
+                held.Add(it);
+                if (held.Count > 60) held.RemoveAt(0);
+                return true;
+            }
             Show(it);
             return true;
         }
@@ -123,7 +136,7 @@ namespace ElansAddonHub.Lodge
         {
             var now = Clock();
             // coalesce a burst: same kind + channel still on screen
-            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms && it.Kind != ToastKind.Security);
+            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms && it.Kind != ToastKind.Security && it.Kind != ToastKind.Friend);
             if (same != null)
             {
                 same.Count++;
@@ -135,7 +148,7 @@ namespace ElansAddonHub.Lodge
             var vm = new ToastVM
             {
                 Kind = it.Kind, KickerText = it.Kicker, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
-                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event || it.Kind == ToastKind.Realms || it.Kind == ToastKind.Security ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
+                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event || it.Kind == ToastKind.Realms || it.Kind == ToastKind.Security || it.Kind == ToastKind.Friend ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
                 Text = it.Text, Opacity = 0,
             };
             Visible.Add(vm);
@@ -145,7 +158,7 @@ namespace ElansAddonHub.Lodge
 
         static string Plural(ToastKind k, int n, string channel)
         {
-            var noun = k == ToastKind.Mention ? "mention" : k == ToastKind.Reply ? "repl" + (n == 1 ? "y" : "ies") : k == ToastKind.Reaction ? "reaction" : "pin";
+            var noun = k == ToastKind.Mention ? "mention" : k == ToastKind.Reply ? "repl" + (n == 1 ? "y" : "ies") : k == ToastKind.Reaction ? "reaction" : k == ToastKind.Message ? "message" : "pin";
             if (k != ToastKind.Reply && n != 1) noun += "s";
             return $"{n} new {noun}" + (channel != null ? " in #" + channel : "");
         }
@@ -155,17 +168,20 @@ namespace ElansAddonHub.Lodge
         public void Tick()
         {
             var now = Clock();
-            if (held.Count > 0 && !InCombat())
+            if (held.Count > 0 && !Holding)
             {
                 var items = held.ToList();
+                bool forInstance = heldForInstance;
                 held.Clear();
+                heldForInstance = false;
                 if (items.Count == 1) Show(items[0]);
                 else
                 {
-                    var parts = items.GroupBy(i => i.Kind).Select(g => g.Count() + " " + (g.Key == ToastKind.Mention ? "mention" : g.Key == ToastKind.Reply ? "repl" + (g.Count() == 1 ? "y" : "ies")
-                        : g.Key == ToastKind.Reaction ? "reaction" : g.Key == ToastKind.Pin ? "pin" : g.Key == ToastKind.Health ? "addon error" : "update") + (g.Count() > 1 && g.Key != ToastKind.Reply ? "s" : ""));
+                    var parts = items.GroupBy(i => i.Kind).Select(g => g.Key == ToastKind.Friend ? g.Count() + (g.Count() > 1 ? " friends online" : " friend online")
+                        : g.Count() + " " + (g.Key == ToastKind.Mention ? "mention" : g.Key == ToastKind.Reply ? "repl" + (g.Count() == 1 ? "y" : "ies")
+                        : g.Key == ToastKind.Reaction ? "reaction" : g.Key == ToastKind.Pin ? "pin" : g.Key == ToastKind.Health ? "addon error" : g.Key == ToastKind.Message ? "message" : "update") + (g.Count() > 1 && g.Key != ToastKind.Reply ? "s" : ""));
                     var chans = items.Where(i => i.Channel != null).Select(i => "#" + i.Channel).Distinct().ToList();
-                    Show(new ToastItem { Kind = ToastKind.Summary, Sender = items.Count + " missed in combat", Text = string.Join(", ", parts) + (chans.Count > 0 ? " · " + string.Join(", ", chans.Take(3)) : "") });
+                    Show(new ToastItem { Kind = ToastKind.Summary, Sender = items.Count + (forInstance ? " missed in the dungeon" : " missed in combat"), Text = string.Join(", ", parts) + (chans.Count > 0 ? " · " + string.Join(", ", chans.Take(3)) : "") });
                 }
             }
             foreach (var v in Visible.ToList())

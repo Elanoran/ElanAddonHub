@@ -178,6 +178,8 @@ namespace ElansAddonHub
             OverlayAlwaysBox.IsChecked = s.OverlayAlways;
             ToastsBox.IsChecked = !s.ToastsOff; ToastMentionBox.IsChecked = !s.ToastMentionsOff; ToastReplyBox.IsChecked = !s.ToastRepliesOff;
             ToastReactBox.IsChecked = s.ToastReactions; ToastPinBox.IsChecked = s.ToastPins; ToastUpdateBox.IsChecked = !s.ToastUpdateOff; ToastHealthBox.IsChecked = !s.ToastHealthOff;
+            ToastMessagesBox.IsChecked = s.ToastMessages; ToastFriendsPlayingBox.IsChecked = s.ToastFriendsPlaying; ToastFriendSoundBox.IsChecked = s.ToastFriendSound; ToastHoldInstanceBox.IsChecked = s.ToastHoldInstance;
+            ToastFriendsOff.IsChecked = s.ToastFriends != "all" && s.ToastFriends != "chosen"; ToastFriendsAll.IsChecked = s.ToastFriends == "all"; ToastFriendsChosen.IsChecked = s.ToastFriends == "chosen";
             var tc = s.ToastCorner ?? "tr";
             ToastTL.IsChecked = tc == "tl"; ToastTR.IsChecked = tc == "tr"; ToastBL.IsChecked = tc == "bl"; ToastBR.IsChecked = tc == "br";
 
@@ -926,6 +928,9 @@ namespace ElansAddonHub
             settings.ToastsOff = ToastsBox.IsChecked != true; settings.ToastMentionsOff = ToastMentionBox.IsChecked != true;
             settings.ToastRepliesOff = ToastReplyBox.IsChecked != true; settings.ToastReactions = ToastReactBox.IsChecked == true;
             settings.ToastPins = ToastPinBox.IsChecked == true; settings.ToastUpdateOff = ToastUpdateBox.IsChecked != true; settings.ToastHealthOff = ToastHealthBox.IsChecked != true;
+            settings.ToastMessages = ToastMessagesBox.IsChecked == true; settings.ToastFriendsPlaying = ToastFriendsPlayingBox.IsChecked == true;
+            settings.ToastFriendSound = ToastFriendSoundBox.IsChecked == true; settings.ToastHoldInstance = ToastHoldInstanceBox.IsChecked == true;
+            settings.ToastFriends = ToastFriendsAll.IsChecked == true ? "all" : ToastFriendsChosen.IsChecked == true ? "chosen" : "off";
             settings.ToastCorner = ToastTL.IsChecked == true ? "tl" : ToastBL.IsChecked == true ? "bl" : ToastBR.IsChecked == true ? "br" : "tr";
             SettingsStore.Save(settings);
         }

@@ -1166,6 +1166,7 @@
               </DockPanel>
               <Slider x:Name="PopVolume" Minimum="0" Maximum="2" Margin="0,8,0,0" ValueChanged="PopVolume_Changed" />
             </StackPanel>
+            <Button x:Name="PopFriend" Style="{StaticResource MenuRow}" Margin="-8,8,0,0" Click="PopFriend_Click" ToolTip="A small note over the game. Settings: Toasts and notifications" />
             <StackPanel x:Name="PopModArea" Margin="-8,8,0,0">
               <Button x:Name="PopMute" Style="{StaticResource MenuRow}" Click="PopMute_Click" />
               <Button Style="{StaticResource MenuRow}" Click="PopKick_Click">
