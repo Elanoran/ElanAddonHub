@@ -18,6 +18,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **New items** have a gold ring until you hover them.
 - **Bag bar** in the window: hover a bag to see its slots, drop a bag on it to swap.
 - **Bank**: on WoW Forever's tabbed bank it opens next to the game's bank and lists every tab with the same search.
+- **Mailbox list**: next to the mailbox, your other characters on this realm and faction, and your friends. Click a name to
+  put it in the To: field. Your other characters need [Elan's Hub](ElansHub.md) and one login each.
 - **Junk seller**: Alt+right-click an item to mark it as junk. At a merchant a **Sell junk** button sells grey and marked
   items; selling automatically is a setting (off by default).
 - **Your other characters** on item tooltips, for example "Elan: 3 (bags) · Measley: 12 (bank)". This needs
@@ -36,13 +38,14 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 | `/ebags sell` | sell junk (at a merchant) · `/ebags junk`: the marked items · `/ebags junk auto`: auto-sell on/off |
 | `/ebags chars` | the characters it knows · `/ebags forget <name>`: hide one |
 | `/ebags bank on\|off` | use the Bags bank window or the game's |
+| `/ebags mail on\|off` | show or hide the list next to the mailbox |
 | `/ebags minimap` | show or hide the minimap button |
 
 `/elansbags` works too.
 
 ## Settings
 
-Tabs **General** (which windows it replaces, the bag bar, new-item rings, slots per row, scale, opacity, tooltip line,
+Tabs **General** (which windows it replaces, the mailbox list, the bag bar, new-item rings, slots per row, scale, opacity, tooltip line,
 ammo warning), **Categories** (turn sections on or off), **Junk** (auto-sell, the marked items) and **Alts** (hide or forget
 characters).
 
