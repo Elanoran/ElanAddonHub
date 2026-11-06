@@ -22,7 +22,7 @@ Needs [Elan's Toolkit](ElansToolkit.md); get both with [Elan's Outpost](../READM
 - **Pet Abilities** and **Pet Families**: every ability rank and which beasts teach it; an overview of each family.
 - **Tooltips** on beasts: at a glance with icons, tameable or not, what it teaches, whether that is a new rank for you, diet and
   speed. Hold Shift for the details.
-- **Rare radar**: an icon when a tameable rare's spawn spot is near; alerts for rares and for beasts that teach you a new rank.
+- **Rare radar**: an icon when a tameable rare's spawn spot is near; alerts for rares and for beasts that teach you a new rank. With the Toolkit's Camp Boss switched on, she says your alerts instead of chat.
 - **Taming helper**: after a tame, which ranks you still have to learn from that beast.
 - **Map pins** for beasts (filterable), Stable Masters, hunter and pet trainers and ammo vendors: hover the paw button
   next to the world map.
