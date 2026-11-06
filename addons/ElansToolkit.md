@@ -14,6 +14,9 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Center bars** (off by default, `/etk bars`): curved health and power bars around your character, you on the left and your
   target on the right, with a label beside the right arc: level badge, name and range. What you hover gets a small label at the
   mouse.
+- **Tooltip** (`/etk tooltip`, everything off by default): the game's tooltip at the mouse instead of in the corner, a dark
+  background with a border by class, reaction or item quality, the name in that colour, a slim health bar, and the item ID on
+  Shift. Each switch works by itself. With the tooltip at the mouse, the hover label shows only its badge and range.
 - **Waypoint arrow**: a movable arrow (3D or classic) with the distance and time left. It turns from green to yellow to
   red as you face away. Numbered pins and lines show on the map and minimap, and a button bar under the world map steps
   through your stops or adds one where you click. A **trip** is a list of up to 10 stops.
@@ -35,6 +38,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 | Command | |
 |---|---|
 | `/etk` | open the window |
+| `/etk tooltip` | the tooltip's five switches, off by default |
 | `/etk boss` | the Camp Boss: a small talking head, off by default, and what she has said |
 | `/etk hud on\|off` | the HUD · `/etk bars`: the center bars on or off (the cast bar then hangs centered below them) · `/etk castbar`: what "Hide the game's own cast bar" finds · `/etk flight on\|off`: the flight timer · `/etk layout`: move the HUD |
 | `/etk way <zone> <x> <y> [title]` | set a waypoint (zone name or map id; x and y from 0 to 100) |
@@ -50,7 +54,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 ## Settings
 
 Trainer pins, outgrown trainers, zone levels, Atlas recording (and WoW's combat log, always or only in dungeons and
-raids), the minimap button; the HUD's parts; and the arrow's style, colour, size, sound and when it hides.
+raids), the minimap button; the HUD's parts; the tooltip; and the arrow's style, colour, size, sound and when it hides.
 
 ## Good to know
 
