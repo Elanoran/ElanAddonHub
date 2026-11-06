@@ -38,7 +38,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 |---|---|
 | `/etk` | open the window |
 | `/etk tooltip` | where the tooltip goes and how it looks, off by default |
-| `/etk boss` | the Camp Boss: a small talking head, off by default, and what she has said |
+| `/etk boss` | the Camp Boss: a small talking head, off by default, who also tells you when you have played long enough. Her settings and what she has said |
 | `/etk hud on\|off` | the HUD · `/etk bars`: the center bars on or off (the cast bar then hangs centered below them) · `/etk castbar`: what "Hide the game's own cast bar" finds · `/etk flight on\|off`: the flight timer · `/etk layout`: move the HUD |
 | `/etk way <zone> <x> <y> [title]` | set a waypoint (zone name or map id; x and y from 0 to 100) |
 | `/etk way list`, `way next`, `way prev`, `way clear` | your waypoints |
