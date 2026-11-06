@@ -14,7 +14,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Center bars** (off by default, `/etk bars`): curved health and power bars around your character, you on the left and your
   target on the right, with a label beside the right arc: level badge, name and range.
 - **Tooltip** (`/etk tooltip`, everything off by default): choose where each kind of tooltip goes (world units, world objects, unit
-  frames, buttons): the corner, the mouse, next to it or a spot you drag, with offsets. Also a dark background with a border by class, reaction or item quality, the name in that colour, Horde and Alliance as icons, a slim health bar, and the item ID on
+  frames, buttons): the corner, the mouse, next to it or a spot you drag, with offsets. Also a dark background with a border by class, reaction or item quality, the name in that colour, Horde and Alliance as icons, who it is targeting (YOU when it is you), a mana, rage or energy bar, a slim health bar, and the item ID on
   Shift. Each switch works by itself.
 - **Waypoint arrow**: a movable arrow (3D or classic) with the distance and time left. It turns from green to yellow to
   red as you face away. Numbered pins and lines show on the map and minimap, and a button bar under the world map steps
