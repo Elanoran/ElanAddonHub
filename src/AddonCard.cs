@@ -61,9 +61,10 @@ namespace ElansAddonHub
                 bool pal = string.Equals(folder, "ElansPaladinHelper", System.StringComparison.OrdinalIgnoreCase);
                 bool bags = string.Equals(folder, "ElansBags", System.StringComparison.OrdinalIgnoreCase);
                 bool tk = string.Equals(folder, "ElansToolkit", System.StringComparison.OrdinalIgnoreCase);
+                bool prof = string.Equals(folder, "ElansProfessionHelper", System.StringComparison.OrdinalIgnoreCase);
                 if (!Painted)
                 {
-                    var icon = Res(ehh ? "Icon.Hunter" : hub ? "Icon.Hub" : pal ? "Icon.Paladin" : bags ? "Icon.Bags" : tk ? "Icon.Toolkit" : "Icon.Hub");
+                    var icon = Res(ehh ? "Icon.Hunter" : hub ? "Icon.Hub" : pal ? "Icon.Paladin" : bags ? "Icon.Bags" : tk ? "Icon.Toolkit" : prof ? "Icon.Professions" : "Icon.Hub");
                     if (icon != null) return icon;
                 }
                 if (ehh) return "pack://application:,,,/Assets/logo-ehh.png";

@@ -126,7 +126,9 @@ namespace ElansAddonHub
                 var tkDef = HealthReader.Defs.FirstOrDefault(d => d.Id == "ElansToolkit");
                 var prDef = HealthReader.Defs.FirstOrDefault(d => d.Id == "ElansPriestHelper");
                 Check("defs: Elan's Priest Helper (ElansPriestHelperDB, /epr diag) is registered (3.0.1)", prDef != null && prDef.DbName == "ElansPriestHelperDB" && prDef.Slash == "/epr diag");
-                Check("defs: Elan's Toolkit (ElansToolkitDB, /etk diag) is registered next to the others", tkDef != null && tkDef.Title == "Elan's Toolkit" && tkDef.DbName == "ElansToolkitDB" && tkDef.Slash == "/etk diag" && HealthReader.Defs.Length == 6, HealthReader.Defs.Length.ToString());
+                Check("defs: Elan's Toolkit (ElansToolkitDB, /etk diag) is registered next to the others", tkDef != null && tkDef.Title == "Elan's Toolkit" && tkDef.DbName == "ElansToolkitDB" && tkDef.Slash == "/etk diag" && HealthReader.Defs.Length == 7, HealthReader.Defs.Length.ToString());
+                var profDef = HealthReader.Defs.FirstOrDefault(d => d.Id == "ElansProfessionHelper");
+                Check("defs: Elan's Profession Helper (ElansProfessionHelperDB, /eprof diag) is registered", profDef != null && profDef.Title == "Elan's Profession Helper" && profDef.DbName == "ElansProfessionHelperDB" && profDef.Slash == "/eprof diag");
                 var tkRoot = Path.Combine(dir, "healthwow-toolkit");
                 if (Directory.Exists(tkRoot)) Directory.Delete(tkRoot, true);
                 var tkSv = Path.Combine(tkRoot, "_classic_beta_", "WTF", "Account", "TESTACC", "SavedVariables");

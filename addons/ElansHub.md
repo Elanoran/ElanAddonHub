@@ -2,7 +2,7 @@
 
 The small **companion addon** of [Elan's Outpost](../README.md). It tells the Outpost (and your Lodge, if you join one)
 which character you play, where you are and what you carry. Without the Outpost you don't need it; Elan's Bags uses it
-for your other characters' items, and Elan's Toolkit for the Outpost's profession guides.
+for your other characters' items, and Elan's Profession Helper for the Outpost's profession guides.
 
 [![Download ElansHub.zip](https://img.shields.io/badge/Download-ElansHub.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansHub.zip)
 

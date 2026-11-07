@@ -60,10 +60,11 @@ The addons that come with it (each has its own page, and can be [downloaded with
 | Addon | What it does |
 |---|---|
 | **[Elan's Hub](addons/ElansHub.md)** (required) | A tiny companion that tells the Outpost (and your Lodge, if you join one) which character you play, where you are and what you carry. |
-| **[Elan's Toolkit](addons/ElansToolkit.md)** | For every class: a movable HUD with cast bar, threat bar and flight timer, trainer pins for your professions, gathering pins and a waypoint arrow. |
+| **[Elan's Toolkit](addons/ElansToolkit.md)** | For every class: a movable HUD with cast bar, threat bar and flight timer, a waypoint arrow, the Camp Boss and the Atlas recording. |
 | **[Elan's Hunter Helper](addons/ElansHunterHelper.md)** | Where it all started: pet abilities and where to tame them, Beast Finder, Auto Shot timer, range and dead zone, feeding, stable and more. |
 | **[Elan's Paladin Helper](addons/ElansPaladinHelper.md)** | Seal, aura and blessing reminders, a Seal and Judgement bar, party blessing timers. |
 | **[Elan's Priest Helper](addons/ElansPriestHelper.md)** | Heal frames with click-casting, Renew and shield timers, a buff manager, the five-second rule and a healer coach. |
+| **[Elan's Profession Helper](addons/ElansProfessionHelper.md)** | For every class: fishing on one key, your skills and nearest trainers with map pins, and the profession guides you follow from the Outpost. |
 | **[Elan's Bags](addons/ElansBags.md)** | One tidy bag window with search, categories and a junk seller. |
 
 ### The Atlas

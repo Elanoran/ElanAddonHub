@@ -8,16 +8,16 @@ namespace ElansAddonHub.Services
     // one needs before it can load.
     //
     // The order is a rule, not a list: 1 required addons (installed for everyone: Elan's Hub), 2 addons another addon in the list needs
-    // (Elan's Toolkit: the Hunter Helper won't load without it), 3 class addons (the class helpers, by name), 4 the rest (Elan's Bags, then
-    // any new addon by name). Inside groups 1, 2 and 4 the known ids are the tie-breaker, so the order is the same whatever order the
-    // manifest lists them in. Today's six: Elan's Hub, Elan's Toolkit, Hunter, Paladin and Priest Helper, Elan's Bags.
+    // (Elan's Toolkit: the Hunter Helper won't load without it), 3 class addons (the class helpers, by name), 4 the rest (Elan's Bags, Elan's
+    // Profession Helper, then any new addon by name). Inside groups 1, 2 and 4 the known ids are the tie-breaker, so the order is the same whatever
+    // order the manifest lists them in. Today's seven: Elan's Hub, Elan's Toolkit, Hunter, Paladin and Priest Helper, Elan's Bags, Elan's Profession Helper.
     //
     // Needs: the manifest's "needs" (addon ids). Until the manifests carry it, a small built-in map stands in - ONLY for an entry that has
     // no "needs" field at all; "needs": [] in a manifest means "needs nothing" and wins over the map. Only hard dependencies belong here
     // (the TOC's "## Dependencies:"), never the OptionalDeps.
     public static class AddonOrder
     {
-        public static readonly string[] Known = { "ElansHub", "ElansToolkit", "ElansHunterHelper", "ElansPaladinHelper", "ElansPriestHelper", "ElansBags" };
+        public static readonly string[] Known = { "ElansHub", "ElansToolkit", "ElansHunterHelper", "ElansPaladinHelper", "ElansPriestHelper", "ElansBags", "ElansProfessionHelper" };
 
         // from the addons' TOC files: ElansHunterHelper has "## Dependencies: ElansToolkit"; the others only have OptionalDeps
         public static readonly Dictionary<string, string[]> FallbackNeeds = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)

@@ -64,6 +64,7 @@ namespace ElansAddonHub
                 b = MemberVersions.Compare("3.9.1", V("test", ("toolkit", "0.21.0")), stable, null);
                 Ck("a test member while Test isn't known yet: compared with Stable", b.Count == 1 && b[0].Newest == "0.22.0", Str(b));
                 Ck("nothing known about the releases: nobody is behind", MemberVersions.Compare("1.0.0", V("stable", ("hub", "0.1")), null, null).Count == 0);
+                Ck("wire ids: Elan's Profession Helper is \"professionhelper\" (16 characters, the server's limit, nothing cut)", MemberVersions.WireId("ElansProfessionHelper") == "professionhelper", MemberVersions.WireId("ElansProfessionHelper"));
                 Ck("an unknown addon id is ignored", MemberVersions.Compare("3.9.0", V("stable", ("other", "0.0.1")), stable, test).Count == 0);
 
                 // ---- what this Outpost says about itself

@@ -15,7 +15,7 @@ using ElansAddonHub.Services.Professions;
 namespace ElansAddonHub
 {
     // "Follow in game": the guide of one character and profession is written into Interface\AddOns\ElansHub\SharedData.lua (the Outpost's only write into the WoW
-    // folder, see Services\SharedDataFile.cs) and Elan's Toolkit shows it in game after /reload or the next login. The followed guides are remembered in the settings.
+    // folder, see Services\SharedDataFile.cs) and Elan's Profession Helper shows it in game (Elan's Toolkit 0.4.0 to 0.22.x did, before Profession Helper took it over) after /reload or the next login. The followed guides are remembered in the settings.
     // They are made again (a) when the person follows or stops, (b) when the Lodge's or this PC's gathering nodes changed, (c) when a followed character's skill changed
     // (the Characters data was read again), always debounced and never on the UI thread.
     public partial class ProfessionsPage
@@ -143,7 +143,7 @@ namespace ElansAddonHub
             if (list.Count == 0) followStatus = res.wr != null && res.wr.Written.Count > 0 ? "Removed from the game's file. The game shows the change after /reload or your next login." : "";
             else if (res.o.IsEmpty) followStatus = "The guide could not be made yet" + (res.missing.Count > 0 ? " (" + string.Join("; ", res.missing.Take(2)) + ")" : "") + ".";
             else if (res.wr == null || res.wr.Written.Count + res.wr.Unchanged.Count == 0) followStatus = "Ready, but no Elan's Hub addon folder was found to write it to. Install or update Elan's Hub from the Addons page.";
-            else followStatus = "Shows in game after /reload or your next login (needs Elan's Toolkit 0.4.0).";
+            else followStatus = "Shows in game after /reload or your next login (needs Elan's Profession Helper).";
             followDirty = false;
             Dispatcher.BeginInvoke(new Action(() => { if (IsLoaded && tab == "guide") RenderBody(); }));
         }
@@ -156,14 +156,14 @@ namespace ElansAddonHub
             bool can = who != null && prof != null && who.FromHub;
             bool on = can && IsFollowing(who.Key, prof.Id);
             var btn = new Button { Style = Sty(on ? "Button.M" : "Button.Primary.M"), Content = on ? "Stop following" : "Follow in game", HorizontalAlignment = HorizontalAlignment.Left, IsEnabled = can, Tag = "follow" };
-            btn.ToolTip = can ? (on ? "Remove this guide from the game's file" : "Show this guide in game with Elan's Toolkit: the current step, reagents, shopping list and gathering routes")
+            btn.ToolTip = can ? (on ? "Remove this guide from the game's file" : "Show this guide in game with Elan's Profession Helper: the current step, reagents, shopping list and gathering routes")
                 : who == null ? "Pick a character above" : "Needs this character's Elan's Hub data (log in with Elan's Hub installed)";
             var pw = who; var pp = prof;
             btn.Click += (s, e) => SetFollow(pw, pp, !on);
             sp.Children.Add(btn);
             followButton = btn;
             string text = followStatus;
-            if (on && string.IsNullOrEmpty(text)) text = "Following in game. Shows after /reload or your next login (needs Elan's Toolkit 0.4.0).";
+            if (on && string.IsNullOrEmpty(text)) text = "Following in game. Shows after /reload or your next login (needs Elan's Profession Helper).";
             if (!can && who != null) text = "To follow this guide in game, the character needs Elan's Hub data.";
             followLine = Line(text, "Text.Caption", null, 6);
             followLine.TextWrapping = TextWrapping.Wrap;

@@ -472,7 +472,7 @@ namespace ElansAddonHub
                 firstCraft != null && firstCraft.Int("spell") > 0 && firstCraft.Int("n") >= 1 && firstCraft.Child("r") != null && firstCraft.Child("r").Count >= 1 && asteps.Select(kv => kv.Value).OfType<Dictionary<string, object>>().Any(s => s.Str("k") == "train" && s.Int("from") == 75 && s.Str("t") == "Journeyman Tailoring"),
                 asteps == null ? "no steps" : string.Join(",", asteps.Select(kv => ((Dictionary<string, object>)kv.Value).Str("k") + ((Dictionary<string, object>)kv.Value).Int("from"))));
             await Until(() => !page.FollowStatusForTest.EndsWith("..."), 8000);   // the status is set after the file write finishes (on a busy PC a moment later)
-            Check("follow: the page says when it shows in game, and which Toolkit it needs", page.FollowStatusForTest.Contains("Shows in game after /reload or your next login") && page.FollowStatusForTest.Contains("Toolkit 0.4.0"), page.FollowStatusForTest);
+            Check("follow: the page says when it shows in game, and which addon it needs", page.FollowStatusForTest.Contains("Shows in game after /reload or your next login") && page.FollowStatusForTest.Contains("Elan's Profession Helper"), page.FollowStatusForTest);
             Check("follow: the button now says 'Stop following'", page.FollowButtonForTest != null && (string)page.FollowButtonForTest.Content == "Stop following");
             // a second profession of the same character; a skill change of a followed character remakes the guide
             Check("follow: the file keeps changes small - rebuilding with the same data leaves SharedData.lua alone", await PgRebuildUnchanged(page, dest));

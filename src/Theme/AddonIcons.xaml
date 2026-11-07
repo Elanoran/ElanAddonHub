@@ -330,4 +330,56 @@
       </DrawingGroup>
     </DrawingImage.Drawing>
   </DrawingImage>
+  <!-- ===================== Elan's Profession Helper: a fishing rod at dusk, its red and white bobber in the lake ===================== -->
+  <DrawingImage x:Key="Icon.Professions">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <StaticResource ResourceKey="Draw.Frame" />
+        <DrawingGroup ClipGeometry="{StaticResource Geo.ArtClip}">
+          <!-- dusk sky -->
+          <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="7,7,114,74" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#F2CF8C" Offset="0" /><GradientStop Color="#C98A3E" Offset="0.55" /><GradientStop Color="#7A4A1E" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <!-- low sun -->
+          <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="34,66" RadiusX="20" RadiusY="20" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><RadialGradientBrush><GradientStop Color="#FFFFF6D8" Offset="0" /><GradientStop Color="#CCFFD9A0" Offset="0.5" /><GradientStop Color="#00FFD9A0" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <!-- far shore -->
+          <GeometryDrawing Brush="#4A2C12" Geometry="M7,74 C28,64 46,70 62,68 C84,64 102,70 121,64 L121,82 L7,82 Z" />
+          <!-- the lake -->
+          <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="7,78,114,43" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#2E6A78" Offset="0" /><GradientStop Color="#123545" Offset="0.5" /><GradientStop Color="#0B2433" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <GeometryDrawing Geometry="M16,92 L38,92 M50,108 L70,108 M96,100 L114,100 M22,114 L34,114">
+            <GeometryDrawing.Pen><Pen Brush="#66CFE6EE" Thickness="1.6" StartLineCap="Round" EndLineCap="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- rings round the bobber -->
+          <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="78,92" RadiusX="22" RadiusY="6" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Pen><Pen Brush="#99CFE6EE" Thickness="1.4" /></GeometryDrawing.Pen></GeometryDrawing>
+          <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="78,92" RadiusX="13" RadiusY="3.6" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Pen><Pen Brush="#CCFFF6D8" Thickness="1.4" /></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- the line -->
+          <GeometryDrawing Geometry="M104,18 C100,40 86,58 78,77"><GeometryDrawing.Pen><Pen Brush="#E6FFF6D8" Thickness="1" /></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- the rod, its cork grip and reel -->
+          <GeometryDrawing Geometry="M8.7,117 L103.1,17.2 L104.9,18.8 L15.3,123 Z">
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#E0A25A" Offset="0" /><GradientStop Color="#B87A38" Offset="0.5" /><GradientStop Color="#8A5426" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="1.6" LineJoin="Round" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing Brush="#5A3010" Geometry="M7.6,116 L27.8,93.5 L36.7,101.6 L16.5,124 Z"><GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="1.6" LineJoin="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <GeometryDrawing>
+            <GeometryDrawing.Geometry><EllipseGeometry Center="43,96" RadiusX="7" RadiusY="7" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><RadialGradientBrush GradientOrigin="0.35,0.3"><GradientStop Color="#F4F7FA" Offset="0" /><GradientStop Color="#A3AEBA" Offset="0.5" /><GradientStop Color="#4C5662" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#1B222A" Thickness="1.8" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="43,96" RadiusX="2.4" RadiusY="2.4" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><SolidColorBrush Color="#2A3036" /></GeometryDrawing.Brush></GeometryDrawing>
+          <!-- the bobber: red over white -->
+          <GeometryDrawing Brush="#FFF1E0" Geometry="M69,86 A9,9 0 0 0 87,86 Z" />
+          <GeometryDrawing Geometry="M69,86 A9,9 0 0 1 87,86 Z">
+            <GeometryDrawing.Brush><RadialGradientBrush GradientOrigin="0.35,0.3"><GradientStop Color="#FF8A70" Offset="0" /><GradientStop Color="#D2352A" Offset="0.55" /><GradientStop Color="#7E1810" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="78,86" RadiusX="9" RadiusY="9" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Pen><Pen Brush="#3A0F0A" Thickness="1.8" /></GeometryDrawing.Pen></GeometryDrawing>
+          <GeometryDrawing Geometry="M78,77 L78,73"><GeometryDrawing.Pen><Pen Brush="#3A0F0A" Thickness="2" StartLineCap="Round" EndLineCap="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <GeometryDrawing Brush="#CCFFFFFF"><GeometryDrawing.Geometry><EllipseGeometry Center="74,82" RadiusX="2" RadiusY="1.4" /></GeometryDrawing.Geometry></GeometryDrawing>
+          <StaticResource ResourceKey="Draw.Finish" />
+        </DrawingGroup>
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
 </ResourceDictionary>

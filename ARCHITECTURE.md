@@ -9,7 +9,7 @@ This is the contract between the in-game addons, Elan's Hub and Elan's Outpost.
 ## Contents
 
 **[The big picture](#the-big-picture)** - Who does what between the addons, Elan's Hub, the Outpost and the Lodge; the data formats; rules and open issues.<br>
-[Roles](#roles) · [Which data belongs where](#which-data-belongs-where) · [Three shared layers](#three-shared-layers) · [ElansLib](#elanslib) · [Paths and how fast they are](#paths-and-how-fast-they-are) · [Handing data to the Hub](#handing-data-to-the-hub) · [Stored layout (ElansHubData)](#stored-layout-elanshubdata) · [Versions](#versions) · [Rules](#rules) · [Schemas](#schemas) · [core v1](#core-v1) · [bags v1](#bags-v1) · [bank v1](#bank-v1) · [guildbank v1](#guildbank-v1) · [gear v1](#gear-v1) · [reps v1](#reps-v1) · [talents v1](#talents-v1) · [professions v1](#professions-v1) · [flight v1](#flight-v1) · [hunter.fieldnotes v1](#hunterfieldnotes-v1) · [hunter.pets v1](#hunterpets-v1) · [health v1](#health-v1) · [The HUD](#the-hud) · [The Outpost's changelog and log](#the-outposts-changelog-and-log) · [Release and update trust](#release-and-update-trust) · [Game data start, progress and updates](#game-data-start-progress-and-updates) · [Background activity and the close guard](#background-activity-and-the-close-guard) · [Migration (dual read)](#migration-dual-read)
+[Roles](#roles) · [Which data belongs where](#which-data-belongs-where) · [Three shared layers](#three-shared-layers) · [ElansLib](#elanslib) · [Paths and how fast they are](#paths-and-how-fast-they-are) · [Handing data to the Hub](#handing-data-to-the-hub) · [Stored layout (ElansHubData)](#stored-layout-elanshubdata) · [Versions](#versions) · [Rules](#rules) · [Schemas](#schemas) · [core v1](#core-v1) · [bags v1](#bags-v1) · [bank v1](#bank-v1) · [guildbank v1](#guildbank-v1) · [gear v1](#gear-v1) · [reps v1](#reps-v1) · [talents v1](#talents-v1) · [professions v1](#professions-v1) · [flight v1](#flight-v1) · [hunter.fieldnotes v1](#hunterfieldnotes-v1) · [hunter.pets v1](#hunterpets-v1) · [health v1](#health-v1) · [The HUD](#the-hud) · [Toolkit hooks for other addons](#toolkit-hooks-for-other-addons) · [The Outpost's changelog and log](#the-outposts-changelog-and-log) · [Release and update trust](#release-and-update-trust) · [Game data start, progress and updates](#game-data-start-progress-and-updates) · [Background activity and the close guard](#background-activity-and-the-close-guard) · [Migration (dual read)](#migration-dual-read)
 
 **[The Atlas: data layers](#the-atlas-data-layers)** - Where the Atlas's facts come from: the game's files, what the client has seen, maps, drops and sources.<br>
 [Atlas: the game's own data](#atlas-the-games-own-data) · [Item data layer v1](#item-data-layer-v1) · [Spells, skills, recipes, factions and item details](#spells-skills-recipes-factions-and-item-details) · [Browse by category](#browse-by-category) · [What the client has seen (SeenData)](#what-the-client-has-seen-seendata) · [Combat log](#combat-log) · [Map layer](#map-layer) · [Atlas: items, maps, instances and where things come from](#atlas-items-maps-instances-and-where-things-come-from) · [atlas.obs v1](#atlasobs-v1)
@@ -518,6 +518,22 @@ their own HUD; they register into it:
 
 So Hunter Helper adds shot timers, Quick Shots, aspect and distance; a future class addon adds its own
 (swing timer, seals). Class addons list `ElansToolkit` as a dependency.
+
+### Toolkit hooks for other addons
+
+*Since Toolkit 0.23.0. Elan's Profession Helper is the first user; it lists the Toolkit only as an OptionalDep, so each
+hook may be missing and every caller checks for it.*
+
+| Hook | What it gives |
+|---|---|
+| `ElansToolkit.Activity.Register{ id, order, height, build, active, shown }` | the **activity card**: the Camp Boss's bar opened up into a card for what the player is doing (fishing first). The lowest `order` of the active ones shows. Returns the card's body frame, or nil when the card is off (her tab, **Activity card**): the addon then uses its own window. `Activity.Update()`, `Activity.On()`. Shown, hidden and moved only out of combat (it may hold secure buttons); its contents update in a fight too. |
+| `ElansToolkit.Atlas.Nodes()`, `.Objects()`, `.FishSpots()` | read only: the gathering nodes, what each object gave, and the fishing spots the Toolkit recorded (the `atlas.obs` data before it goes to the Hub). nil while nothing is recorded. |
+| `ElansToolkit.Nav.SetRouteProvider{ current }`, `Nav.RouteChanged()`, `Nav.HasRoute()` | the arrow walks a route another addon supplies (the guide's gather step); without a provider there is no route. |
+| `ElansToolkit.Nav.AddKnownMaps(ids)` | map ids another addon's data knows, so their names resolve. |
+| `ElansToolkit.AddPinSwitch{ name, get, set }` | another addon's map pins follow the map bar's "our pins on / off" button (the Profession Helper's trainer pins). |
+
+The Camp Boss's tray icons sit in her bar, the activity card flush under it, and her box slides out under the card when
+she speaks, so nothing at her spot covers anything.
 
 ### The Outpost's changelog and log
 
@@ -4453,7 +4469,8 @@ Self-test sections `objects` (synthetic files) and `objectsreal` (the real files
 *Since Lodge 2.38 (PROTOCOL.md "2.38 additions").* So members can see who can't use new features yet.
 - Outpost -> Lodge: the Outpost version it connects with (`/ws?client=hub/x.y.z`, every Outpost sends it; the server shows it as `user.app`),
   and the `versions` message `{channel, addons}` (`LodgeSession.Versions.cs`): its update channel and the Elan's addons from the manifest that
-  are installed (`MemberVersions.Mine`, wire id = the folder name without "Elans", lower case). Sent after every welcome and when an install,
+  are installed (`MemberVersions.Mine`, wire id = the folder name without "Elans", lower case, at most 16 characters:
+`ElansProfessionHelper` is `professionhelper`). Sent after every welcome and when an install,
   update or removal changes it. Nothing else about the PC goes with it.
 - Lodge -> Outpost: `user.app` and the cleaned `user.versions` on each member entry (not on a masked one).
 - The Outpost compares each member with the newest release of **their own** channel (`MemberVersions.Compare`; Stable when they said none).
@@ -4492,7 +4509,9 @@ whole set again when the epoch differs.
 
 *profguide: since Outpost 2.50.0, Lodge server 2.18.0 (sub-feature `atlas3`).*
 
-One contract with the in-game side (Elan's Toolkit 0.4.0), in four parts.
+One contract with the in-game side, in four parts. Recording (A) is Elan's Toolkit's; the guide in game (D) is read by
+Elan's Profession Helper since Toolkit 0.23.0 (Toolkit 0.4.0 to 0.22.x read it before). The `profGuides` v1 format did
+not change with the move.
 
 #### A. Recording
 
@@ -4623,7 +4642,9 @@ ElansHubShared = {
 - a followed character's skill changed;
 - a saved route was picked.
 
-**In game**: the game reads the file at login or `/reload` only; the page says so.
+**In game**: Elan's Profession Helper reads `ElansHubShared.profGuides` (v1) for its tracker, shopping list, node and
+route pins; the Toolkit's arrow walks the route through `Nav.SetRouteProvider`. The game reads the file at login or
+`/reload` only; the page says so.
 
 The Talents hand-off (`TalentHandoff`) is not wired (see "Talent layer").
 

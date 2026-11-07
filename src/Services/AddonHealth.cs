@@ -84,6 +84,7 @@ namespace ElansAddonHub.Services
             new HealthAddonDef { Id = "ElansPaladinHelper", Title = "Elan's Paladin Helper", DbName = "ElansPaladinHelperDB", Slash = "/eph diag" },
             new HealthAddonDef { Id = "ElansPriestHelper", Title = "Elan's Priest Helper", DbName = "ElansPriestHelperDB", Slash = "/epr diag" },
             new HealthAddonDef { Id = "ElansBags", Title = "Elan's Bags", DbName = "ElansBagsDB", Slash = "/ebags diag" },
+            new HealthAddonDef { Id = "ElansProfessionHelper", Title = "Elan's Profession Helper", DbName = "ElansProfessionHelperDB", Slash = "/eprof diag" },
             new HealthAddonDef { Id = "ElansToolkit", Title = "Elan's Toolkit", DbName = "ElansToolkitDB", Slash = "/etk diag" },
             new HealthAddonDef { Id = "ElansHub", Title = "Elan's Hub companion", DbName = "ElansHubDB", Slash = "/ehub diag" },
         };

@@ -56,6 +56,9 @@ namespace ElansAddonHub
             more.Add(NeedsFixture("ElansMageHelper", "Elan's Mage Helper", classes: new List<string> { "MAGE" }));
             Check("order: new addons - a class helper among the helpers by name, the others after Bags by name",
                 Ids(AddonOrder.Sort(more)) == "ElansHub,ElansToolkit,ElansHunterHelper,ElansMageHelper,ElansPaladinHelper,ElansPriestHelper,ElansBags,ElansAardvark,ElansZed", Ids(AddonOrder.Sort(more)));
+            var seven = RealSix(); seven.Insert(0, NeedsFixture("ElansProfessionHelper", "Elan's Profession Helper"));
+            Check("order: Elan's Profession Helper (no class, needed by none) is one of the rest, right after Bags (a known id), before new addons by name",
+                Ids(AddonOrder.Sort(seven)) == expected + ",ElansProfessionHelper" && AddonOrder.Group(seven[0], seven) == 3, Ids(AddonOrder.Sort(seven)));
 
             // ---- needs: the built-in map only without a manifest "needs"
             Check("needs: Hunter Helper without \"needs\" -> the built-in map (Elan's Toolkit)", AddonOrder.Needs(six[0]).SequenceEqual(new[] { "ElansToolkit" }), string.Join(",", AddonOrder.Needs(six[0])));
