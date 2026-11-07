@@ -1,41 +1,28 @@
--- Minimap button (same behaviour as Elan's Hunter Helper's): drag around the minimap, left-click = settings,
--- right-click = lock/unlock the emote wheel.
+-- Minimap button: the button itself (drag around the minimap, saved angle, show / hide, a free spot on a new install,
+-- hidden while the Elan dock holds the Hub) is ElansLib.MinimapButton; this file says what it does.
+-- Left-click = the Hub's window, right-click = lock / unlock the emote wheel.
+-- Saved where it always was: ElansHubDB.minimap.angle and ElansHubDB.minimap.hide (EHUB.db maps them, see UI.lua).
 local _, EHUB = ...
-local UI = EHUB.UI
-local btn
+local MB = ElansLib:Get("MinimapButton")
 
-local function position()
-  local a = math.rad(EHUB.DB().minimap.angle or 200)
-  local r = (Minimap:GetWidth() / 2) + 5
-  btn:ClearAllPoints()
-  btn:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * r, math.sin(a) * r)
+-- the tooltip's short lines (also used by the dock's status and the tests): { label, value, color }
+function EHUB.MinimapStatus()
+  local w = EHUB.DB().wheel
+  local px = EHUB.PixelsOn and EHUB.PixelsOn()
+  return {
+    { "Pixel strip", px and "on" or "off", px and "good" or "textDim" },
+    { "Emote wheel", w.enabled and (w.locked and "on, locked" or "on, unlocked") or "off", w.enabled and "good" or "textDim" },
+  }
 end
 
-function EHUB.UpdateMinimap()
-  if not btn then return end
-  btn:SetShown(not EHUB.DB().minimap.hide)
-end
-
-local function initMinimap()
-  btn = CreateFrame("Button", "ElansHubMinimapButton", Minimap)
-  EHUB.minimapButton = btn
-  btn:SetSize(32, 32)
-  btn:SetFrameStrata("MEDIUM")
-  btn:SetFrameLevel(8)
-  btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  btn:RegisterForDrag("LeftButton")
-  btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-  local icon = btn:CreateTexture(nil, "BACKGROUND")
-  icon:SetTexture(EHUB.ICON or "Interface\\Icons\\INV_Banner_02")
-  icon:SetSize(20, 20)
-  icon:SetPoint("CENTER", 0, 1)
-  icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-  local border = btn:CreateTexture(nil, "OVERLAY")
-  border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-  border:SetSize(54, 54)
-  border:SetPoint("TOPLEFT")
-
-  btn:SetScript("OnClick", function(_, button)
+local B = MB.New{
+  ns = EHUB,
+  name = "ElansHubMinimapButton",
+  icon = EHUB.ICON or "Interface\\Icons\\INV_Banner_02",
+  defaultAngle = 200,
+  angleKey = "minimapAngle",
+  shownKey = "minimapShown",
+  onClick = function(button)
     if button == "RightButton" then
       local w = EHUB.DB().wheel
       EHUB.SetWheelLocked(not w.locked)
@@ -44,44 +31,20 @@ local function initMinimap()
     else
       EHUB.OpenSettings()
     end
-  end)
-  btn:SetScript("OnDragStart", function(self)
-    self:SetScript("OnUpdate", function()
-      local mx, my = Minimap:GetCenter()
-      local cx, cy = GetCursorPosition()
-      local s = Minimap:GetEffectiveScale()
-      EHUB.DB().minimap.angle = math.deg(math.atan2(cy / s - my, cx / s - mx))
-      position()
-    end)
-  end)
-  btn:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
-  local function showTip(self)
-    local Tip = UI.Tip
-    local w = EHUB.DB().wheel
-    Tip.Begin(self, "ANCHOR_LEFT")
-    Tip.Title("Elan's Hub", "v" .. tostring(EHUB.Version and EHUB.Version() or "?"), "textDim")
-    local px = EHUB.PixelsOn and EHUB.PixelsOn()
-    Tip.Pair("Pixel strip", px and "on" or "off", px and "good" or "textDim")
-    Tip.Pair("Emote wheel", w.enabled and (w.locked and "on, locked" or "on, unlocked") or "off", w.enabled and "good" or "textDim")
-    Tip.Gap()
-    Tip.Action("Left-click", "settings")
-    Tip.Action("Right-click", "lock / move emote wheel")
-    Tip.ShiftDetails({ "Drag to move the button around the minimap.", "Hide it in the settings." })
-    Tip.Show()
-  end
-  -- Shift pressed or let go while hovering: the tooltip again, with or without its details
-  btn:SetScript("OnEvent", function(self, _, key)
-    if (key == "LSHIFT" or key == "RSHIFT") and GameTooltip:IsOwned(self) then showTip(self) end
-  end)
-  btn:SetScript("OnEnter", function(self)
-    self:RegisterEvent("MODIFIER_STATE_CHANGED")
-    showTip(self)
-  end)
-  btn:SetScript("OnLeave", function(self)
-    self:UnregisterEvent("MODIFIER_STATE_CHANGED")
-    GameTooltip:Hide()
-  end)
-  position()
-  EHUB.UpdateMinimap()
+  end,
+  tooltip = function(Tip)
+    MB.Card(Tip, {
+      title = "Elan's Hub", version = EHUB.Version and EHUB.Version() or "?",
+      status = function() for _, r in ipairs(EHUB.MinimapStatus()) do Tip.Pair(r[1], r[2], r[3]) end end,
+      actions = { { "Left-click", "settings" }, { "Right-click", "lock / move emote wheel" } },
+      details = { "Drag to move the button around the minimap.", "Hide it in the settings (/ehub)." },
+    })
+  end,
+}
+
+function EHUB.UpdateMinimap() B.Update() end
+function EHUB.GetMinimapButton() return B.Get() end
+
+EHUB.inits[#EHUB.inits + 1] = function()
+  EHUB.minimapButton = B.Create()
 end
-EHUB.inits[#EHUB.inits + 1] = initMinimap

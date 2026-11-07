@@ -25,6 +25,17 @@ Works on its own, and comes with [Elan's Outpost](../README.md).
 
 **On its own**, without the Outpost, you get the emote wheel and `/rl`; the rest is only read by the Outpost.
 
+## Settings
+
+`/ehub` or a left-click on its minimap button opens the Hub's window, laid out like Elan's other addons: tabs on the left
+(**General**, **Emote wheel**, **About**), a search box, and a tooltip on every option. *Since Elan's Hub 1.20.0.*
+
+- **General**: the minimap button, `/rl`, the status strip and your map position for the Outpost.
+- **Emote wheel**: on or off, lock, names, how and where it opens, 6, 8 or 10 emotes and which ones, its size and a key.
+- With two or more Elan addons, **One window for all Elan addons** puts them all in one window with one minimap button;
+  `/ehub` then opens the Hub's part of it. The same switch is in each Elan addon's settings.
+- It is also listed in the game's Options > AddOns.
+
 ## Privacy
 
 It sends **nothing** over chat or addon channels. Everything stays in WoW's own save files on your PC, where the Outpost
@@ -35,7 +46,7 @@ reads it. Your Lodge only gets what the Outpost shares, and each kind of sharing
 
 | Command | |
 |---|---|
-| `/ehub` | the settings window |
+| `/ehub` | the Hub's window (settings) |
 | `/ehub pixel on\|off` | the status strip |
 | `/ehub position on\|off` | share your map position with the Outpost (off by default) |
 | `/ehub calendar on\|off` | save the in-game calendar for the Outpost |

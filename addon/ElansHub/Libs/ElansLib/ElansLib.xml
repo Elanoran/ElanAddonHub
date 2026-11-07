@@ -1,0 +1,17 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <!-- Load order matters: the registry first, then the modules (Diag uses Secret). -->
+  <Script file="ElansLib.lua"/>
+  <Script file="Secret.lua"/>
+  <Script file="Defaults.lua"/>
+  <Script file="BugTrap.lua"/>
+  <Script file="Diag.lua"/>
+  <Script file="Theme.lua"/>
+  <Script file="Widgets.lua"/>
+  <Script file="Settings.lua"/>
+  <Script file="Tip.lua"/>
+  <Script file="MinimapButton.lua"/>
+  <Script file="Pins.lua"/>
+  <Script file="Window.lua"/>
+  <Script file="Dock.lua"/>
+  <Script file="Grid.lua"/>
+</Ui>

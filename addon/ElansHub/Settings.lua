@@ -1,10 +1,35 @@
--- Settings window (/ehub, minimap button left-click): header + a left tab list (General, Emote wheel, About),
--- one page per tab. Same look as Elan's Hunter Helper's main window (copied, not shared).
+-- The Hub's window (/ehub, minimap button left-click): the tabbed shell is ElansLib.Window (tabs on the left: General,
+-- Emote wheel, About), the settings pages are ElansLib.Settings (search, tooltips, dimmed sub-options), the same as
+-- Elan's other addons. The window registers with the Elan dock by itself (ElansLib.Dock): docked, /ehub opens the
+-- Hub's section of the one window. Position in ElansHubDB.settings, last tab in ElansHubDB.settingsTab.
 local _, EHUB = ...
 local UI = EHUB.UI
 local C = UI.C
+local Lib = ElansLib
 
-local WIN_W, WIN_H, SIDE_W = 600, 440, 140
+local VERSION = EHUB.Version and EHUB.Version() or nil
+
+local W = Lib:Get("Window").New{
+  ns = EHUB,
+  name = "ElansHubSettings",
+  title = "Elan's |cffabd473Hub|r",
+  subtitle = "Companion for Elan's Outpost",
+  icon = "Ability_Hunter_BeastTaming",
+  version = VERSION,
+  width = 660, height = 500,
+  db = function() return EHUB.DB() end,
+  posKey = "settings", -- ElansHubDB.settings = where it stands, ElansHubDB.settingsTab = the last tab (as before)
+  dock = { slash = "/ehub", settingsTab = "general", status = function()
+    local r = EHUB.MinimapStatus and EHUB.MinimapStatus()[1]
+    if r then return r[1] .. ": " .. tostring(r[2]), r[3] end
+  end },
+  tabs = "left",
+  tabWidth = 150,
+  headerColor = { 0.16, 0.22, 0.10, 1 },
+  onBuild = function(main) EHUB.settings = main end,
+}
+EHUB.Win = W
+
 local TABS = {
   { key = "general", label = "General", icon = "INV_Misc_Gear_01" },
   { key = "wheel", label = "Emote wheel", icon = "INV_Banner_02" },
@@ -12,111 +37,66 @@ local TABS = {
 }
 EHUB.SettingsTabs = TABS
 
-local win
-local widgets = {}
+local Settings = Lib:Get("Settings").New{ ns = EHUB, db = function() return EHUB.DB() end, title = "Elan's Hub" }
+EHUB.Settings = Settings
 
-local function track(w) widgets[#widgets + 1] = w return w end
+-- ------------------------------------------------------------ General
+Settings:Page{
+  id = "general", title = "General", sub = "The minimap button, the /rl shortcut and what Elan's Outpost can see.", links = false,
+  sections = {
+    { title = "General", columns = 1, colWidth = 450, items = {
+      { "check", "Show minimap button", "minimapShown",
+        tip = "Left-click opens this window, right-click locks or unlocks the emote wheel. Drag it around the minimap.",
+        get = function() return not EHUB.DB().minimap.hide end,
+        set = function(v) EHUB.DB().minimap.hide = not v end,
+        after = function() EHUB.UpdateMinimap() end },
+      { "check", "/rl shortcut for /reload (after /reload)", "rl",
+        tip = "Type /rl to reload the interface. Only when no other addon (or the game) already has /rl. A change here counts after the next /reload.",
+        get = function() return EHUB.DB().rl ~= false end,
+        set = function(v) EHUB.DB().rl = v and true or false end },
+      Lib:Get("Dock").SettingItem(),
+    } },
+    { title = "Elan's Outpost", columns = 1, colWidth = 450, sub = "What the Outpost on this PC can see. The addon itself sends nothing anywhere.", items = {
+      { "check", "Detect my character live (pixel strip)", "pixel",
+        tip = "A tiny strip of coloured squares in the top-left screen corner lets the Hub see your character without a /reload.",
+        get = function() return EHUB.PixelsOn() end,
+        set = function(v) EHUB.SetPixels(v) end },
+      { "check", EHUB.POSITION_LABEL, "position", tip = EHUB.POSITION_DESC,
+        get = function() return EHUB.PositionOn() end,
+        set = function(v) EHUB.SetPosition(v) end },
+      { "note", EHUB.POSITION_SHORT, indent = 1, width = 410, height = 46, dy = -2 },
+      { "note", "The pixel strip only carries who you play and what you are doing, a few settings of other Elan addons (such as where a window of theirs sits), and your map position only if you turn that on. It never reads your health, buffs, cooldowns or combat events.", width = 440, height = 60, dy = -4 },
+    } },
+  },
+}
 
-local function note(parent, text, y, w)
-  local fs = UI.Text(parent, 11, C.textDim)
-  fs:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y)
-  fs:SetWidth(w or 420)
-  fs:SetJustifyH("LEFT")
-  if fs.SetWordWrap then fs:SetWordWrap(true) end
-  fs:SetText(text)
-  return fs
-end
+-- ------------------------------------------------------------ Emote wheel
+local function wheelDb() return EHUB.DB().wheel end
 
--- ------------------------------------------------------------ pages
-local function buildGeneral(page)
-  local y = 0
-  local h = UI.Header(page, "General") h:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - 32
-  local function place(w, h2) w:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - (h2 or 28) track(w) end
-  place(UI.Check(page, "Show minimap button",
-    function() return not EHUB.DB().minimap.hide end,
-    function(v) EHUB.DB().minimap.hide = not v EHUB.UpdateMinimap() end))
-  place(UI.Check(page, "Detect my character live (pixel strip)",
-    function() return EHUB.PixelsOn() end,
-    function(v) EHUB.SetPixels(v) end,
-    "A tiny strip of coloured squares in the top-left screen corner lets the Hub see your character without a /reload."))
-  place(UI.Check(page, "/rl shortcut for /reload (after /reload)",
-    function() return EHUB.DB().rl ~= false end,
-    function(v) EHUB.DB().rl = v and true or false end))
-  place(UI.Check(page, EHUB.POSITION_LABEL,
-    function() return EHUB.PositionOn() end,
-    function(v) EHUB.SetPosition(v) end,
-    EHUB.POSITION_DESC), 24)
-  -- 1.18.1: a short line under the check (the full description is its tooltip), so the page stays calm and nothing overlaps
-  local pd = note(page, EHUB.POSITION_SHORT, y, 400)
-  pd:ClearAllPoints()
-  pd:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y)
-  page.positionNote = pd
-  y = y - ((pd.GetStringHeight and pd:GetStringHeight() or 30) + 22)
-  page.stripNote = note(page, "The pixel strip only carries who you play and what you are doing, a few settings of other Elan addons (such as where a window of theirs sits), and your map position only if you turn that on. It never reads your health, buffs, cooldowns or combat events.", y)
-end
-
-local function buildWheel(page)
-  local y = 0
-  local h = UI.Header(page, "Emote wheel") h:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - 32
-  local function place(w, h2) w:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - (h2 or 24) track(w) end
-  place(UI.Check(page, "Enable emote wheel",
-    function() return EHUB.DB().wheel.enabled end,
-    function(v) EHUB.DB().wheel.enabled = v and true or false EHUB.ApplyWheel() end))
-  place(UI.Check(page, "Lock position (unlock to drag)",
-    function() return EHUB.DB().wheel.locked end,
-    function(v) EHUB.SetWheelLocked(v) end))
-  place(UI.Check(page, "Show emote names next to the icons",
-    function() return EHUB.DB().wheel.labels ~= false end,
-    function(v) EHUB.SetWheelLabels(v) end))
-  y = y - 4
-  local function row(text, items, get, set)
-    local lbl = UI.Text(page, 12, C.text)
-    lbl:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y - 5)
-    lbl:SetText(text)
-    local d = UI.Dropdown(page, 130, function() return items end, get, set)
-    d:SetPoint("TOPLEFT", page, "TOPLEFT", 150, y)
-    track(d)
-    y = y - 28
-    return d
+-- the emote dropdowns (one per slot, clockwise from the top) and a preview of the ring
+local function buildSlots(cell)
+  cell.grid, cell.nums = {}, {}
+  for i = 1, EHUB.WHEEL_MAXSLOTS do
+    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+    local num = UI.Text(cell, 11, C.textFaint, "RIGHT")
+    num:SetWidth(18)
+    num:SetPoint("TOPLEFT", cell, "TOPLEFT", col * 158, -row * 28 - 6)
+    num:SetText(tostring(i))
+    local d = UI.Dropdown(cell, 132, EHUB.EmoteItems,
+      function() return EHUB.GetSlot(i) end,
+      function(v) EHUB.SetSlot(i, v) cell.preview:Refresh() end)
+    d:SetPoint("TOPLEFT", cell, "TOPLEFT", col * 158 + 22, -row * 28)
+    d.slot = i
+    cell.grid[i], cell.nums[i] = d, num
   end
-  row("Open the wheel on", { { value = "hover", text = "Hover" }, { value = "click", text = "Click" } },
-    function() return EHUB.DB().wheel.mode end,
-    function(v) EHUB.DB().wheel.mode = v end)
-  row("Opens", { { value = "fixed", text = "At the icon" }, { value = "cursor", text = "At the mouse" } },
-    function() return EHUB.DB().wheel.where end,
-    function(v) EHUB.SetWheelWhere(v) end)
-  local box -- preview, set below
-  local grid = {}
-  local function relayout()
-    local n = EHUB.SlotCount()
-    for i, d in ipairs(grid) do d:SetShown(i <= n) end
-    if box then box:Refresh() end
-  end
-  local slotItems = { { value = 6, text = "6 emotes" }, { value = 8, text = "8 emotes" }, { value = 10, text = "10 emotes" } }
-  row("Number of emotes", slotItems,
-    function() return EHUB.DB().wheel.slots end,
-    function(v) EHUB.SetWheelSlots(v) relayout() end)
-  y = y - 2
-  local sl = UI.Slider(page, "Size", 0.6, 1.6, 0.1,
-    function() return EHUB.DB().wheel.scale end,
-    function(v) EHUB.DB().wheel.scale = v EHUB.ApplyWheel() end,
-    function(v) return string.format("%d%%", v * 100 + 0.5) end)
-  sl:SetWidth(250)
-  sl:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  track(sl)
-  y = y - 44
-
-  -- preview of the layout, top right
-  box = CreateFrame("Frame", nil, page)
+  local box = CreateFrame("Frame", nil, cell)
   box:SetSize(130, 130)
-  box:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, -34)
+  box:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -4, 0)
   UI.Skin(box, C.bgCard, C.border)
   local centre = UI.Icon(box, 24, EHUB.ICON)
   centre:SetPoint("CENTER", 0, 0)
   local icons = {}
-  for i = 1, EHUB.WHEEL_MAXSLOTS do
-    icons[i] = UI.Icon(box, 24, EHUB.SlotIcon and EHUB.SlotIcon(i))
-  end
+  for i = 1, EHUB.WHEEL_MAXSLOTS do icons[i] = UI.Icon(box, 24, EHUB.SlotIcon and EHUB.SlotIcon(i)) end
   local cap = UI.Text(box, 10, C.textFaint, "CENTER")
   cap:SetPoint("BOTTOM", box, "BOTTOM", 0, 3)
   cap:SetText("preview")
@@ -135,194 +115,113 @@ local function buildWheel(page)
     end
   end
   box.icons = icons
-  track(box)
-  page.preview = box
-  local kb = note(page, "Key binding: Esc > Key Bindings > AddOns > Elan's Hub. Hold the key to open at the mouse, release to do the emote.", -172, 130)
-  kb:ClearAllPoints()
-  kb:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, -172)
-  kb:SetWidth(130)
-
-  local el = UI.Text(page, 12, C.text)
-  el:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  el:SetText("Emotes, clockwise from the top")
-  local reset = UI.Button(page, "Reset wheel position", 130, 20)
-  reset:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, y + 3)
-  reset:SetScript("OnClick", function() EHUB.WheelCommand("reset") end)
-  page.reset = reset
-  y = y - 22
-  for i = 1, EHUB.WHEEL_MAXSLOTS do
-    local col, rw = (i - 1) % 3, math.floor((i - 1) / 3)
-    local d = UI.Dropdown(page, 136, EHUB.EmoteItems,
-      function() return EHUB.GetSlot(i) end,
-      function(v) EHUB.SetSlot(i, v) box:Refresh() end)
-    d:SetPoint("TOPLEFT", page, "TOPLEFT", col * 143, y - rw * 26)
-    d.slot = i
-    grid[i] = d
-    track(d)
-  end
-  relayout()
+  cell.preview = box
 end
 
+local function refreshSlots(cell)
+  local n = EHUB.SlotCount()
+  for i, d in ipairs(cell.grid) do
+    d:SetShown(i <= n)
+    cell.nums[i]:SetShown(i <= n)
+    d:Refresh()
+  end
+  cell.preview:Refresh()
+end
+
+Settings:Page{
+  id = "wheel", title = "Emote wheel", sub = "A small icon that opens a ring of emotes.", links = false, db = wheelDb,
+  sections = {
+    { title = "Emote wheel", columns = 1, colWidth = 450, sub = "Point at the icon (or click it), then point at an emote and click.", items = {
+      { "check", "Enable emote wheel", "enabled",
+        tip = "Shows the wheel's icon on your screen. It only does the normal emote command, nothing secure, so it works in combat too.",
+        after = function() EHUB.ApplyWheel() end },
+      { "check", "Lock position (unlock to drag)", "locked",
+        tip = "Unlocked, the icon can be dragged and the ring does not open from it. Right-clicking the icon (or the minimap button) also locks or unlocks it.",
+        after = function(v) EHUB.SetWheelLocked(v) end },
+      { "check", "Show emote names next to the icons", "labels", after = function(v) EHUB.SetWheelLabels(v) end },
+      { "dropdown", "Open the wheel on", "mode", labelWidth = 150, width = 130,
+        options = function() return { { value = "hover", text = "Hover" }, { value = "click", text = "Click" } } end },
+      { "dropdown", "Opens", "where", labelWidth = 150, width = 130,
+        options = function() return { { value = "fixed", text = "At the icon" }, { value = "cursor", text = "At the mouse" } } end,
+        after = function(v) EHUB.SetWheelWhere(v) end },
+      { "dropdown", "Number of emotes", "slots", labelWidth = 150, width = 130,
+        options = function() return { { value = 6, text = "6 emotes" }, { value = 8, text = "8 emotes" }, { value = 10, text = "10 emotes" } } end,
+        after = function(v, page) EHUB.SetWheelSlots(v) page:Refresh() end },
+      { "slider", "Size", "scale", 0.6, 1.6, 0.1,
+        fmt = function(v) return string.format("%d%%", v * 100 + 0.5) end,
+        after = function() EHUB.ApplyWheel() end },
+      { "key", "Key binding", binding = "ELANSHUB_WHEEL", width = 300,
+        tip = "Hold the key to open the wheel at the mouse, release it to do the emote you point at. Also in the game's Key Bindings > AddOns > Elan's Hub." },
+      { "button", "Reset wheel position", width = 150, tip = "Puts the icon back in its first place.",
+        onClick = function() EHUB.WheelCommand("reset") end },
+    } },
+    { title = "Emotes", columns = 1, colWidth = 450, sub = "Clockwise from the top. The preview shows the ring.", items = {
+      { "custom", "emotes slots thank cheer wave dance preview", height = 142, build = buildSlots, refresh = refreshSlots },
+    } },
+  },
+}
+
+-- ------------------------------------------------------------ About (text only)
 local function buildAbout(page)
+  local function text(size, color, s, y, wrap)
+    local fs = UI.Text(page, size, color)
+    fs:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+    if wrap then fs:SetWidth(440) fs:SetWordWrap(true) fs:SetJustifyV("TOP") end
+    fs:SetText(s)
+    return fs
+  end
   local y = 0
-  local h = UI.Header(page, "About") h:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - 30
-  local v = UI.Text(page, 12, C.text)
-  v:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  v:SetText("Elan's Hub  |cffabd473v" .. tostring(EHUB.Version and EHUB.Version() or "?") .. "|r")
+  page.title = text(14, C.accent, "Elan's Hub", y)
+  y = y - 22
+  page.versionText = text(12, C.text, "Version |cffabd473" .. tostring(VERSION or "?") .. "|r", y)
   y = y - 24
-  local n = note(page, "Companion for Elan's Addon Hub: shares your character with the Lodge (class, level, zone, group), the pixel strip, the /rl shortcut, the minimap button and the emote wheel. For Elan's Outpost it also saves your bags, gear, talents and professions; the recipes you know are read when you open a profession window.", y)
+  text(11, C.textDim, "The companion addon of Elan's Outpost: shares your character with the Lodge (class, level, zone, group), the pixel strip, the /rl shortcut, the minimap button and the emote wheel. For the Outpost it also saves your bags, gear, talents and professions; the recipes you know are read when you open a profession window.", y, true)
   y = y - 72
-  local cmd = UI.Text(page, 12, C.gold)
-  cmd:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  cmd:SetText("Commands")
+  text(12, C.gold, "Commands", y)
   y = y - 20
-  local list = UI.Text(page, 11, C.text)
-  list:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  list:SetWidth(420)
-  list:SetJustifyH("LEFT")
-  if list.SetWordWrap then list:SetWordWrap(true) end
-  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset|open\n/ehub pixel on|off\n/ehub position on|off  -  share your map position with the Outpost (off by default)\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
-  y = y - 104
-  local out = UI.Text(page, 12, C.gold)
-  out:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  out:SetText("Get the Hub")
+  page.commands = text(11, C.text, "/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on / off / lock / unlock / reset / open\n/ehub pixel on / off\n/ehub position on / off  -  share your map position with the Outpost (off by default)\n/ehub copy  -  recent chat lines to copy\n/ehub data  -  what the Hub has saved for the Outpost\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI", y, true)
+  y = y - 136
+  text(12, C.gold, "Get the Hub", y)
   y = y - 18
-  local link = UI.Text(page, 11, C.accent)
-  link:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-  link:SetText("github.com/Elanoran/ElanAddonHub")
+  text(11, C.accent, "github.com/Elanoran/ElanAddonHub", y)
 end
 
-local BUILD = { general = buildGeneral, wheel = buildWheel, about = buildAbout }
-
--- ------------------------------------------------------------ window
-function EHUB.SelectSettingsTab(key)
-  if not win then return end
-  if not BUILD[key] then key = "general" end
-  for k, b in pairs(win.tabButtons) do
-    local on = (k == key)
-    b.bg:SetShown(on)
-    b.bar:SetShown(on)
-    local tc = on and C.text or C.textDim
-    b.text:SetTextColor(tc[1], tc[2], tc[3], tc[4] or 1)
-    if win.pages[k] then win.pages[k]:SetShown(on) end
+-- ------------------------------------------------------------ tabs
+local function settingsTab(id)
+  return function(p)
+    p.settingsPage = Settings:Build(p, id)
   end
-  if not win.pages[key] then
-    local page = CreateFrame("Frame", nil, win.content)
-    page:SetAllPoints()
-    BUILD[key](page)
-    win.pages[key] = page
-  end
-  win.pages[key]:Show()
-  win.current = key
-  EHUB.DB().settingsTab = key
-  EHUB.RefreshSettings()
 end
+W:AddTab{ id = "general", label = "General", icon = "INV_Misc_Gear_01", build = settingsTab("general"),
+  onShow = function(p) p.settingsPage:Refresh() end }
+W:AddTab{ id = "wheel", label = "Emote wheel", icon = "INV_Banner_02", build = settingsTab("wheel"),
+  onShow = function(p) p.settingsPage:Refresh() end }
+W:AddTab{ id = "about", label = "About", icon = "INV_Misc_Book_09", build = buildAbout }
 
-local function build()
-  win = CreateFrame("Frame", "ElansHubSettings", UIParent)
-  EHUB.settings = win
-  win:SetSize(WIN_W, WIN_H)
-  win:SetPoint("CENTER", 0, 40)
-  win:SetFrameStrata("DIALOG")
-  win:SetMovable(true)
-  win:SetClampedToScreen(true)
-  win:EnableMouse(true)
-  win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", function(self) self:StartMoving() end)
-  win:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-  UI.Skin(win, C.bg, { 0, 0, 0, 1 })
-  win:Hide()
-  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "ElansHubSettings") end
-  win:SetScript("OnHide", function() UI.ClosePopup() end)
-
-  -- header (also a drag handle)
-  local header = CreateFrame("Frame", nil, win)
-  header:SetPoint("TOPLEFT", 1, -1)
-  header:SetPoint("TOPRIGHT", -1, -1)
-  header:SetHeight(44)
-  header:EnableMouse(true)
-  header:RegisterForDrag("LeftButton")
-  header:SetScript("OnDragStart", function() win:StartMoving() end)
-  header:SetScript("OnDragStop", function() win:StopMovingOrSizing() end)
-  local hbg = UI.Tex(header, "BACKGROUND", { 1, 1, 1, 1 })
-  hbg:SetAllPoints()
-  UI.Gradient(hbg, "HORIZONTAL", { 0.16, 0.22, 0.10, 1 }, { 0.06, 0.07, 0.075, 1 })
-  local line = UI.Tex(header, "ARTWORK", C.accent)
-  line:SetPoint("BOTTOMLEFT") line:SetPoint("BOTTOMRIGHT") line:SetHeight(1)
-  UI.Gradient(line, "HORIZONTAL", { C.accent[1], C.accent[2], C.accent[3], 0.9 }, { C.accent[1], C.accent[2], C.accent[3], 0 })
-  local logo = UI.Icon(header, 30, "Ability_Hunter_BeastTaming")
-  logo:SetPoint("LEFT", 12, 0)
-  local title = UI.Text(header, 16, C.text)
-  title:SetPoint("LEFT", logo, "RIGHT", 10, 7)
-  title:SetText("Elan's |cffabd473Hub|r")
-  local sub = UI.Text(header, 10, C.textDim)
-  sub:SetPoint("LEFT", logo, "RIGHT", 10, -8)
-  sub:SetText("Companion for Elan's Addon Hub  -  v" .. tostring(EHUB.Version and EHUB.Version() or "?"))
-  local close = CreateFrame("Button", nil, header)
-  close:SetSize(28, 28)
-  close:SetPoint("RIGHT", -8, 0)
-  local x = UI.Text(close, 16, C.textDim, "CENTER")
-  x:SetPoint("CENTER")
-  x:SetText("x")
-  close:SetScript("OnEnter", function() x:SetTextColor(C.bad[1], C.bad[2], C.bad[3], 1) end)
-  close:SetScript("OnLeave", function() x:SetTextColor(C.textDim[1], C.textDim[2], C.textDim[3], 1) end)
-  close:SetScript("OnClick", function() win:Hide() end)
-  win.close = close
-
-  -- sidebar
-  local side = CreateFrame("Frame", nil, win)
-  side:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
-  side:SetPoint("BOTTOMLEFT", 1, 1)
-  side:SetWidth(SIDE_W)
-  UI.Skin(side, C.bgSide, { 0, 0, 0, 0 })
-  local sl = UI.Tex(side, "ARTWORK", C.border)
-  sl:SetPoint("TOPRIGHT") sl:SetPoint("BOTTOMRIGHT") sl:SetWidth(1)
-
-  local content = CreateFrame("Frame", nil, win)
-  content:SetPoint("TOPLEFT", side, "TOPRIGHT", 18, -16)
-  content:SetPoint("BOTTOMRIGHT", -18, 14)
-  win.content = content
-  win.pages = {}
-  win.tabButtons = {}
-
-  local y = -10
-  for _, def in ipairs(TABS) do
-    local b = CreateFrame("Button", nil, side)
-    b:SetHeight(32)
-    b:SetPoint("TOPLEFT", 0, y)
-    b:SetPoint("TOPRIGHT", -1, y)
-    b.bg = UI.Tex(b, "BACKGROUND", C.accentDim)
-    b.bg:SetAllPoints() b.bg:Hide()
-    b.hl = UI.Tex(b, "BACKGROUND", { 1, 1, 1, 0.04 })
-    b.hl:SetAllPoints() b.hl:Hide()
-    b.bar = UI.Tex(b, "ARTWORK", C.accent)
-    b.bar:SetPoint("TOPLEFT") b.bar:SetPoint("BOTTOMLEFT") b.bar:SetWidth(3) b.bar:Hide()
-    b.icon = UI.Icon(b, 22, def.icon)
-    b.icon:SetPoint("LEFT", 14, 0)
-    b.text = UI.Text(b, 13, C.textDim)
-    b.text:SetPoint("LEFT", b.icon, "RIGHT", 10, 0)
-    b.text:SetText(def.label)
-    b:SetScript("OnEnter", function(self) self.hl:Show() end)
-    b:SetScript("OnLeave", function(self) self.hl:Hide() end)
-    b:SetScript("OnClick", function() EHUB.SelectSettingsTab(def.key) end)
-    b.key = def.key
-    win.tabButtons[def.key] = b
-    y = y - 34
-  end
-  local ver = UI.Text(side, 10, C.textFaint)
-  ver:SetPoint("BOTTOMLEFT", 14, 10)
-  ver:SetText("v" .. tostring(EHUB.Version and EHUB.Version() or "?"))
-end
-
+-- every built settings page reads its values again (after the minimap button or a slash command changed one)
 function EHUB.RefreshSettings()
-  for _, w in ipairs(widgets) do if w.Refresh then w:Refresh() end end
+  for _, list in pairs(Settings.built or {}) do
+    for _, p in ipairs(list) do pcall(p.Refresh, p) end
+  end
+end
+
+function EHUB.SelectSettingsTab(key)
+  if not W.byId[key] then key = "general" end
+  W:Select(key)
 end
 
 -- Toggles the window. tab = which page to show (default: the last one used). Opening it on the page that is
 -- already showing closes it again.
 function EHUB.OpenSettings(tab)
-  if not win then build() end
-  if win:IsShown() and (tab == nil or tab == win.current) then win:Hide() return end
-  EHUB.SelectSettingsTab(tab or EHUB.DB().settingsTab or "general")
-  win:Show()
+  if tab and not W.byId[tab] then tab = "general" end
+  if W:IsShown() and (tab == nil or tab == W:Current()) then W:Hide() return end
+  W:Show(tab)
+end
+
+-- Options > AddOns: a button to the window
+EHUB.inits[#EHUB.inits + 1] = function()
+  EHUB.settingsPanel, EHUB.settingsCategory = Settings:OptionsEntry{
+    name = "Elan's Hub", title = "Elan's |cffabd473Hub|r", button = "Open settings",
+    open = function() W:Show("general") end,
+  }
 end
