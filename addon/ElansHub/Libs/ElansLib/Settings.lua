@@ -36,6 +36,11 @@
 --   S:OptionsEntry{ name = "Elan's Hunter Helper", title = "Elan's |cff..Hunter Helper|r", open = fn,
 --     button = "Open main window", page = "general" }  -- Options > AddOns panel; `page` embeds that page. -> panel, category
 --   ElansLib:Get("Settings").All() -> every addon's S (all lib copies of this minor and newer)
+--   Page art (MINOR 4): New{ art = "Interface\\AddOns\\X\\Media\\page_art" } (or art = on one page) draws a dusk
+--     vignette behind the page, filling the lower right out to the window edge, with a fade over the text side that is
+--     stronger the fuller the page. The texture is square (a 5:4 picture squashed; TexCoord crops it back).
+--   S:ArtItem() -> a "Background art" check item (S:DB().pageArt, on by default) for the addon's page
+--   S:UpdateArt()                               shows / hides the art on every built page (after the check changes)
 --   S.built[pageId] -> { page, ... }            every built copy of a page (MINOR 3; the dock's search jumps into one)
 --
 -- Items (positional fields after the kind, the rest by name; every item takes tip, indent, enabled, when, get, set):
@@ -60,7 +65,7 @@
 local Lib = _G.ElansLib
 local prev = Lib:Get("Settings")
 local carried = prev and prev.instances
-local M = Lib:NewModule("Settings", 3)
+local M = Lib:NewModule("Settings", 4)
 if not M then return end
 
 M.instances = carried or {} -- every addon's S (a newer copy takes them over)
@@ -216,7 +221,7 @@ local S = {}
 S.__index = S
 
 function M.New(cfg)
-  local s = setmetatable({ ns = cfg.ns, dbf = cfg.db, title = cfg.title, pages = {}, order = {} }, S)
+  local s = setmetatable({ ns = cfg.ns, dbf = cfg.db, title = cfg.title, art = cfg.art, pages = {}, order = {} }, S)
   M.instances[#M.instances + 1] = s
   return s
 end
@@ -251,6 +256,23 @@ function S:Page(def)
 end
 
 function S:GetPage(id) return self.pages[id] end
+
+-- page art: on unless the player switched it off (one choice per addon)
+function S:ArtOn() return self:DB().pageArt ~= false end
+
+function S:UpdateArt()
+  for _, list in pairs(self.built or {}) do
+    for _, page in ipairs(list) do if page.UpdateArt then page:UpdateArt() end end
+  end
+end
+
+function S:ArtItem()
+  local s = self
+  return { "check", "Background art", "pageArt", tip = "A quiet painted scene behind this addon's pages. Off = the plain dark page.",
+    get = function() return s:ArtOn() end,
+    set = function(v) s:DB().pageArt = v and true or false end,
+    after = function() s:UpdateArt() end }
+end
 
 -- every item of one page (or of all pages), built or not
 function S:Items(pageId)
@@ -312,6 +334,81 @@ function S:Build(parent, id)
   sf:SetPoint("BOTTOMRIGHT")
   local c = sf.child
   page.frame, page.child = sf, c
+
+  -- page art: the picture (lower right, out to the window edge) and the fade over the text side, all on the parent's
+  -- BACKGROUND so the scroll frame and its widgets draw above it. The fade is four gradients (two stops each) in the
+  -- page colour; its strength follows how full the page is (a short page keeps more of the picture).
+  local artPath = def.art or self.art
+  if artPath then
+    local BLEED_X, BLEED_Y = 16, 14   -- the content inset of Window and Dock: reach the window edge
+    local ASPECT = 1.25               -- the picture's real shape (5:4)
+    local bg = C.bg
+    local art = parent:CreateTexture(nil, "BACKGROUND", nil, -6)
+    art:SetTexture(artPath)
+    art:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    art:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", BLEED_X, -BLEED_Y)
+    art:SetAlpha(0.8)
+    local fades = {}
+    -- { from, to (fractions of the width / height), alpha at from, alpha at to, horizontal }
+    local FADE = { { 0, 0.45, 0.92, 0.75, true }, { 0.45, 0.92, 0.75, 0, true },
+                   { 0, 0.40, 0.85, 0.45, false }, { 0.40, 0.75, 0.45, 0, false } }
+    for i = 1, #FADE do
+      local t = parent:CreateTexture(nil, "BACKGROUND", nil, -5)
+      t:SetTexture(UI.WHITE)
+      fades[i] = t
+    end
+    page.art, page.artFades = art, fades
+
+    local strength = 1
+    local function place()
+      local w, h = parent:GetWidth(), parent:GetHeight()
+      if not w or not h or w <= 0 or h <= 0 then return end
+      w, h = w + BLEED_X, h + BLEED_Y
+      -- cover, anchored at the lower right: crop the top (wide area) or the left (tall area)
+      local r = w / h
+      if r > ASPECT then art:SetTexCoord(0, 1, 1 - ASPECT / r, 1) else art:SetTexCoord(1 - r / ASPECT, 1, 0, 1) end
+      for i, f in ipairs(FADE) do
+        local t = fades[i]
+        local a1, a2 = f[3] * strength, f[4] * strength
+        t:ClearAllPoints()
+        if f[5] then
+          t:SetPoint("TOPLEFT", parent, "TOPLEFT", w * f[1], 0)
+          t:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", w * f[1], -BLEED_Y)
+          t:SetWidth(w * (f[2] - f[1]))
+          UI.Gradient(t, "HORIZONTAL", { bg[1], bg[2], bg[3], a1 }, { bg[1], bg[2], bg[3], a2 })
+        else
+          t:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -h * f[1])
+          t:SetPoint("TOPRIGHT", parent, "TOPRIGHT", BLEED_X, -h * f[1])
+          t:SetHeight(h * (f[2] - f[1]))
+          -- VERTICAL gradients run bottom (c1) to top (c2)
+          UI.Gradient(t, "VERTICAL", { bg[1], bg[2], bg[3], a2 }, { bg[1], bg[2], bg[3], a1 })
+        end
+      end
+    end
+    page.PlaceArt = place
+
+    -- fullness = page height / visible height: 0.5 for a page that fills half or less, 1 for a full one
+    function page:SetArtStrength(contentH)
+      local vh = sf:GetHeight()
+      local s2 = 1
+      if vh and vh > 0 and contentH then s2 = math.max(0.5, math.min(1, contentH / vh)) end
+      if s2 ~= strength then strength = s2 place() end
+    end
+    function page:ArtStrength() return strength end
+
+    function page:UpdateArt()
+      local on = s:ArtOn()
+      art:SetShown(on)
+      for _, t in ipairs(fades) do t:SetShown(on) end
+      if on then place() end
+    end
+
+    -- an empty frame of our own over the parent tells us when it changes size (no hooks on the parent)
+    local sizer = CreateFrame("Frame", nil, parent)
+    sizer:SetAllPoints(parent)
+    sizer:SetScript("OnSizeChanged", function() place() page:SetArtStrength(c:GetHeight()) end)
+    page.artSizer = sizer
+  end
 
   local function pdb()
     if def.db then return def.db() or {} end
@@ -592,6 +689,7 @@ function S:Build(parent, id)
       self.noMatch:SetShown(q ~= "" and not any)
     end
     c:SetHeight(-y + 20)
+    if self.SetArtStrength then self:SetArtStrength(-y + 20) end
     for si, b in pairs(self.links) do
       if self.sections[si].visible then b:Enable() else b:Disable() end
     end
@@ -644,6 +742,7 @@ function S:Build(parent, id)
 
   page:Layout()
   page:Refresh()
+  if page.UpdateArt then page:UpdateArt() end
   return page
 end
 
