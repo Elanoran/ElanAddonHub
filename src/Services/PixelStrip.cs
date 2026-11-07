@@ -17,7 +17,7 @@ namespace ElansAddonHub.Services
     // 12 reserved, 2 checksum bytes. Version 3 (companion 1.15.3+) uses reserved bytes 10-14 for the OPT-IN map position: posFlags
     // (1 sharing on, 2 position valid), x (2 bytes), y (2 bytes) = 0..65535 of the uiMap in bytes 2-3. Older hubs ignore them.
     // Version 4 (companion 1.16.0+) uses bytes 15-21 for one trail event at a time (same opt-in): seq (1-255, 0 = none), kind, id (3 bytes),
-    // extra, age in seconds; version 5 (companion 1.16.1+) adds posFlags bits 4 on a flight, 8 indoors, 16 swimming (with a valid position only; older Outposts mask them off); version 6 (companion 1.17.0+) adds 32 on a mount, 64 your pet is out (same rules); each event stays a few seconds, so a reader at 1 Hz sees it at least twice (StripEventFilter passes it once). Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
+    // extra, age in seconds; version 7 (companion 1.19.0+) also sends notes there, kinds 64-255 (StripNote): small settings from other Elan addons that need only the strip, not the position opt-in; version 5 (companion 1.16.1+) adds posFlags bits 4 on a flight, 8 indoors, 16 swimming (with a valid position only; older Outposts mask them off); version 6 (companion 1.17.0+) adds 32 on a mount, 64 your pet is out (same rules); each event stays a few seconds, so a reader at 1 Hz sees it at least twice (StripEventFilter passes it once). Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
     // row 0 only and never looks below it, so v1 and v2 hubs/companions mix in every combination: a v2 decoder without row 1
     // (old companion, or a failed checksum there) simply returns the v1 fields.
     //   flags1: 1 combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in instance, 32 raid instance, 64 party instance, 128 in group
@@ -64,6 +64,8 @@ namespace ElansAddonHub.Services
             // ---- row 1 version 4 (companion 1.16.0+): one trail event at a time (bytes 15-21). EvSeq 0 = none; an older Hub never has one.
             public int EvSeq, EvKind, EvId, EvExtra, EvAge;
             public bool HasEvent => HasV2 && RowVersion >= 4 && EvSeq > 0 && EvKind > 0;
+            // ---- row 1 version 7 (companion 1.19.0+): the same bytes may carry a note (kind 64-255) instead of a trail event
+            public bool NotesSupported => HasV2 && RowVersion >= 7;
             public string ClassFile => ClassFiles.TryGetValue(ClassId, out var c) ? c : null;
             public string ClassName => ClassNames.TryGetValue(ClassId, out var c) ? c : null;
             public string RaceFile => RaceFiles.TryGetValue(RaceId, out var c) ? c : null;
@@ -273,14 +275,33 @@ namespace ElansAddonHub.Services
     // The Hub shows each event for a few seconds and numbers them (seq 1-255): a reader that looks once a second sees it two or three times.
     // This passes each one once: a different seq (or kind / id) is a new event; the same one again is new only after a long gap (a /reload starts
     // the numbers again, so a repeat after StaleAfter is a new event, never the old one). Strips without events (older Hubs) pass nothing.
+    // A note from the strip (companion 1.19.0+): kind 64-255 in the event bytes, a small setting another Elan addon handed the Hub
+    // (ElansHub.Note). Never a trail event and never part of the position opt-in. Kinds are handed out in ARCHITECTURE.md.
+    public sealed class StripNote
+    {
+        public const int MinKind = 64;
+        public int Kind, Id, Extra, Seq;
+        public DateTime At;
+        public string Who = "";
+        public static bool IsNoteKind(int k) => k >= MinKind && k <= 255;
+    }
+
+    // The trail filter passes trail kinds only; `new StripEventFilter(StripNote.IsNoteKind)` passes the notes (with its own memory).
     public sealed class StripEventFilter
     {
         public static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(20);
         int lastSeq = -1, lastKind, lastId; DateTime lastSeen = DateTime.MinValue; string lastWho = "";
         readonly object gate = new object();
+        readonly Func<int, bool> accept;
+        public StripEventFilter(Func<int, bool> accept = null) { this.accept = accept ?? StripEvent.KnownKind; }
+        public StripNote TakeNote(StripCodec.Info info, DateTime nowUtc)
+        {
+            var e = Take(info, nowUtc);
+            return e == null ? null : new StripNote { Kind = (int)e.Kind, Id = e.Id, Extra = e.Extra, Seq = e.Seq, At = e.At, Who = e.Who };
+        }
         public StripEvent Take(StripCodec.Info info, DateTime nowUtc)
         {
-            if (info == null || !info.HasEvent || !StripEvent.KnownKind(info.EvKind)) return null;
+            if (info == null || !info.HasEvent || !accept(info.EvKind)) return null;
             lock (gate)
             {
                 var who = info.Name ?? "";
@@ -310,6 +331,8 @@ namespace ElansAddonHub.Services
         public event Action PositionChanged;                       // only the opt-in map position changed: no presence change, no SavedVariables poll
         public event Action<StripEvent> TrailEvent;                // a new trail event (each one once; worker thread)
         public readonly StripEventFilter Events = new StripEventFilter();
+        public event Action<StripNote> Note;                       // a new note (kinds 64-255, each one once; worker thread)
+        public readonly StripEventFilter Notes = new StripEventFilter(StripNote.IsNoteKind);
         public IntPtr TestHwnd;                                  // self-test: read this window instead of WoW
         public StripCodec.Info Probe(out string why) => ReadOnce(out why);
 
@@ -340,6 +363,8 @@ namespace ElansAddonHub.Services
                     else if (!old.PosEquals(info)) PositionChanged?.Invoke();
                     var ev = Events.Take(info, DateTime.UtcNow);
                     if (ev != null) TrailEvent?.Invoke(ev);
+                    var note = info.NotesSupported ? Notes.TakeNote(info, DateTime.UtcNow) : null;
+                    if (note != null) Note?.Invoke(note);
                 }
             }
             catch (Exception e) { Status = "error " + e.Message; }

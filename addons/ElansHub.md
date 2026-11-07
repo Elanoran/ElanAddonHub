@@ -11,7 +11,8 @@ Works on its own, and comes with [Elan's Outpost](../README.md).
 ## What it does
 
 - **Status strip**: a tiny block of coloured squares in the top-left corner that the Outpost on the same PC reads from the
-  screen: your character, level, zone and status (in combat, dead, AFK, resting, in a group). Hover it to see what it is;
+  screen: your character, level, zone and status (in combat, dead, AFK, resting, in a group), and a few settings of other
+  Elan addons that the Outpost uses (such as where a window of theirs sits). Hover it to see what it is;
   clicks go through it. It can be turned off.
 - **Saves your characters** for the Outpost, when you `/reload` or log out: level, zone, money, bags, bank, gear and
   stats, talents, professions and recipes, reputations, and the guild bank tabs you looked at. The bank, recipes and

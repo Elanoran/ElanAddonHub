@@ -114,6 +114,18 @@ position with Elan's Outpost", off by default):
 | Hub 1.16.1+ | three bits: on a flight, indoors, swimming (for the 3D height) |
 | Hub 1.17.0+ | two more bits: mounted, pet out (for the paw-print trail) |
 
+**Notes** (Hub 1.19.0+, row 1 version 7) are the one thing in the event bytes that needs only the strip, not the
+position opt-in. A note is a small setting another Elan addon hands the Outpost with `ElansHub.Note`, never anything
+about where you are or what you do.
+
+- Kinds 64-255 are notes, kinds 1-63 are trail events. Turning the position option off drops only the trail events.
+- Each note is numbers only: `id` 0-16777215 and `extra` 0-255. It is shown for a few seconds, one at a time with the
+  trail events. A newer note of a kind replaces one still waiting, and a full queue drops trail events first.
+- The slot carries about 5 bytes every 3 s. Send a note when a setting changes and repeat it now and then (about once a
+  minute) for an Outpost that started later. Anything bigger or that can wait goes through `Publish`.
+- The Outpost passes notes to `GamePresence.Note`, never to the trail. Older Outposts ignore these kinds.
+- Kinds handed out: none yet.
+
 ### Handing data to the Hub
 
 Elan's Hub exposes one global, `ElansHub` (API level `ElansHub.API`). A feature addon never depends on it
@@ -148,6 +160,9 @@ end
 - **`ElansHub.CharKey()`** returns `"Realm-Name"`, the one key format for characters everywhere.
 - **`ElansHub.Characters()`** (Hub 1.13.0) lists every character the Hub has data for:
   `{ { key, at, modules = { ... } } }`, newest first. Feature addons use it instead of reading `ElansHubData` directly.
+- **`ElansHub.Note(kind, id, extra)`** (Hub 1.19.0) puts a small note on the status strip for the Outpost, live
+  (see Notes above). Returns `true` when queued, `false` when the strip is off or the kind is not 64-255.
+  Guard it like the others: `if H and H.Note then ... end`.
 
 ### Stored layout (`ElansHubData`)
 

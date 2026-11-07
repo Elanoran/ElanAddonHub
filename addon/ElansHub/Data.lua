@@ -201,6 +201,16 @@ function H.Get(module, key)
   return copy, entry.v, entry.at
 end
 
+-- Hub 1.19.0: a small note for Elan's Outpost on this PC, carried by the status strip (no /reload needed). Numbers only: kind 64-255
+-- (handed out in ARCHITECTURE.md), id 0-16777215, extra 0-255; anything else is sent as 0. Shown a few seconds, one at a time with the trail
+-- events; a newer note of the same kind replaces one still waiting. Meant for settings that change now and then (say every minute or on
+-- a change), not for a stream. Returns true when queued, false when the strip is off or the kind is wrong. Check `H.Note` exists first.
+function H.Note(kind, id, extra)
+  if not EHUB.PushNote then return false end
+  local ok, r = pcall(EHUB.PushNote, kind, id, extra)
+  return ok and r == true
+end
+
 ElansHub = H
 
 -- The Hub's own module: general character data every class has. Called by snapshot() (out of combat, event driven).

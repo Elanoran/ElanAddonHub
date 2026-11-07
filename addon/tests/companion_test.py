@@ -647,7 +647,7 @@ evt("PLAYER_ENTERING_WORLD")
 local d = decode()
 ok("v1 row still valid (name/class/race/level)", d.v1 and d.name == "Elan" and d.class == 3 and d.race == 2 and d.level == 60)
 ok("v1 flags: sex bits kept, v2-present bit (8) set", d.flags == 1 + 2 * 2 + 8)
-ok("v2 row valid: version 6 (1.17.0: how you move incl. mounted / pet out, in posFlags), uiMapID 1413", d.v2 and d.ver == 6 and d.map == 1413)
+ok("v2 row valid: version 7 (1.19.0: notes in the event bytes; 1.17.0: how you move incl. mounted / pet out, in posFlags), uiMapID 1413", d.v2 and d.ver == 7 and d.map == 1413)
 ok("v2 xp 33%, not in combat, combat flag valid", d.xp == 33 and d.f1 == 0 and band(d.f2, 1) == 1 and band(d.f2, 2) == 2)
 ok("old hub view: marker+calibration cells intact", strip.__textures[1].__rgb[1] == 1 and strip.__textures[1].__rgb[3] == 1 and strip.__textures[1].__rgb[2] == 0)
 
@@ -725,7 +725,7 @@ do
   tick() evt("ZONE_CHANGED")
   local d = decode()
   ok("position: off by default (db.position nil, PositionOn false)", db.position == nil and not E.PositionOn())
-  ok("position off: row 1 version 6, posFlags 0, x/y and the event bytes zero", d.v2 and d.ver == 6 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
+  ok("position off: row 1 version 7, posFlags 0, x/y and the event bytes zero", d.v2 and d.ver == 7 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
   ok("position off: the position was never asked for and no timer runs", POSCALLS == 0 and not E.PositionTimerRunning())
   ok("position off: flight / indoors / swimming were never asked for", MOVECALLS == 0)
   local t0 = E.posTicks tick() tick()
@@ -1062,6 +1062,58 @@ do
   local keys = {} for k in pairs(db) do keys[#keys + 1] = k end
   local extra = {} for _, k in ipairs(keys) do local had = false for _, k2 in ipairs(dbKeys) do if k2 == k then had = true end end if not had and k ~= "position" and k ~= "positionHinted" then extra[#extra + 1] = k end end
   ok("events are never saved (no new SavedVariables keys: " .. table.concat(extra, ",") .. ")", #extra == 0)
+  ST.pos = nil
+end
+-- ================= notes (1.19.0): kinds 64-255 share the event bytes, need only the strip, not the position option
+do
+  local function collect(n)
+    local seen, out = {}, {}
+    for i = 1, n or 10 do
+      tick()
+      local d = decode()
+      if d.v2 and d.es > 0 and not seen[d.es] then seen[d.es] = true out[#out + 1] = d end
+    end
+    return out
+  end
+  local function has(l, kind, id) for _, x in ipairs(l) do if x.ek == kind and (id == nil or x.ei == id) then return true end end return false end
+  ST.pos, ST.px, ST.py = "ok", 0.3, 0.3
+  SlashCmdList.ELANSHUB("position off")
+  collect(6)
+  ok("notes: ElansHub.Note exists", type(ElansHub.Note) == "function")
+  ok("notes: position option off, strip on -> a note is accepted", ElansHub.Note(64, 0x123456, 7) == true)
+  local l = collect(6)
+  ok("notes: drawn once as kind 64 with its id and extra, row 1 version 7", #l == 1 and l[1].ek == 64 and l[1].ei == 0x123456 and l[1].ex == 7 and l[1].ver == 7)
+  ok("notes: the position option still off -> nothing listens, trail kinds still refused", not E.TrailEventsListening()
+     and E.PushEvent(E.EV.quest, 5, 0) == false and ElansHub.Note(E.EV.quest, 5, 0) == false)
+  ok("notes: wrong kinds refused (256, 63, 64.5, a string, nil)", ElansHub.Note(256, 0, 0) == false and ElansHub.Note(63, 0, 0) == false
+     and ElansHub.Note(64.5, 0, 0) == false and ElansHub.Note("x", 0, 0) == false and ElansHub.Note(nil) == false)
+  -- a newer note of a kind replaces the one still waiting
+  ElansHub.Note(65, 1, 0) ElansHub.Note(64, 1, 0) ElansHub.Note(64, 2, 0)
+  l = collect(14)
+  ok("notes: a newer note of the same kind replaces the waiting one (65, then 64 with id 2 only)", #l == 2 and l[1].ek == 65 and l[2].ek == 64 and l[2].ei == 2)
+  -- the position option going off drops the trail events and keeps the notes
+  SlashCmdList.ELANSHUB("position on")
+  collect(6)
+  E.PushEvent(E.EV.quest, 3001, 0) E.PushEvent(E.EV.quest, 3002, 0) ElansHub.Note(66, 9, 0)
+  SlashCmdList.ELANSHUB("position off")
+  l = collect(14)
+  ok("position off: the waiting trail events are gone, the note still comes", #l == 1 and l[1].ek == 66 and l[1].ei == 9)
+  -- a full queue drops trail events before a note
+  SlashCmdList.ELANSHUB("position on")
+  collect(6)
+  E.PushEvent(E.EV.quest, 4000, 0) ElansHub.Note(67, 1, 0)
+  for i = 1, 12 do E.PushEvent(E.EV.quest, 4000 + i, 0) end
+  l = collect(60)
+  ok("queue full: the oldest trail events go first, the note survives", has(l, 67, 1) and has(l, 8, 4012) and not has(l, 8, 4001))
+  -- the strip off: no notes either, and a waiting one is forgotten
+  E.PushEvent(E.EV.quest, 5001, 0) ElansHub.Note(68, 1, 0)
+  SlashCmdList.ELANSHUB("pixel off")
+  ok("pixel strip off: notes refused, the queue is empty", ElansHub.Note(64, 1, 0) == false and E.EventsQueued() == 0)
+  SlashCmdList.ELANSHUB("pixel on")
+  l = collect(8)
+  ok("pixel strip on again: the forgotten note does not come back", not has(l, 68))
+  SlashCmdList.ELANSHUB("position off")
+  collect(6)
   ST.pos = nil
 end
 -- state for the hub's cross-check (STRIP_DUMP): in combat, AFK, level 60 Orc hunter "Elan", zone 1426, party instance 43, group 5
@@ -1468,8 +1520,10 @@ check("position code never hooks or touches protected things", not _re.search(r"
 # trail events: read only in ElansHub.lua behind the position option, from plain events; no hooks, no combat events
 _tev = _hub.split("-- ---- trail events")[1].split("local lastSig")[0]
 check("trail events never hook anything or touch protected / combat-log code", not _re.search(r"hooksecurefunc|HookScript|SetAttribute|Secure|COMBAT_LOG|CombatLog", _tev))
-check("trail events only run while the position option and the strip are on (eventsOn gates push, the handler and the registration)", "local function eventsOn() return positionOn() and pixelsOn() end" in _tev
-      and "if not eventsOn() then return false end" in _tev and "if not eventsOn() then return end" in _tev and "local want = eventsOn()" in _tev)
+check("trail events only run while the position option and the strip are on (eventsOn gates the handler and the registration; slotAllows lets only notes past without the option)",
+      "local function eventsOn() return positionOn() and pixelsOn() end" in _tev and "if not eventsOn() then return end" in _tev and "local want = eventsOn()" in _tev
+      and "local function slotAllows(kind) return pixelsOn() and (isNote(kind) or positionOn()) end" in _tev and "local NOTE_MIN = 64" in _tev
+      and "if not slotAllows(kind) then return false end" in _tev and "if not (evCur and slotAllows(evCur.kind)) then" in _tev)
 check("trail events never write to the saved variables", "ElansHubDB" not in _tev)
 check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.12.0")[1])
 check("Data.lua is in the toc right after ElansHub.lua and ElansHubData is a saved variable", files[:2] == ["ElansHub.lua", "Data.lua"] and "ElansHubData" in toc)

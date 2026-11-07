@@ -193,6 +193,30 @@ namespace ElansAddonHub.Services
                 Read(Ev(4, 11, 5), 38);                                                                             // a kind this Outpost does not know
                 Read(new StripCodec.Info { Name = "Elan", HasV2 = true, RowVersion = 3, EvSeq = 9, EvKind = 1, EvId = 6 }, 39);   // a v3 row never has one
                 Check("filter: the same seq after 20 s counts again, another character's counts, unknown kinds and older rows never", got.Count == 2 && got[1].Who == "Other", got.Count + "");
+
+                // ---- v7 (companion 1.19.0+): notes, kinds 64-255 in the same bytes, without the position opt-in; never a trail event
+                var n7 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 7, 0, 0, 0, evSeq: 12, evKind: 64, evId: 0x123456, evExtra: 7));
+                Check("v7 strip, position off: a kind 64 note decodes (seq, kind, id, extra), no position", n7 != null && n7.RowVersion == 7 && n7.NotesSupported && n7.HasEvent && !n7.PosEnabled
+                    && n7.EvSeq == 12 && n7.EvKind == 64 && n7.EvId == 0x123456 && n7.EvExtra == 7, n7 == null ? "null" : $"v={n7.RowVersion} k={n7.EvKind} id={n7.EvId}");
+                var trailF = new StripEventFilter(); var noteF = new StripEventFilter(StripNote.IsNoteKind);
+                StripCodec.Info N(int seq, int kind, int id, int ver = 7) => new StripCodec.Info { Name = "Elan", HasV2 = true, RowVersion = ver, EvSeq = seq, EvKind = kind, EvId = id, EvExtra = 3 };
+                var notes = new System.Collections.Generic.List<StripNote>(); int trail = 0;
+                void ReadN(StripCodec.Info i, double s)
+                {
+                    if (trailF.Take(i, t0.AddSeconds(s)) != null) trail++;
+                    var n = i.NotesSupported ? noteF.TakeNote(i, t0.AddSeconds(s)) : null;
+                    if (n != null) notes.Add(n);
+                }
+                ReadN(N(1, 64, 77), 0); ReadN(N(1, 64, 77), 1); ReadN(N(1, 64, 77), 2);    // one note, read three times
+                ReadN(N(2, 8, 5), 3); ReadN(N(2, 8, 5), 4);                                  // a trail event in between
+                ReadN(N(3, 255, 1), 5); ReadN(N(4, 63, 1), 6);                              // the last note kind, and 63 (neither: not a note, not a known trail kind)
+                ReadN(N(5, 64, 9, ver: 6), 7);                                              // an older Hub's row: never a note
+                Check("notes: each note passes the note filter once with kind, id and extra; the trail filter takes only the trail event; kind 63 and a v6 row give no note",
+                    notes.Count == 2 && notes[0].Kind == 64 && notes[0].Id == 77 && notes[0].Extra == 3 && notes[0].Who == "Elan" && notes[1].Kind == 255 && trail == 1,
+                    $"notes={string.Join(",", notes.Select(n => n.Kind + ":" + n.Id))} trail={trail}");
+                Check("notes: never a trail kind (the live map's own check refuses kinds 64-255)", !StripEvent.KnownKind(64) && !StripEvent.KnownKind(255) && StripNote.IsNoteKind(64) && !StripNote.IsNoteKind(10));
+                var n7b = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 7, 0, 0, 0, evSeq: 13, evKind: 65, evId: 1));
+                Check("a note alone is not a presence or position change (no Lodge update, no file poll)", n7 != null && n7b != null && n7.V2Equals(n7b) && n7.PosEquals(n7b));
             }
             // ---- v5 (companion 1.16.1+): how you move in posFlags bits 4 / 8 / 16 (flight, indoors, swimming), with a valid position only; older Outposts mask them off
             {

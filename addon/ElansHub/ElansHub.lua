@@ -97,6 +97,8 @@ end
 -- (IsIndoors), 16 swimming (IsSwimming), so the Outpost's 3D map can show you at the right height. An older Outpost only looks at bits 1 and 2.
 -- Row 1 version 6 (companion 1.17.0+) adds two more, same rules: 32 on a mount (IsMounted), 64 your pet is out (UnitExists("pet")), for the paw and
 -- hoof prints on the Outpost's trail. An Outpost that knows version 5 only masks them off.
+-- Row 1 version 7 (companion 1.19.0+) lets the event bytes also carry notes (kinds 64-255, see "notes" below): small settings other Elan
+-- addons hand the Outpost through ElansHub.Note. Notes need only the strip, not the position option. An older Outpost ignores those kinds.
 -- An old hub reads row 0 only and ignores row 1; a new hub without row 1 (old companion) falls back to v1.
 -- Turn it off with /ehub pixel off.
 local CELL, NCELLS, NDATA = 4, 32, 27
@@ -364,6 +366,22 @@ local function eventsOn() return positionOn() and pixelsOn() end
 EHUB.TrailEventsOn = eventsOn
 local function evClear() evQueue = {} evCur = nil end
 
+-- ---- notes (companion 1.19.0+, row 1 version 7): kinds NOTE_MIN-255 share the event bytes with the trail events. A note is a small setting
+-- another Elan addon hands the Outpost (ElansHub.Note in Data.lua), never something about where you are or what you do, so it needs only
+-- the strip; trail events (kinds below NOTE_MIN) still need "Share my map position" as well. Turning that option off drops only the trail events.
+local NOTE_MIN = 64
+EHUB.NOTE_MIN = NOTE_MIN
+local function isNote(kind) return kind >= NOTE_MIN end
+-- may an item of this kind be queued or drawn right now
+local function slotAllows(kind) return pixelsOn() and (isNote(kind) or positionOn()) end
+-- the position option went off: forget the trail events, keep the notes
+local function evDropTrail()
+  local keep = {}
+  for _, e in ipairs(evQueue) do if isNote(e.kind) then keep[#keep + 1] = e end end
+  evQueue = keep
+  if evCur and not isNote(evCur.kind) then evCur = nil end
+end
+
 local evStep
 local function evSchedule(delay)
   if evTimer then return end
@@ -371,7 +389,8 @@ local function evSchedule(delay)
   C_Timer.After(delay, function() evTimer = false pcall(evStep) end)
 end
 evStep = function()
-  if not eventsOn() then evClear() return end
+  if not pixelsOn() then evClear() return end
+  if not positionOn() then evDropTrail() end
   local now = GetTime()
   if evCur and now - evCur.shownAt < EV_HOLD then evSchedule(EV_HOLD - (now - evCur.shownAt) + 0.05) return end
   local had = evCur ~= nil
@@ -388,21 +407,33 @@ end
 
 -- queue an event (callers pass plain numbers only: everything from the game went through clean() first)
 local function pushEvent(kind, id, extra)
-  if not eventsOn() then return false end
+  if type(kind) ~= "number" or kind ~= math.floor(kind) or kind < 1 or kind > 255 then return false end
+  if not slotAllows(kind) then return false end
   id = tonumber(id) or 0
   if id ~= id or id < 0 or id >= 16777216 then id = 0 end
   extra = tonumber(extra) or 0
   if extra ~= extra or extra < 0 or extra > 255 then extra = 0 end
-  if #evQueue >= EV_MAX then table.remove(evQueue, 1) end
+  if #evQueue >= EV_MAX then -- full: the oldest trail event goes first, a note only when there is nothing else
+    local drop = 1
+    for i, e in ipairs(evQueue) do if not isNote(e.kind) then drop = i break end end
+    table.remove(evQueue, drop)
+  end
   evQueue[#evQueue + 1] = { kind = kind, id = math.floor(id), extra = math.floor(extra), at = GetTime() }
   evStep()
   return true
 end
 EHUB.PushEvent = pushEvent
+-- a note (kind NOTE_MIN-255): a newer one of the same kind replaces one still waiting, so a note repeated now and then never piles up
+function EHUB.PushNote(kind, id, extra)
+  if type(kind) ~= "number" or kind ~= math.floor(kind) or not isNote(kind) or kind > 255 then return false end
+  if not pixelsOn() then return false end
+  for i = #evQueue, 1, -1 do if evQueue[i].kind == kind then table.remove(evQueue, i) end end
+  return pushEvent(kind, id, extra)
+end
 function EHUB.EventShown() return evCur end
 function EHUB.EventsQueued() return #evQueue end
 local function eventBytes()
-  if not (evCur and eventsOn()) then return 0, 0, 0, 0, 0 end
+  if not (evCur and slotAllows(evCur.kind)) then return 0, 0, 0, 0, 0 end
   return evCur.seq, evCur.kind, evCur.id, evCur.extra, evCur.age
 end
 
@@ -647,7 +678,10 @@ function EHUB.UpdateTrailEvents()
     pcall(healthFrame.UnregisterAllEvents, healthFrame)
     evRegistered = false
   end
-  if not want then evClear() gatherPending = nil recent = {} killed, killedOrder = {}, {} inCombat = false end
+  if not want then
+    if pixelsOn() then evDropTrail() else evClear() end -- notes stay while the strip is on
+    gatherPending = nil recent = {} killed, killedOrder = {}, {} inCombat = false
+  end
 end
 function EHUB.TrailEventsListening() return evRegistered end
 
@@ -679,7 +713,7 @@ local function drawStrip()
   local q
   if P then
     local m, ins = P.mapId % 65536, P.instanceId % 65536
-    q = { 0xB2, 6, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
+    q = { 0xB2, 7, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
           P.xp % 256, P.group % 256 }
     for i = 11, 22 do q[i] = 0 end
     local okPos, pf, px, py = pcall(positionForStrip, P)

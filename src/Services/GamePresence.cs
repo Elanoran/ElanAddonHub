@@ -67,6 +67,7 @@ namespace ElansAddonHub.Services
             Strip.Changed += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(Poll));
             Strip.PositionChanged += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(OnStripPosition));
             Strip.TrailEvent += ev => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => TrailEvent?.Invoke(ev)));
+            Strip.Note += n => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => Note?.Invoke(n)));
             timer.Tick += (s, e) => Poll();
             debounce.Tick += (s, e) => { debounce.Stop(); Poll(); };
             this.watch.Changed += running => { ApplyWow(running); Poll(); };
@@ -188,6 +189,8 @@ namespace ElansAddonHub.Services
         // a trail event from the strip (companion 1.16.0+, part of the opt-in position): each one once, on the UI thread. Display only, never sent to the Lodge.
         public event Action<StripEvent> TrailEvent;
         public void TrailEventForTest(StripEvent ev) => TrailEvent?.Invoke(ev);
+        // a note from the strip (companion 1.19.0+, kinds 64-255): a setting from another Elan addon, each one once, on the UI thread. Nothing listens yet.
+        public event Action<StripNote> Note;
 
         static bool FromThisSession(Character c, DateTime started)
         {

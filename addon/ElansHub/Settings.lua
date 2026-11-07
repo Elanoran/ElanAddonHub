@@ -52,7 +52,7 @@ local function buildGeneral(page)
   pd:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y)
   page.positionNote = pd
   y = y - ((pd.GetStringHeight and pd:GetStringHeight() or 30) + 22)
-  page.stripNote = note(page, "The pixel strip only carries who you play and what you are doing, and your map position only if you turn that on. It never reads your health, buffs, cooldowns or combat events.", y)
+  page.stripNote = note(page, "The pixel strip only carries who you play and what you are doing, a few settings of other Elan addons (such as where a window of theirs sits), and your map position only if you turn that on. It never reads your health, buffs, cooldowns or combat events.", y)
 end
 
 local function buildWheel(page)
