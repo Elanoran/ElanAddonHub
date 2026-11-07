@@ -4448,6 +4448,18 @@ Self-test sections `objects` (synthetic files) and `objectsreal` (the real files
 
 *Lodge server features and the Cairn, the commons shared across Lodges.*
 
+### Lodge feature `versions`: who runs an old Outpost or old addons
+
+*Since Lodge 2.38 (PROTOCOL.md "2.38 additions").* So members can see who can't use new features yet.
+- Outpost -> Lodge: the Outpost version it connects with (`/ws?client=hub/x.y.z`, every Outpost sends it; the server shows it as `user.app`),
+  and the `versions` message `{channel, addons}` (`LodgeSession.Versions.cs`): its update channel and the Elan's addons from the manifest that
+  are installed (`MemberVersions.Mine`, wire id = the folder name without "Elans", lower case). Sent after every welcome and when an install,
+  update or removal changes it. Nothing else about the PC goes with it.
+- Lodge -> Outpost: `user.app` and the cleaned `user.versions` on each member entry (not on a masked one).
+- The Outpost compares each member with the newest release of **their own** channel (`MemberVersions.Compare`; Stable when they said none).
+  The newest of each channel comes from the update check's own manifest (`MemberVersions.Feed`) or, for the other channel, a signed manifest
+  read at most every 30 minutes (`MemberVersions.Ensure`). Shown as a small amber mark on the member's row and lines on the hover card.
+
 ### Lodge feature `atlas`
 
 *Since Lodge server 2.15.0.*

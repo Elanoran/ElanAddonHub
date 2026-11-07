@@ -428,6 +428,7 @@ namespace ElansAddonHub.Lodge
                     if (mem.Invisible && !mem.IsMe && !CanSeeInvisible) DropLivePos(mem);   // never a dot for someone I can't see
                     bool wasPlaying = mem.Playing;
                     ApplyGame(mem, uv.Game);
+                    mem.SetVersions(u.App, u.VersionsInfo);
                     FriendGameChanged(mem, wasPlaying);
                     Remember(mem);
                     if (mem.BadgeKey != oldBadge) RefreshAuthorAvatars(mem.Name);
@@ -636,6 +637,7 @@ namespace ElansAddonHub.Lodge
             ReadRealmsFeatures(features);
             ReadClassicFeatures(w, features);
             ReadLivePosFeatures(features);
+            ReadVersionsFeatures(features);
             var rs = w.Reactions.ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -664,6 +666,7 @@ namespace ElansAddonHub.Lodge
                 have.Room = pm.Room; have.Muted = pm.Muted; have.Deaf = pm.Deaf; have.ServerMuted = pm.ServerMuted;
                 have.Status = pm.Status; have.Note = pm.Note; have.Role = pm.Role; have.Invisible = pm.Invisible;
                 have.CopyGameFrom(pm);
+                have.SetVersions(pm.App, pm.VersionsInfo);
                 Remember(have);
             }
             Me = Members.FirstOrDefault(x => x.IsMe);
@@ -759,6 +762,7 @@ namespace ElansAddonHub.Lodge
             if (Auto.Status != "online" || Auto.Note.Length > 0 || Invisible) SendStatus();
             lastGameJson = null;
             SendGame();
+            SendVersions();                                     // my channel and addons (a no-op without the server feature)
             SendPosition();                                     // after the game (the server needs my shared zone first); a no-op unless I share
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             FlightSync(connect: true);                          // shared flight times (a no-op without the server feature)
@@ -801,6 +805,7 @@ namespace ElansAddonHub.Lodge
             m.SetAvatar(u.AvatarId, u.Accent);
             if (u.HasDisplayName) { m.SetDisplayName(u.DisplayName); DisplayNames.Remember(m.Name, m.DisplayName); }
             ApplyGame(m, u.Game);
+            ApplyVersions(m, u);
             Remember(m);
             return m;
         }

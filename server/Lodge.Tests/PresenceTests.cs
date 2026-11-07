@@ -56,10 +56,10 @@ public class PresenceTests
             Auth = new Auth(cfg, T.Log);
             Hub = new LodgeHub(cfg, Auth, new FileStore(cfg), T.Log, new FakeClock());
         }
-        public async Task<ScriptSocket> Join(string code, bool invisible = false)
+        public async Task<ScriptSocket> Join(string code, bool invisible = false, string client = "hub/test")
         {
             var s = new ScriptSocket();
-            Runs.Add(Hub.Run(s, Auth.Check(code)!, code, null, "hub/test", "1.1.1." + (Runs.Count + 1), Cts.Token, invisible));
+            Runs.Add(Hub.Run(s, Auth.Check(code)!, code, null, client, "1.1.1." + (Runs.Count + 1), Cts.Token, invisible));
             await Settle();
             return s;
         }
@@ -388,5 +388,78 @@ public class PresenceTests
         await l.Join(MemCode, invisible: true);
         Assert.Equal(2, l.Hub.Online);
         Assert.Equal(1, l.Hub.VisibleOnline);
+    }
+
+    // ---------------------------------------------------------------- 2.38: who runs which version (feature "versions")
+
+    [Fact]
+    public void The_outpost_version_is_read_from_the_client_string_only_when_it_is_plain()
+    {
+        Assert.Equal("3.9.1", PresenceModule.AppVersion("hub/3.9.1"));
+        Assert.Equal("3.10.0.2", PresenceModule.AppVersion("hub/3.10.0.2"));
+        Assert.Null(PresenceModule.AppVersion("hub/test"));
+        Assert.Null(PresenceModule.AppVersion("hub/3.9.1-beta"));
+        Assert.Null(PresenceModule.AppVersion("hub/1.2.3.4.5"));
+        Assert.Null(PresenceModule.AppVersion("other/3.9.1"));
+        Assert.Null(PresenceModule.AppVersion(null));
+        Assert.Null(PresenceModule.AppVersion("hub/"));
+    }
+
+    [Fact]
+    public void Versions_are_cleaned_channel_ids_and_numbers()
+    {
+        var v = PresenceModule.BuildVersions(Obj("""
+            {"t":"versions","channel":"test","addons":{"hub":"1.19.0","toolkit":"0.22.1","Bad":"1.0","x y":"1","ehh":"1.27.1-rc","bags":7,"priest":"0.6.18","x":"1.2.3.4.5"}}
+            """));
+        Assert.Equal("test", (string?)v["channel"]);
+        var a = v["addons"]!.AsObject();
+        Assert.Equal(new[] { "hub", "toolkit", "priest" }, a.Select(kv => kv.Key).ToArray());
+        Assert.Equal("0.22.1", (string?)a["toolkit"]);
+        Assert.Null(v["t"]);
+        Assert.Null((string?)PresenceModule.BuildVersions(Obj("""{"channel":"beta"}"""))["channel"]);
+        var many = new JsonObject(); for (int i = 0; i < 40; i++) many["a" + i] = "1.0." + i;
+        Assert.Equal(Elans.Shared.LodgeVersions.MaxAddons, PresenceModule.BuildVersions(new JsonObject { ["addons"] = many })["addons"]!.AsObject().Count);
+    }
+
+    [Fact]
+    public async Task Members_see_each_others_outpost_version_and_versions()
+    {
+        using var l = new Lodge2();
+        var mia = await l.Join(MemCode, client: "hub/3.9.0");
+        var welcome = mia.Of("welcome").Last();
+        Assert.Contains("versions", ((JsonArray)welcome["features"]!).Select(f => (string?)f));
+        var zed = await l.Join(Mem2Code, client: "hub/3.9.1");
+        var seenMia = ((JsonArray)zed.Of("welcome").Last()["users"]!).Select(u => u!.AsObject()).First(u => (string?)u["name"] == "Mia");
+        Assert.Equal("3.9.0", (string?)seenMia["app"]);
+        Assert.False(seenMia.ContainsKey("versions"));                    // not sent yet: no key at all (older clients see the same entry)
+
+        zed.Clear();
+        mia.Say("""{"t":"versions","channel":"stable","addons":{"hub":"1.18.4","toolkit":"0.22.0"}}""");
+        await Lodge2.Settle();
+        var upd = zed.Of("user").Last()["user"]!.AsObject();
+        Assert.Equal("Mia", (string?)upd["name"]);
+        Assert.Equal("stable", (string?)upd["versions"]!["channel"]);
+        Assert.Equal("0.22.0", (string?)upd["versions"]!["addons"]!["toolkit"]);
+        Assert.Equal(new[] { "app", "versions" }, upd.Select(kv => kv.Key).TakeLast(2).ToArray());
+
+        zed.Clear();                                                      // the same again: no broadcast
+        mia.Say("""{"t":"versions","channel":"stable","addons":{"hub":"1.18.4","toolkit":"0.22.0"}}""");
+        await Lodge2.Settle();
+        Assert.Empty(zed.Of("user"));
+    }
+
+    [Fact]
+    public async Task A_masked_entry_has_no_versions()
+    {
+        using var l = new Lodge2();
+        var mia = await l.Join(MemCode, invisible: true, client: "hub/3.9.0");
+        mia.Say("""{"t":"versions","channel":"test","addons":{"hub":"1.19.0"}}""");
+        await Lodge2.Settle();
+        var u = l.Hub.Members.First(m => m.Name == "Mia").View(masked: true);
+        Assert.Null(u.App);
+        Assert.Null(u.Versions);
+        var full = l.Hub.Members.First(m => m.Name == "Mia").View();
+        Assert.Equal("3.9.0", full.App);
+        Assert.NotNull(full.Versions);
     }
 }

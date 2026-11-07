@@ -1,9 +1,9 @@
 # Lodge protocol
 
-This describes the Lodge server as of 2.31.2; the sections below say which server version added what.
+This describes the Lodge server as of 2.38.0; the sections below say which server version added what.
 
 **Contents:** [HTTP](#http) · [WebSocket](#websocket-get-wsnamedisplay-nameclienthub200visinvisible--header-x-lodge-code) · [Ranks](#ranks) · [Voice](#voice-binary-frames) · [The Cairn](#the-cairn-atlas-commons-lodge-features-cairn-and-cairn2-opt-in-outpost-286-give-to-get-287) · [Operator stats](#operator-stats-read-only-get-adminstats-sudo-lodge-admin-stats) · [Typed messages](#typed-messages) · [How to add a message](#how-to-add-a-message) · [Every message type (index)](#every-message-type-index)<br>
-**Added by version:** [2.3](#23-additions-and-compatibility) · [2.4](#24-additions-and-compatibility) · [2.5](#25-additions-and-compatibility) · [2.6 profiles](#26-additions-and-compatibility-avatars-and-profiles) · [2.7 display names](#27-additions-and-compatibility-display-names) · [2.8](#28-additions-all-optional-for-clients-older-clients-ignore-them) · [2.9 sign-up cards, search](#29-additions-sign-up-cards-older-messages-search-features-lfg-history2-search-optional-for-clients) · [2.10 invites, devices](#210-additions-one-time-invites-device-tokens-all-optional-for-clients) · [2.31.2 device links](#2312-additions-device-links-for-existing-members-feature-devicenotice-optional-for-clients) · [2.11 calendar](#211-additions-raid--event-calendar-all-optional-for-clients) · [2.12 starting a lodge](#212-additions-starting-a-lodge-inviting-from-the-app-leaving) · [2.13 flight times](#213-additions-shared-flight-times-optional-for-clients) · [2.14 shared files](#214-additions-shared-files-optional-for-clients) · [2.15 Atlas pool](#215-additions-the-atlas-pool-optional-for-clients) · [2.16 Armory](#216-additions-the-armory-optional-for-clients) · [2.17 Classic baseline](#217-additions-hosted-datasets-the-classic-baseline-optional-for-clients) · [Realm status](#realm-status-feature-realms-the-server-version-is-set-at-merge-2200-here-optional-for-clients) · [Badges and the ladder](#badges-and-the-ladder-feature-badges-the-server-version-is-set-at-merge-optional-for-clients) · [2.22 forgetting members](#222-additions-forgetting-members-optional-for-clients) · [2.23 field notes](#223-additions-hunter-field-notes-feature-atlas5) · [2.24 entrances](#224-additions-instance-entrances-feature-atlas6) · [2.25 seen details](#225-additions-seen-details-with-the-game-build-feature-atlas7) · [2.26 npc positions](#226-additions-where-npcs-really-stand-feature-atlas8-counter-extras-feature-atlas9-below) · [Reputations](#reputations-in-the-armory-feature-reputations-the-server-version-is-set-at-merge-optional-for-clients) · [2.30 live positions](#230-additions-live-map-positions-between-members-feature-liveposition-optional-for-clients)
+**Added by version:** [2.3](#23-additions-and-compatibility) · [2.4](#24-additions-and-compatibility) · [2.5](#25-additions-and-compatibility) · [2.6 profiles](#26-additions-and-compatibility-avatars-and-profiles) · [2.7 display names](#27-additions-and-compatibility-display-names) · [2.8](#28-additions-all-optional-for-clients-older-clients-ignore-them) · [2.9 sign-up cards, search](#29-additions-sign-up-cards-older-messages-search-features-lfg-history2-search-optional-for-clients) · [2.10 invites, devices](#210-additions-one-time-invites-device-tokens-all-optional-for-clients) · [2.31.2 device links](#2312-additions-device-links-for-existing-members-feature-devicenotice-optional-for-clients) · [2.11 calendar](#211-additions-raid--event-calendar-all-optional-for-clients) · [2.12 starting a lodge](#212-additions-starting-a-lodge-inviting-from-the-app-leaving) · [2.13 flight times](#213-additions-shared-flight-times-optional-for-clients) · [2.14 shared files](#214-additions-shared-files-optional-for-clients) · [2.15 Atlas pool](#215-additions-the-atlas-pool-optional-for-clients) · [2.16 Armory](#216-additions-the-armory-optional-for-clients) · [2.17 Classic baseline](#217-additions-hosted-datasets-the-classic-baseline-optional-for-clients) · [Realm status](#realm-status-feature-realms-the-server-version-is-set-at-merge-2200-here-optional-for-clients) · [Badges and the ladder](#badges-and-the-ladder-feature-badges-the-server-version-is-set-at-merge-optional-for-clients) · [2.22 forgetting members](#222-additions-forgetting-members-optional-for-clients) · [2.23 field notes](#223-additions-hunter-field-notes-feature-atlas5) · [2.24 entrances](#224-additions-instance-entrances-feature-atlas6) · [2.25 seen details](#225-additions-seen-details-with-the-game-build-feature-atlas7) · [2.26 npc positions](#226-additions-where-npcs-really-stand-feature-atlas8-counter-extras-feature-atlas9-below) · [Reputations](#reputations-in-the-armory-feature-reputations-the-server-version-is-set-at-merge-optional-for-clients) · [2.30 live positions](#230-additions-live-map-positions-between-members-feature-liveposition-optional-for-clients) · [2.38 versions](#238-additions-who-runs-which-version-feature-versions-optional-for-clients)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -644,6 +644,18 @@ type, an older client ignores `memberpos`. `game` is unchanged.
   (`BuildPosition`) from the raw JSON: their strict number / string / JSON-`false` checks are the validation. The wire is unchanged, key
   order included (a server test pins the key sets of `join`, `user`, `user.game`, the invisible and the masked entry, `leave` and `memberpos`).
 
+## 2.38 additions (who runs which version; feature `versions`; optional for clients)
+
+So members can see who runs an old Outpost or old addons (and can't get new features yet):
+- `user.app` - the Outpost version the member connected with, read from `/ws?client=hub/x.y.z` (every Outpost sends it). Only a plain
+  `x.y.z` (digits, at most 4 parts) counts; anything else leaves it out. Absent for a masked entry.
+- `versions` `{channel, addons: {id: "x.y.z"}}` (client -> server, Control budget; typed `LodgeVersions` in PresenceMessages.cs): the member's
+  update channel (`stable` or `test`; anything else = not said) and the Elan's addons installed in WoW Forever. At most 24 ids of `[a-z0-9]`
+  (1-16 characters), each with a version of digits and dots (at most 4 parts); everything else is dropped. A later `versions` replaces it.
+  An unchanged one is not broadcast again.
+- `user.versions` - the cleaned `{channel, addons}`, absent until the member sent one (older Outposts never do) and for a masked entry.
+- Both keys come after every other key of `user`, and only when there is something, so older clients see the same entry as before.
+
 ## The Cairn (Atlas commons; Lodge features `cairn` and `cairn2`, opt-in; Outpost 2.86, give to get 2.87)
 
 Lodge 2.29: when the Cairn's manifest offers a "what changed" delta from the dataset this Lodge holds (`latest.deltas[]`, matched by
@@ -897,7 +909,7 @@ Not Lodge messages (never on this socket): the Atlas world-map page's own messag
 | Feature | client -> server | server -> client | both |
 |---|---|---|---|
 | Connection | `ping` | `pong` · `welcome` · `error` | - |
-| Members and presence | `status` · `game` · `position` | `join` · `leave` · `user` · `memberpos` | - |
+| Members and presence | `status` · `game` · `position` · `versions` | `join` · `leave` · `user` · `memberpos` | - |
 | Voice | `voice` · `state` | - | - |
 | Chat | `edit` · `delete` · `history:before` · `search` | `edited` · `deleted` · `history:page` · `search:result` | `msg` · `react` · `pin` · `unpin` · `typing` |
 | Looking for group | `lfg:join` · `lfg:maybe` · `lfg:leave` · `lfg:close` · `lfg:cancel` | `lfg` | - |

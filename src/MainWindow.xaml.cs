@@ -163,6 +163,7 @@ namespace ElansAddonHub
         // Addons item of the rail: how many updates are waiting (ours + other addons + the hub itself)
         public void RefreshRailBadges()
         {
+            ShareMyVersions();                                  // the Lodge hears about an install / update / removal (unchanged = not sent)
             var n = cards.Count(c => c.State == CardState.UpdateAvailable) + (others?.Count(c => c.State == TpState.UpdateAvailable) ?? 0)
                 + (manifest != null && SelfUpdater.IsNewer(manifest.Hub) ? 1 : 0);
             UpdateBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -408,6 +409,7 @@ namespace ElansAddonHub
             if (Begin("lodgefeatures")) { result += "\r\n" + await LodgeFeaturesTest(dir); End(); }
             if (Begin("lodgehardening")) { result += "\r\n" + await HardeningTest(dir); End(); }
             if (Begin("lodgefun")) { result += "\r\n" + await LodgeFunTest(dir); End(); }
+            if (Begin("memberversions")) { result += "\r\n" + await MemberVersionsTest(dir); End(); }
             if (Begin("chatlist")) { result += "\r\n" + await ChatListTest(dir); End(); }
             if (Begin("invites")) { result += "\r\n" + await InvitesTest(dir); End(); }
             if (Begin("invites2")) { result += "\r\n" + await Invites2Test(dir); End(); }
@@ -923,6 +925,7 @@ namespace ElansAddonHub
                 manifest = m;
                 manifestPre = ch.Pre;
                 var dirty = UpdateChannel.Track(settings, manifest.Hub?.Version, ch.Pre);
+                MemberVersions.Feed(manifest, UpdateChannel.IsTest(settings) && !ch.FellBack, ch.Pre);   // the newest of my channel: who in the Lodge is behind
                 if (UpdateHomes.Accepted(settings, manifest, ch.Pre, manifestSigned)) dirty = true;
                 if (dirty) SettingsStore.Save(settings);
                 lastError = null;

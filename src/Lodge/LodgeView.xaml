@@ -37,6 +37,8 @@
         </StackPanel>
         <TextBlock Text="{Binding CardPlaceLine}" Visibility="{Binding CardPlaceVisibility}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
         <TextBlock Text="{Binding CardStatusLine}" Visibility="{Binding CardStatusVisibility}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding CardVersionLine}" Visibility="{Binding CardVersionVisibility}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding CardBehindLine}" Visibility="{Binding CardBehindVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Warn}" Margin="0,2,0,0" TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" Visibility="{Binding CardVoiceVisibility}" Margin="0,8,0,0">
           <TextBlock Text="{Binding StateGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{Binding StateBrush}" Margin="0,0,4,0" VerticalAlignment="Center" />
           <TextBlock Text="{Binding CardVoiceLine}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
@@ -61,6 +63,8 @@
           <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center" Visibility="{Binding StateIconVisibility}" />
           <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Warn}" Margin="0,0,4,0"
                      VerticalAlignment="Center" Visibility="{Binding AfkVisibility}" />
+          <TextBlock DockPanel.Dock="Right" Text="&#xE898;" FontFamily="{StaticResource Font.Icons}" FontSize="11" Foreground="{StaticResource Brush.Warn}" Margin="0,0,4,0"
+                     VerticalAlignment="Center" Visibility="{Binding OldVisibility}" ToolTip="{Binding OldTip}" AutomationProperties.Name="Old version" />
           <StackPanel Margin="8,0,4,0" VerticalAlignment="Center">
             <TextBlock Text="{Binding Display}" Style="{StaticResource Text.Body}" Opacity="{Binding NameOpacity}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis" />
             <TextBlock Text="{Binding SecondLine}" Visibility="{Binding SecondVisibility}" Style="{StaticResource Text.Caption}"
@@ -249,6 +253,8 @@
           <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="12" Height="12" Margin="4,2,0,0" VerticalAlignment="Top" Visibility="{Binding StateIconVisibility}" />
           <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Warn}" Margin="4,2,0,0"
                      VerticalAlignment="Top" Visibility="{Binding AfkVisibility}" />
+          <TextBlock DockPanel.Dock="Right" Text="&#xE898;" FontFamily="{StaticResource Font.Icons}" FontSize="11" Foreground="{StaticResource Brush.Warn}" Margin="4,2,0,0"
+                     VerticalAlignment="Top" Visibility="{Binding OldVisibility}" ToolTip="{Binding OldTip}" AutomationProperties.Name="Old version" />
           <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Top" Margin="0,2,0,0" />
           <StackPanel Margin="8,0,4,0" VerticalAlignment="Center">
             <TextBlock Style="{StaticResource Text.Body}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis"><Run Text="{Binding CharName, Mode=OneWay}" /><Run Text="{Binding CharOwnerText, Mode=OneWay}" Foreground="{StaticResource Brush.Text.Secondary}" FontSize="11" /></TextBlock>

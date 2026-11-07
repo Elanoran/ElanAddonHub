@@ -80,6 +80,7 @@ public class PresenceModule : IModule
         // Elans.Shared GameMsg / LodgeGame and PositionMsg / MemberPosMsg (PresenceMessages.cs)
         if (type == GameMsg.Type) { await Game(me, m); return true; }
         if (type == PositionMsg.Type) { await Position(me, m); return true; }
+        if (type == LodgeVersions.Type) { await Versions(me, m); return true; }
         if (type != StatusMsg.Type) return false;
         var sm = StatusMsg.Read(new LodgeJsonFields(m));          // a non-string status / note / visibility is "missing", as before
         var st = sm.Status;
@@ -178,6 +179,47 @@ public class PresenceModule : IModule
         // identical to what everyone already has: nothing to tell them (keeps a chatty addon from costing broadcasts)
         if (!vis && (before == null ? me.Game == null : me.Game != null && JsonNode.DeepEquals(before, me.Game))) return;
         if (!vis) await hub.BroadcastPresence(me);
+    }
+
+    // ---- versions (2.38, feature "versions"): which Outpost and addons a member runs, so the others can see who is behind
+
+    static bool IsVersion(string s)
+    {
+        if (string.IsNullOrEmpty(s) || s.Length > 23) return false;
+        var parts = s.Split('.');
+        if (parts.Length > 4) return false;
+        foreach (var p in parts) if (p.Length == 0 || p.Length > 5 || !p.All(char.IsAsciiDigit)) return false;
+        return true;
+    }
+
+    // "hub/3.9.1" -> "3.9.1"; anything else (an older or a foreign client) -> null
+    public static string AppVersion(string clientInfo)
+    {
+        if (clientInfo == null || !clientInfo.StartsWith("hub/", StringComparison.Ordinal)) return null;
+        var v = clientInfo.Substring(4);
+        return IsVersion(v) ? v : null;
+    }
+
+    // the cleaned { channel, addons } (Elans.Shared LodgeVersions): a known channel or null, at most MaxAddons ids of [a-z0-9]{1,16}, plain versions
+    public static JsonObject BuildVersions(JsonObject m)
+    {
+        var raw = LodgeVersions.Read(new LodgeJsonFields(m));
+        var v = new LodgeVersions { Channel = raw.Channel is "stable" or "test" ? raw.Channel : null };
+        foreach (var kv in raw.Addons)
+        {
+            if (v.Addons.Count >= LodgeVersions.MaxAddons) break;
+            if (kv.Key.Length is < 1 or > 16 || !kv.Key.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9')) continue;
+            if (IsVersion(kv.Value)) v.Addons[kv.Key] = kv.Value;
+        }
+        return LodgeJson.Build(v.WriteView);
+    }
+
+    async Task Versions(Member me, JsonObject m)
+    {
+        var next = BuildVersions(m);
+        if (me.Versions != null && JsonNode.DeepEquals(me.Versions, next)) return;
+        me.Versions = next;
+        await hub.BroadcastPresence(me);
     }
 
     // ---- live map position (2.30, feature "liveposition"). The client sends

@@ -63,6 +63,8 @@ public class Member
     public string Status = "online"; // online | away | busy | dungeon | lfg
     public string Note = "";
     public JsonObject Game;          // what they're playing (from the hub), null = not shared
+    public string App;               // 2.38: the Outpost version from /ws?client=hub/x.y.z (PresenceModule.AppVersion), null = unknown
+    public JsonObject Versions;      // 2.38: their Outpost's channel and installed addons (PresenceModule.BuildVersions), null = not sent
     public bool Invisible;           // "Appear offline": connected, but hidden from everyone without Perm.SeeInvisible
     public JsonObject LivePos;       // 2.30: the live map position they chose to share (mapId, fx, fy, move, scope), null = not shared. See Hub.LivePos.cs
     public JsonObject LivePosSent;   // the last memberpos sent about them (an unchanged position is not sent again)
@@ -99,6 +101,7 @@ public class Member
         Room = Room, Voice = Room != null, Muted = Muted, Deaf = Deaf, ServerMuted = ServerMuted,
         AvatarId = Profile?.AvatarId, Accent = Profile?.Accent, DisplayName = Profile?.DisplayName ?? "",
         Status = masked ? "online" : Status, Note = masked ? "" : Note, Game = masked ? null : Game?.DeepClone(),
+        App = masked ? null : App, Versions = masked ? null : Versions?.DeepClone(),
     };
     public JsonObject ToJson(bool masked = false) => LodgeJson.Build(View(masked).Write);
 }
@@ -112,7 +115,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.37.3";
+    public const string Version = "2.38.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
 
     public readonly LodgeConfig Cfg;
@@ -240,7 +243,7 @@ public partial class LodgeHub
         var me = new Member
         {
             Id = NextId(), Ws = ws, Code = code, DeviceId = who.DeviceId, Personal = who.Personal, Role = who.Role, Ip = ip,
-            ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip), Invisible = invisible, LastSeen = Clock.UtcNow,
+            ClientInfo = Names.ForLog(clientInfo, 32), App = PresenceModule.AppVersion(clientInfo), Budget = BudgetFor(who, ip), Invisible = invisible, LastSeen = Clock.UtcNow,
         };
         lock (admission) me.Name = who.Personal ? UniqueName(Names.Normalize(who.Name)) : UniqueName(GuestName(name), ReservedNames());
         me.ServerMuted = IsServerMuted(me);
@@ -283,6 +286,7 @@ public partial class LodgeHub
         if (Cairn.Enabled) f.Add("cairn");                         // the owner contributes the pooled Atlas numbers (ids and counts, no names) to the Cairn: members are told so
         if (CairnIn.Enabled) f.Add("cairn2");
         if (CairnIn.Enabled) f.Add("cairnnotices");               // 2.31: notices from the Cairn's operator, signed, for the Guild Master and officers                      // give to get: members who share get the Cairn's dataset from this Lodge (atlas.sharing, cairn.status, GET /cairn/...)
+        f.Add("versions");                                          // 2.38: user.app (the Outpost version) and user.versions (channel + addons, the "versions" message)
         f.Add("liveposition");                                      // 2.30: members may share their live map position (opt-in per member, always available)
         if (Cfg.AtlasEnabled) f.Add("cairnjoin");                  // 2.28: the Guild Master can switch "Join the Cairn" on (admin.cairn, cairn.join.get -> cairn.join)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on

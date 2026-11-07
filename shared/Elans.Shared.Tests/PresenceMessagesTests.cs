@@ -213,4 +213,34 @@ public class PresenceMessagesTests
         Assert.Equal(new[] { "t", "id", "mapId", "fx", "fy", "move", "valid" }, Written(new MemberPosMsg { Valid = true }.Write).D.Keys);
         Assert.Equal(new[] { "t", "id", "valid" }, Written(new MemberPosMsg().Write).D.Keys);
     }
+
+    // 2.38 (feature "versions"): user.app and user.versions come last and only when there is something; the versions message round-trips
+    [Fact]
+    public void Versions_round_trip_and_are_left_out_when_unknown()
+    {
+        Assert.False(Written(User().Write).D.ContainsKey("app"));
+        Assert.False(Written(User().Write).D.ContainsKey("versions"));
+        var withV = User(); withV.App = "3.9.1"; withV.Versions = new JsonObject { ["channel"] = "test", ["addons"] = new JsonObject { ["toolkit"] = "0.22.1" } };
+        var j = LodgeJson.Build(withV.Write);
+        Assert.Equal(new[] { "app", "versions" }, j.Select(kv => kv.Key).TakeLast(2).ToArray());
+        var back = LodgeUser.Read(new LodgeJsonFields(j));
+        Assert.Equal("3.9.1", back.App);
+        var v = LodgeVersions.Read(new LodgeJsonFields((JsonObject)back.Versions));
+        Assert.Equal("test", v.Channel);
+        Assert.Equal("0.22.1", v.Addons["toolkit"]);
+
+        var msg = new LodgeVersions { Channel = "stable" }; msg.Addons["hub"] = "1.19.0"; msg.Addons["bags"] = "0.4.30";
+        var w = LodgeJson.Build(msg.Write);
+        Assert.Equal("versions", (string)w["t"]);
+        Assert.Equal(new[] { "t", "channel", "addons" }, w.Select(kv => kv.Key).ToArray());
+        var r = LodgeVersions.Read(new LodgeJsonFields(w));
+        Assert.Equal(new[] { "hub", "bags" }, r.Addons.Keys.ToArray());
+        Assert.False(LodgeJson.Build(msg.WriteView).ContainsKey("t"));
+        // not a string: skipped; no addons object: empty
+        var odd = LodgeVersions.Read(new LodgeJsonFields(new JsonObject { ["channel"] = 5, ["addons"] = new JsonObject { ["a"] = 1, ["b"] = "2" } }));
+        Assert.Null(odd.Channel);
+        Assert.Equal(new[] { "b" }, odd.Addons.Keys.ToArray());
+        Assert.Empty(LodgeVersions.Read(new LodgeJsonFields(new JsonObject())).Addons);
+        Assert.Null(LodgeVersions.Read(null));
+    }
 }

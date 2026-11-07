@@ -270,6 +270,46 @@ namespace ElansAddonHub.Lodge
         }
         public bool ClearLivePos() => SetLivePos(false, 0, 0, 0, 0);
 
+        // ---- versions (Lodge server 2.38): their Outpost version and what it said about itself; Behind = what they lack from THEIR channel
+        string app;
+        Elans.Shared.LodgeVersions versionsInfo;
+        List<MemberVersions.Behind> behind = new List<MemberVersions.Behind>();
+        public string App => app;
+        public Elans.Shared.LodgeVersions VersionsInfo => versionsInfo;
+        public IReadOnlyList<MemberVersions.Behind> Behind => behind;
+        public bool IsBehind => behind.Count > 0;
+        public Visibility OldVisibility => behind.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string OldTip => behind.Count == 0 ? "" : "Not up to date: " + string.Join(", ", behind) + " (can't use the newest features yet)";
+        // "Outpost 3.9.1 · Test channel" (the channel only when their Outpost said it)
+        public string CardVersionLine
+        {
+            get
+            {
+                if (app == null && versionsInfo == null) return "";
+                var s = "Outpost " + (app ?? "?");
+                if (versionsInfo?.Channel == "test") s += " · Test channel";
+                else if (versionsInfo?.Channel == "stable") s += " · Stable";
+                return s;
+            }
+        }
+        public Visibility CardVersionVisibility => CardVersionLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // "Behind: Outpost 3.9.0 → 3.9.1, Toolkit 0.22.0 → 0.22.1"
+        public string CardBehindLine => behind.Count == 0 ? "" : "Behind: " + string.Join(", ", behind);
+        public Visibility CardBehindVisibility => behind.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        public void SetVersions(string app, Elans.Shared.LodgeVersions v)
+        {
+            this.app = app; versionsInfo = v;
+            RefreshBehind();
+        }
+
+        public void RefreshBehind()
+        {
+            behind = MemberVersions.Compare(app, versionsInfo, MemberVersions.Stable, MemberVersions.Test);
+            foreach (var n in new[] { nameof(App), nameof(VersionsInfo), nameof(Behind), nameof(IsBehind), nameof(OldVisibility), nameof(OldTip), nameof(CardVersionLine),
+                nameof(CardVersionVisibility), nameof(CardBehindLine), nameof(CardBehindVisibility), nameof(Tip) }) Raise(n);
+        }
+
         // a copy of what someone plays now (the profile editor's preview card)
         public void CopyGameFrom(MemberVM o)
         {
@@ -454,7 +494,8 @@ namespace ElansAddonHub.Lodge
             + (status != "online" ? " - " + StatusLabel(status) : "")
             + (string.IsNullOrEmpty(note) ? "" : ": " + note)
             + (serverMuted ? " (muted by an officer)" : "")
-            + (GameDetail != null ? "\n" + GameDetail : "");
+            + (GameDetail != null ? "\n" + GameDetail : "")
+            + (behind.Count > 0 ? "\n" + CardBehindLine : "");
     }
 
     // ================================================================ messages

@@ -25,7 +25,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "addonsgrid", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "chatlist", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "flightlearn", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "money", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "objects", "objectsreal", "worldlight", "worldlightreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "radio", "presence", "profile", "toasts", "dialogs", "activity", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "cairn", "cairnjoin", "cairnnotices", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashome", "atlashosts", "atlasmenu", "atlasclasses", "factions", "atlasdata", "atlasdatareal", "models", "modelsreal", "datahonesty", "datasources", "atlashidden", "atlashiddenreal", "atlasnameless", "combatlog", "zonelore", "zonelorereal", "about", "gamepatches", "art", "round3", "idlecpu", "coldstart",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "memberversions", "chatlist", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "flightlearn", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "money", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "objects", "objectsreal", "worldlight", "worldlightreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "radio", "presence", "profile", "toasts", "dialogs", "activity", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "cairn", "cairnjoin", "cairnnotices", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashome", "atlashosts", "atlasmenu", "atlasclasses", "factions", "atlasdata", "atlasdatareal", "models", "modelsreal", "datahonesty", "datasources", "atlashidden", "atlashiddenreal", "atlasnameless", "combatlog", "zonelore", "zonelorereal", "about", "gamepatches", "art", "round3", "idlecpu", "coldstart",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -52,6 +52,7 @@ namespace ElansAddonHub.Services
             ["lodge"] = "live Lodge session (only with ELANSHUB_TEST_LODGE=url|code|name)",
             ["lodgefeatures"] = "Lodge chat features from synthetic frames",
             ["lodgehardening"] = "Lodge 2.8 hardening: safe file names, merge on welcome, drafts, restored composer, full voice room, unread on delete",
+            ["memberversions"] = "Lodge 2.38: who runs an old Outpost or old addons - the old mark, the card's version lines, compared with the newest of each member's own channel (stable / test)",
             ["lodgefun"] = "Lodge 2.37: grouped online list, Looking-for-group cards, item links, history paging, search",
             ["chatlist"] = "the Lodge message list in a long channel: where a channel opens, new messages at / away from the end, sending, the unread line and the Jump pill, jumps far up, pictures and video cards that arrive late (no jump), edits / reactions / deletes above the view, scrolling up to the first message, keys, menu, selection, typing, accessibility; plus the numbers of a 5000-message channel (open, rows, memory, scroll steps)",
             ["invites"] = "Lodge 2.38: one-time invite links, device tokens, upgrade prompt, Guild Master invite list, Your devices, error messages",
@@ -147,7 +148,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "chatlist", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "flightlearn", "atlaslodge", "lodgefiles", "badges", "realms", "atlasclassiclodge", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "memberversions", "chatlist", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "flightlearn", "atlaslodge", "lodgefiles", "badges", "realms", "atlasclassiclodge", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these (kept short on purpose: every file here makes a changed-mode run a full run)
             R(@"^src/(App\.xaml(\.cs)?|Brand\.cs)$", Star);
@@ -295,6 +296,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.PresenceTest\.cs$", "presence");
             R(@"^src/MainWindow\.HardeningTest\.cs$", "lodgehardening");
             R(@"^src/MainWindow\.LodgeFunTest(\.\w+)?\.cs$", "lodgefun");
+            R(@"^src/MainWindow\.(Versions|MemberVersionsTest)\.cs$", "memberversions");
             R(@"^src/MainWindow\.ChatListTest\.cs$", "chatlist");
             R(@"^src/MainWindow\.InvitesTest\.cs$", "invites");
             R(@"^src/MainWindow\.Invites2Test\.cs$", "invites2");

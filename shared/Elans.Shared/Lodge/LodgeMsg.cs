@@ -22,6 +22,7 @@ namespace Elans.Shared
         public const string Game = "game";                          // client -> server: what you're playing (or share:false)
         public const string Position = "position";                  // client -> server: your live map position (2.30)
         public const string MemberPos = "memberpos";                // server -> client: a member's live map position (2.30)
+        public const string Versions = "versions";                  // client -> server: my Outpost's channel and installed addons (2.38)
 
         // ---- voice (Voice.cs) ----
         public const string Voice = "voice";                        // client -> server: join / leave a voice room

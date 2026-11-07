@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Elans.Shared
 {
     // Members and presence (server/PROTOCOL.md: WebSocket, 2.5 and 2.30 additions): the field names live only here. The classes only map
@@ -23,6 +25,11 @@ namespace Elans.Shared
         // what they play: the presence object passed through as it is (a raw JsonObject - see
         // ILodgeFields.RawChild); null = not shared (written as JSON null). LodgeGame.Read gives the typed view of it.
         public object Game;
+        // 2.38 (feature "versions"): the Outpost version the member connected with (from the client=hub/x.y.z of /ws), null when unknown;
+        // and what that Outpost said about itself (LodgeVersions: its update channel and the Elan's addons installed), null when it said nothing.
+        // Both are written only when there is something, so an older Outpost's entry is unchanged.
+        public string App;
+        public object Versions;
 
         public void Write(ILodgeWriter w)
         {
@@ -32,6 +39,8 @@ namespace Elans.Shared
             w.Set("status", Status); w.Set("note", Note);
             if (Game != null) w.SetRawChild("game", Game); else w.Set("game", (string)null);
             if (Invisible) w.Set("invisible", true);
+            if (App != null) w.Set("app", App);
+            if (Versions != null) w.SetRawChild("versions", Versions);
         }
 
         // null for a missing entry (a join / user without its user object)
@@ -41,6 +50,7 @@ namespace Elans.Shared
             Room = f.Str("room"), Voice = f.Bool("voice"), Muted = f.Bool("muted"), Deaf = f.Bool("deaf"), ServerMuted = f.Bool("serverMuted"),
             AvatarId = f.Str("avatarId"), Accent = f.Str("accent"), DisplayName = f.Str("displayName"), HasDisplayName = f.Has("displayName"),
             Status = f.Str("status"), Note = f.Str("note"), Game = f.RawChild("game"), Invisible = f.Bool("invisible"),
+            App = f.Str("app"), Versions = f.RawChild("versions"),
         };
     }
 
@@ -220,5 +230,41 @@ namespace Elans.Shared
         {
             Id = f.Int("id"), Valid = f.Bool("valid"), MapId = f.Int("mapId"), Fx = f.Num("fx"), Fy = f.Num("fy"), Move = f.Int("move"),
         };
+    }
+
+    // ---------------------------------------------------------------- versions (2.38, feature "versions")
+
+    // what a member's Outpost says about itself: { channel: "stable" | "test", addons: { id: "x.y.z" } }.
+    // Client -> server as the "versions" message (with t); the server cleans it (PresenceModule.BuildVersions: a known channel or none,
+    // at most MaxAddons ids of [a-z0-9] up to 16 characters, versions of digits and dots) and passes the cleaned object on as user.versions.
+    // Only installed addons are listed. An Outpost sends it again when its channel or installed addons change.
+    public sealed class LodgeVersions
+    {
+        public const string Type = LodgeMsg.Versions;
+        public const int MaxAddons = 24;
+        public string Channel;                                    // "stable" | "test" | null (not said)
+        public Dictionary<string, string> Addons = new Dictionary<string, string>();
+
+        public void Write(ILodgeWriter w) => WriteBody(w, true);
+        public void WriteView(ILodgeWriter w) => WriteBody(w, false);   // user.versions: the same without "t"
+        void WriteBody(ILodgeWriter w, bool asMessage)
+        {
+            if (asMessage) w.Set("t", Type);
+            w.Set("channel", Channel);
+            var a = w.Child("addons");
+            foreach (var kv in Addons) a.Set(kv.Key, kv.Value);
+        }
+
+        // null for a missing object; addons whose value is not a string are skipped (the server's cleaning is the validation)
+        public static LodgeVersions Read(ILodgeFields f)
+        {
+            if (f == null) return null;
+            var v = new LodgeVersions { Channel = f.Str("channel") };
+            var a = f.Child("addons");
+            if (a != null)
+                foreach (var k in a.Keys())
+                    if (a.Str(k) is string s && v.Addons.Count < MaxAddons) v.Addons[k] = s;
+            return v;
+        }
     }
 }

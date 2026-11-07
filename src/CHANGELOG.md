@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.9.2
+- **See who is behind.** In the Lodge, a small amber arrow next to someone means their Outpost or one of their Elan's addons is older than the newest release of their own channel, so they can't use the newest features yet. Hover them: the card shows their Outpost version, whether they are on Stable or Test, and exactly what is behind ("Elan's Toolkit 0.22.0 → 0.22.1"). Someone on Stable is never marked for not having a test build.
+- Your Outpost tells the Lodge its version, your update channel and which Elan's addons you have installed, and nothing else. Needs Lodge server 2.38 (older servers show nothing new).
+
 ## 3.9.1
 - **The Camp Boss can tell you.** Settings > In-game overlay > Who tells you: Cards, or the Camp Boss from Elan's Toolkit. She says your notifications one at a time in her own box over the game, typing them out, blinking and now and then turning her head away, and the next one waits its turn. Fights and dungeons hold her back just like the cards. Security notices stay cards.
 - **Where she stands in game.** With Elan's Toolkit 0.22.1 and Elan's Hub 1.19.0 the Outpost learns her spot, size and face live from the Hub's status strip (numbers only). While she is on in game, the overlay stands just below her, so the two never cover each other. Without them she stands at the top of the game window.
