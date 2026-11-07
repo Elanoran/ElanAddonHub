@@ -843,7 +843,15 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="New addon errors" Tag="&quot;Elan's Bags: 2 new errors&quot; when Addon health finds new errors after a /reload. Held during combat.">
                 <CheckBox x:Name="ToastHealthBox" Style="{StaticResource Switch}" Click="Overlay_Click" />
               </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Corner">
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Who tells you" Tag="Cards, or the Camp Boss from Elan's Toolkit: she says them one at a time in her own box, where she stands in game (just below her while she is on there). With Elan's Hub 1.19.0 the Outpost learns her spot and face from the status strip; until then she stands at the top. Security notices stay cards.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="ToastStyleCards" Style="{StaticResource Segment}" Content="Cards" GroupName="tstyle" Checked="Overlay_Click" />
+                    <RadioButton x:Name="ToastStyleBoss" Style="{StaticResource Segment}" Content="Camp Boss" GroupName="tstyle" Checked="Overlay_Click" />
+                  </StackPanel>
+                </Border>
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Corner" Tag="Where the cards go.">
                 <Border Style="{StaticResource SegmentHost}">
                   <StackPanel Orientation="Horizontal">
                     <RadioButton x:Name="ToastTL" Style="{StaticResource Segment}" Content="Top left" GroupName="tcorner" Checked="Overlay_Click" />

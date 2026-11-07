@@ -18,6 +18,7 @@ namespace ElansAddonHub
             bool o1 = s.ToastsOff, o2 = s.ToastReactions, o3 = s.ToastPins, o4 = s.ToastMentionsOff; var corner = s.ToastCorner;
             bool o5 = s.ToastMessages, o6 = s.ToastFriendsPlaying, o7 = s.ToastFriendSound, o8 = s.ToastHoldInstance;
             var o9 = s.ToastFriends; var o10 = s.ToastFriendNames; var o11 = s.NotifyMode;
+            var o12 = s.ToastStyle; var o13 = (s.BossX, s.BossTop, s.BossWidth, s.BossFace, s.BossInGame);
             Action<string, string> trayNote = null;
             try
             {
@@ -70,6 +71,60 @@ namespace ElansAddonHub
                 s.ToastsOff = false; s.ToastMentionsOff = true; tc.Push(Mention("Bob"));
                 Check("per-type switch off: nothing", tc.Visible.Count == 0);
                 s.ToastMentionsOff = false;
+
+                // ---- toast style "boss" (3.9.1): the Camp Boss says them, one at a time
+                s.ToastStyle = "boss";
+                now = t0.AddSeconds(200);
+                var bc = new ToastCenter(s) { Clock = () => now, InCombat = () => combat };
+                bc.Push(Mention("Bob")); bc.Push(Mention("Tess")); bc.Push(Mention("Dax", "loot"));
+                Check("boss: one at a time, the others wait (nothing coalesced into her line)", bc.Visible.Count == 1 && bc.Visible[0].Boss && bc.Visible[0].Title == "Bob · #general" && bc.WaitingCount == 2);
+                double life = BossPose.Duration(bc.Visible[0].Preview.Length, bc.Visible[0].Turn);
+                Check("boss: she stays as long as her line takes (" + life.ToString("0.0") + " s), at least as long as a card", life >= 6 && BossPose.Duration(96, false) > 8 && Math.Abs((bc.Visible[0].Expires - now).TotalSeconds - life) < 0.01 && !bc.Visible[0].Turn);
+                now = now.AddSeconds(life + 0.1); bc.Tick();
+                Check("boss: when she has gone the next one comes, and she turns away on every other line", bc.Visible.Count == 1 && bc.Visible[0].Title.StartsWith("Tess") && bc.WaitingCount == 1 && bc.Visible[0].Turn);
+                bc.Push(new ToastItem { Kind = ToastKind.Security, Kicker = "Security", Sender = "New device on your account", Text = "A new device signed in." });
+                Check("boss: a security notice stays a card beside her", bc.Visible.Count == 2 && bc.Visible.Count(v => !v.Boss) == 1 && bc.Visible.First(v => !v.Boss).Kind == ToastKind.Security);
+                for (int i = 0; i < 8; i++) bc.Push(Mention("Spam" + i, "spam"));
+                Check("boss: at most " + ToastCenter.WaitMax + " wait their turn (the oldest go)", bc.WaitingCount == ToastCenter.WaitMax);
+                combat = true; now = now.AddSeconds(30); bc.Tick();
+                Check("boss: in a fight the waiting lines join the held ones", !bc.Visible.Any(v => v.Boss) && bc.WaitingCount == 0 && bc.HeldCount == ToastCenter.WaitMax);
+                combat = false; now = now.AddSeconds(1); bc.Tick();
+                Check("boss: after the fight she says the one summary", bc.Visible.Count == 1 && bc.Visible[0].Boss && bc.Visible[0].Kind == ToastKind.Summary);
+                s.ToastStyle = null;
+                var cc = new ToastCenter(s) { Clock = () => now };
+                cc.Push(Mention("Bob")); cc.Push(Mention("Kor", "loot"));
+                Check("cards (the default): no Camp Boss, two cards at once", cc.Visible.Count == 2 && cc.Visible.All(v => !v.Boss) && cc.WaitingCount == 0);
+
+                // her pose over a line (the Toolkit's timings)
+                const int len = 40;
+                var p0 = BossPose.At(0, len, false);
+                Check("pose: she starts above and slides in, nothing typed yet", p0.Down > 0.9 && p0.Chars == 0);
+                var p1 = BossPose.At(BossPose.SlideIn + 0.51, len, false);
+                Check("pose: types 45 characters a second with her mouth moving (" + p1.Chars + ")", p1.Down == 0 && p1.Chars == 22 && (p1.From == BossPose.Talk1 || p1.From == BossPose.Talk2));
+                var p2 = BossPose.At(BossPose.SlideIn + len / BossPose.TypeSpeed + 0.3, len, false);
+                Check("pose: the whole line typed, mouth closed", p2.Chars == len && (p2.From == BossPose.Idle || p2.From == BossPose.Blink));
+                var pt = BossPose.At(BossPose.SlideIn + len / BossPose.TypeSpeed + BossPose.TurnWait + 0.6, len, true);
+                Check("pose: on a turn line she turns her head away (frames 4-15, " + pt.From + "->" + pt.To + ")", pt.From >= BossPose.TurnFirst || pt.To >= BossPose.TurnFirst);
+                var pa = BossPose.At(BossPose.SlideIn + len / BossPose.TypeSpeed + BossPose.TurnWait + 0.6, len, false);
+                Check("pose: not on the other lines", pa.From < BossPose.TurnFirst && pa.To < BossPose.TurnFirst);
+                double dur = BossPose.Duration(len, true);
+                var pe = BossPose.At(dur - 0.05, len, true);
+                Check("pose: she slides out at the end, the bar nearly gone, facing front again", pe.Down > 0.5 && pe.Left < 0.02 && pe.From < BossPose.TurnFirst);
+
+                // where she stands: the Toolkit's notes on the strip (Hub 1.19.0)
+                var ns = new Settings();
+                var place = new StripNote { Kind = BossNotes.Place, Id = (2048 << 12) | 410, Extra = 1 + 2 * 1 };
+                Check("notes: kind 64 -> her centre, top, on in game, face", BossNotes.Apply(ns, place) && Math.Abs(ns.BossX.Value - 0.5) < 0.001 && Math.Abs(ns.BossTop.Value - 0.1) < 0.001 && ns.BossInGame && ns.BossFace == 1);
+                Check("notes: the same note again changes nothing (not saved again)", !BossNotes.Apply(ns, place));
+                Check("notes: kind 65 -> her width; a silly size is ignored", BossNotes.Apply(ns, new StripNote { Kind = BossNotes.Size, Id = (int)(0.17 * 65535) }) && Math.Abs(ns.BossWidth.Value - 0.17) < 0.001
+                    && !BossNotes.Apply(ns, new StripNote { Kind = BossNotes.Size, Id = 10 }) && Math.Abs(ns.BossWidth.Value - 0.17) < 0.001);
+                Check("notes: other kinds change nothing", !BossNotes.Apply(ns, new StripNote { Kind = 70, Id = 1 }));
+                var sp = BossNotes.Spot(ns, 16 / 9.0);
+                Check("spot: while she is on in game the overlay stands just below her own box", sp.top > ns.BossTop.Value + 0.05 && Math.Abs(sp.x - 0.5) < 0.01 && Math.Abs(sp.width - 0.17) < 0.001);
+                ns.BossInGame = false; sp = BossNotes.Spot(ns, 16 / 9.0);
+                Check("spot: with her off in game, exactly where she stands", Math.Abs(sp.top - ns.BossTop.Value) < 1e-9);
+                var dflt = BossNotes.Spot(new Settings(), 16 / 9.0);
+                Check("spot: never heard from the Toolkit -> top centre, her default size", Math.Abs(dflt.x - 0.5) < 1e-9 && Math.Abs(dflt.top - 70 / 768.0) < 1e-9 && dflt.width > 0.2 && dflt.width < 0.3);
 
                 // ---- through the session: real protocol frames
                 Session.Disconnect();
@@ -279,6 +334,34 @@ namespace ElansAddonHub
                 Check("toast window: topmost, click-through, no activation", win != null && win.IsVisible && win.Topmost && !win.ShowActivated && !win.Focusable && ToastWindow.IsClickThrough(win.ExStyleForTest));
                 T.Visible.Clear();
                 LodgePage.ForceToastsForTest = false;
+                await Task.Delay(300);
+
+                // ---- the Camp Boss window (toast style "boss")
+                s.ToastStyle = "boss"; s.BossX = 0.5; s.BossTop = 0.1; s.BossWidth = 0.25; s.BossInGame = false; s.BossFace = 1;
+                T.ClearForTest();
+                T.Push(new ToastItem { Kind = ToastKind.Mention, Sender = "Bob", Channel = "General", ChannelId = "g", Text = "@Elan the Wailing Caverns group needs a hunter, are you in?", Who = Session.Members.First(m => m.Name == "Bob") });
+                T.Push(new ToastItem { Kind = ToastKind.Reply, Sender = "Tess", Channel = "General", ChannelId = "g2", Text = "Yes, sign me up", Who = Session.Members.First(m => m.Name == "Tess") });
+                LodgePage.ForceToastsForTest = true;
+                await Task.Delay(1200);
+                T.Tick();
+                await Task.Delay(300);
+                var bw = LodgePage.BossWindowForTest;
+                var cardWin = LodgePage.ToastWindowForTest;
+                Check("boss window: she shows instead of the cards; topmost, click-through, no activation", bw != null && bw.IsVisible && bw.Topmost && !bw.ShowActivated && !bw.Focusable
+                    && ToastWindow.IsClickThrough(bw.ExStyleForTest) && (cardWin == null || !cardWin.IsVisible) && T.WaitingCount == 1);
+                if (bw != null)
+                {
+                    bw.ApplyForTest(BossPose.SlideIn + 0.41);
+                    Check("boss window: types the line (" + bw.TypedForTest + ")", bw.TypedForTest.Length == 18);
+                    bw.ApplyForTest(BossPose.SlideIn + 3);
+                    LodgePage.SnapshotBoss(System.IO.Path.Combine(dir, "13-toast-boss.png"));
+                }
+                Check("boss window: her faces load (2 sheets of 16 frames, 128 px each)", BossToastWindow.Frames(0).Length == 16 && BossToastWindow.Frames(1).Length == 16 && BossToastWindow.Frames(1)[15].PixelWidth == 128);
+                T.ClearForTest();
+                await Task.Delay(1200);
+                Check("boss window: gone when she has nothing to say", bw == null || !bw.IsVisible);
+                LodgePage.ForceToastsForTest = false;
+                s.ToastStyle = o12;
                 Session.Presence.SetForTest(null, false);
                 T.Visible.Clear(); await Task.Delay(300);
             }
@@ -288,6 +371,7 @@ namespace ElansAddonHub
                 if (trayNote != null) Session.Notify -= trayNote;
                 s.ToastsOff = o1; s.ToastReactions = o2; s.ToastPins = o3; s.ToastMentionsOff = o4; s.ToastCorner = corner;
                 s.ToastMessages = o5; s.ToastFriendsPlaying = o6; s.ToastFriendSound = o7; s.ToastHoldInstance = o8; s.ToastFriends = o9; s.ToastFriendNames = o10; s.NotifyMode = o11;
+                s.ToastStyle = o12; (s.BossX, s.BossTop, s.BossWidth, s.BossFace, s.BossInGame) = o13;
                 SettingsStore.Save(s);
             }
             return "toast selftest: " + (ok ? "PASSED" : "FAILED") + "\r\n  " + string.Join("\r\n  ", notes);

@@ -4,7 +4,9 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
 ## 3.9.1
-- **Ready for settings from your other addons.** The Outpost can now read small settings that Elan's Hub 1.19.0 passes on through its status strip, live and without a `/reload`. Nothing uses them yet: they are the groundwork for showing the Camp Boss over the game.
+- **The Camp Boss can tell you.** Settings > In-game overlay > Who tells you: Cards, or the Camp Boss from Elan's Toolkit. She says your notifications one at a time in her own box over the game, typing them out, blinking and now and then turning her head away, and the next one waits its turn. Fights and dungeons hold her back just like the cards. Security notices stay cards.
+- **Where she stands in game.** With Elan's Toolkit 0.22.1 and Elan's Hub 1.19.0 the Outpost learns her spot, size and face live from the Hub's status strip (numbers only). While she is on in game, the overlay stands just below her, so the two never cover each other. Without them she stands at the top of the game window.
+- Needs WoW in Windowed (Fullscreen) mode, like the other overlays.
 
 ## 3.9.0
 - **Know when a friend comes online.** A small card over the game when someone connects to your Lodge, or only when they start playing WoW. Choose everyone or chosen people: click someone in the member list and pick "Tell me when they come online". Off by default, with an optional sound (Settings > Lodge > Toasts and notifications). Someone who appears offline is never mentioned, and a connection that drops and comes back stays quiet.

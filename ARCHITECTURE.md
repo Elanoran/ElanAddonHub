@@ -124,7 +124,14 @@ about where you are or what you do.
 - The slot carries about 5 bytes every 3 s. Send a note when a setting changes and repeat it now and then (about once a
   minute) for an Outpost that started later. Anything bigger or that can wait goes through `Publish`.
 - The Outpost passes notes to `GamePresence.Note`, never to the trail. Older Outposts ignore these kinds.
-- Kinds handed out: none yet.
+- Kinds handed out:
+
+  | Kind | From | Carries |
+  |---|---|---|
+  | 64 | Toolkit 0.22.1+ (`UI/TalkerNote.lua`) | the Camp Boss's spot: `id` = x × 4096 + top (12 bits each, 0-4095 of the screen: her centre, her top edge from the top), `extra` = 1 when she is on + 2 × her face |
+  | 65 | Toolkit 0.22.1+ | her width: `id` = 0-65535 of the screen width |
+
+  The Outpost reads them in `BossNotes` (toast style "Camp Boss": `BossToastWindow`).
 
 ### Handing data to the Hub
 

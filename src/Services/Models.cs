@@ -197,6 +197,13 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "healthSeen")] public Dictionary<string, int> HealthSeen { get; set; }
         [DataMember(Name = "healthToasted")] public Dictionary<string, int> HealthToasted { get; set; }
         [DataMember(Name = "toastCorner")] public string ToastCorner { get; set; }      // tl | tr (default) | bl | br
+        [DataMember(Name = "toastStyle")] public string ToastStyle { get; set; }        // cards (default) | boss: the Camp Boss says them, one at a time (BossToastWindow)
+        // where the Camp Boss stands in game, from Elan's Toolkit's notes on the strip (BossNotes); null = never heard, the default spot
+        [DataMember(Name = "bossX")] public double? BossX { get; set; }                 // her centre, 0..1 of the game window's width
+        [DataMember(Name = "bossTop")] public double? BossTop { get; set; }             // her top edge, 0..1 of its height from the top
+        [DataMember(Name = "bossWidth")] public double? BossWidth { get; set; }         // her width, 0..1 of its width
+        [DataMember(Name = "bossFace")] public int BossFace { get; set; }               // 0 hairpin, 1 cook (Toolkit T.FACES order)
+        [DataMember(Name = "bossInGame")] public bool BossInGame { get; set; }          // she is switched on in the Toolkit: the overlay stands just below her
         [DataMember(Name = "shareZoneOff")] public bool ShareZoneOff { get; set; }      // false = friends see my zone / instance
         [DataMember(Name = "shareXpOff")] public bool ShareXpOff { get; set; }          // false = friends see my XP % and rested state
         [DataMember(Name = "autoStatusOff")] public bool AutoStatusOff { get; set; }    // false = "In combat" / AFK are set as my Lodge status automatically

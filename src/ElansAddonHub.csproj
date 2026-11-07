@@ -51,6 +51,7 @@
     <Resource Include="Assets\logo-paladin.png" Condition="Exists('Assets\logo-paladin.png')" />
     <!-- painted art (ArtLibrary.cs): zone banners, category browse banners, talent spec backgrounds -->
     <Resource Include="Assets\Art\*.jpg" />
+    <Resource Include="Assets\Boss\*.png" />
   </ItemGroup>
 
   <!-- the world map page (Atlas): Leaflet 1.9.4 (BSD-2-Clause) and three.js r149 (MIT), both with their licence files, and the 2D and 3D pages ride inside the exe; they are written to the data folder (atlas/worldmap/_page) and served from a private virtual host, never from the internet -->

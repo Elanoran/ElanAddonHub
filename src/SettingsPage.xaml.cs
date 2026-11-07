@@ -182,6 +182,7 @@ namespace ElansAddonHub
             ToastFriendsOff.IsChecked = s.ToastFriends != "all" && s.ToastFriends != "chosen"; ToastFriendsAll.IsChecked = s.ToastFriends == "all"; ToastFriendsChosen.IsChecked = s.ToastFriends == "chosen";
             var tc = s.ToastCorner ?? "tr";
             ToastTL.IsChecked = tc == "tl"; ToastTR.IsChecked = tc == "tr"; ToastBL.IsChecked = tc == "bl"; ToastBR.IsChecked = tc == "br";
+            ToastStyleBoss.IsChecked = s.ToastStyle == "boss"; ToastStyleCards.IsChecked = s.ToastStyle != "boss";
 
             var mode = s.NotifyMode ?? "mentions";
             NotifyAll.IsChecked = mode == "all";
@@ -932,6 +933,7 @@ namespace ElansAddonHub
             settings.ToastFriendSound = ToastFriendSoundBox.IsChecked == true; settings.ToastHoldInstance = ToastHoldInstanceBox.IsChecked == true;
             settings.ToastFriends = ToastFriendsAll.IsChecked == true ? "all" : ToastFriendsChosen.IsChecked == true ? "chosen" : "off";
             settings.ToastCorner = ToastTL.IsChecked == true ? "tl" : ToastBL.IsChecked == true ? "bl" : ToastBR.IsChecked == true ? "br" : "tr";
+            settings.ToastStyle = ToastStyleBoss.IsChecked == true ? "boss" : null;
             SettingsStore.Save(settings);
         }
 

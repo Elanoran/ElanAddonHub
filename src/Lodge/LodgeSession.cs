@@ -138,6 +138,8 @@ namespace ElansAddonHub.Lodge
             // presence changes (zone, combat, XP...) are sent at most every ~1 s, and only when the message really differs
             gameTimer.Tick += (s, e) => { gameTimer.Stop(); SendGame(); };
             Presence.Changed += () => { PresenceChanged?.Invoke(); if (!gameTimer.IsEnabled) gameTimer.Start(); };
+            // 3.9.1: where the Camp Boss stands in game, from Elan's Toolkit's notes on the strip (only saved when it changed)
+            Presence.Note += n => { try { if (BossNotes.Apply(settings, n)) SettingsStore.Save(settings); } catch (Exception e) { Util.Log("boss note: " + e.Message); } };
             WowWatch.Shared.Start();
             Presence.Start();
             tick.Tick += (s, e) => OnTick();

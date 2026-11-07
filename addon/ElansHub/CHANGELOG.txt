@@ -61,4 +61,4 @@
 
 1.18.5 /ehub copy lets you pick lines: click one, Shift-click for a range or drag across them. They stay picked while you scroll or search, and Copy picked shows only those
 
-1.19.0 The status strip can carry small settings of other Elan addons for the Outpost on this PC (ElansHub.Note), such as where a window of theirs sits, without a /reload. Numbers only, a few seconds at a time; they need only the strip, not "Share my map position", which still covers your position and trail events exactly as before. Nothing uses it yet, and nothing is sent anywhere. Older Outposts ignore them.
+1.19.0 The status strip can carry small settings of other Elan addons for the Outpost on this PC (ElansHub.Note), such as where a window of theirs sits, without a /reload. Numbers only, a few seconds at a time; they need only the strip, not "Share my map position", which still covers your position and trail events exactly as before. Elan's Toolkit 0.22.1 uses it to tell the Outpost where the Camp Boss stands, so she can read out its notifications over the game. Nothing is sent anywhere. Older Outposts ignore them.

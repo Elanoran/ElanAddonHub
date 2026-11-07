@@ -37,6 +37,8 @@ namespace ElansAddonHub.Lodge
         public string Preview => Text != null && Text.Length > PreviewMax ? Text.Substring(0, PreviewMax).TrimEnd() + "…" : Text;
         const int PreviewMax = 96;
         public double Slide { get => slide; set => Set(ref slide, value); }   // px: enter 8 -> 0 (up), exit 0 -> 4 (down)
+        public bool Boss;     // the Camp Boss says this one (toast style "boss"), one at a time; false = a card
+        public bool Turn;     // she turns her head away after this line (every other one)
         public string Title { get => title; set => Set(ref title, value); }
         public int Count { get => count; set => Set(ref count, value); }
         public double Opacity { get => opacity; set => Set(ref opacity, value); }
@@ -91,10 +93,18 @@ namespace ElansAddonHub.Lodge
         public readonly ObservableCollection<ToastVM> Visible = new ObservableCollection<ToastVM>();
         readonly List<ToastItem> held = new List<ToastItem>();
         public int HeldCount => held.Count;
-        public void ClearForTest() { held.Clear(); Visible.Clear(); }   // a section starts without the toasts an earlier one left
+        public void ClearForTest() { held.Clear(); Visible.Clear(); waiting.Clear(); }   // a section starts without the toasts an earlier one left
         public int Shown { get; private set; }                     // toasts created so far (tests)
 
         public ToastCenter(Settings s) { settings = s; }
+
+        // toast style "boss" (3.9.1): the Camp Boss says the toasts, one at a time; the next waits its turn (at most WaitMax, the oldest go).
+        // Security notices stay cards: a new device on your account should not read like one of her lines.
+        public const int WaitMax = 5;
+        readonly List<ToastItem> waiting = new List<ToastItem>();
+        public int WaitingCount => waiting.Count;
+        bool bossTurn;
+        bool BossFor(ToastKind k) => settings.ToastStyle == "boss" && k != ToastKind.Security;
 
         public bool Enabled(ToastKind k)
         {
@@ -135,8 +145,15 @@ namespace ElansAddonHub.Lodge
         void Show(ToastItem it)
         {
             var now = Clock();
-            // coalesce a burst: same kind + channel still on screen
-            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms && it.Kind != ToastKind.Security && it.Kind != ToastKind.Friend);
+            bool boss = BossFor(it.Kind);
+            if (boss && Visible.Any(v => v.Boss))
+            {
+                waiting.Add(it);
+                while (waiting.Count > WaitMax) waiting.RemoveAt(0);
+                return;
+            }
+            // coalesce a burst: same kind + channel still on screen (cards only: she would have to start her line again)
+            var same = boss ? null : Visible.FirstOrDefault(v => !v.Boss && v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms && it.Kind != ToastKind.Security && it.Kind != ToastKind.Friend);
             if (same != null)
             {
                 same.Count++;
@@ -149,11 +166,16 @@ namespace ElansAddonHub.Lodge
             {
                 Kind = it.Kind, KickerText = it.Kicker, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
                 Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event || it.Kind == ToastKind.Realms || it.Kind == ToastKind.Security || it.Kind == ToastKind.Friend ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
-                Text = it.Text, Opacity = 0,
+                Text = it.Text, Opacity = 0, Boss = boss,
             };
+            if (boss)
+            {
+                vm.Turn = bossTurn; bossTurn = !bossTurn;
+                vm.Expires = now + TimeSpan.FromSeconds(BossPose.Duration((vm.Preview ?? "").Length, vm.Turn));
+            }
             Visible.Add(vm);
             Shown++;
-            while (Visible.Count > Max) Visible.RemoveAt(0);
+            while (Visible.Count(v => !v.Boss) > Max) Visible.Remove(Visible.First(v => !v.Boss));
         }
 
         static string Plural(ToastKind k, int n, string channel)
@@ -164,7 +186,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // every ~100 ms: fade, expire, and after combat one summary of what was held
-        public bool NeedsTick => held.Count > 0 || Visible.Count > 0;
+        public bool NeedsTick => held.Count > 0 || Visible.Count > 0 || waiting.Count > 0;
         public void Tick()
         {
             var now = Clock();
@@ -187,11 +209,18 @@ namespace ElansAddonHub.Lodge
             foreach (var v in Visible.ToList())
             {
                 if (now >= v.Expires) { Visible.Remove(v); continue; }
+                if (v.Boss) { v.Opacity = 1; v.Slide = 0; continue; }   // she moves herself (BossPose)
                 double age = (now - v.Born).TotalSeconds, left = (v.Expires - now).TotalSeconds;
                 double tin = Math.Max(0, Math.Min(1, age / FadeIn)), tout = Math.Max(0, Math.Min(1, left / FadeOut));
                 double enter = 1 - Math.Pow(1 - tin, 3), leave = Math.Pow(1 - tout, 3);   // ease-out in, ease-in out (cubic, as Motion.EaseOut / EaseIn)
                 v.Opacity = Math.Min(enter, tout);
                 v.Slide = Motion.Enabled ? (1 - enter) * 8 + leave * 4 : 0;
+            }
+            // her next line: once she has gone, and not during a fight (then it waits with the others for the summary)
+            if (waiting.Count > 0 && !Visible.Any(v => v.Boss))
+            {
+                if (Holding) { held.AddRange(waiting); waiting.Clear(); if (!InCombat()) heldForInstance = true; }
+                else { var next = waiting[0]; waiting.RemoveAt(0); Show(next); }
             }
         }
     }

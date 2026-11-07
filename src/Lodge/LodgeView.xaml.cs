@@ -214,7 +214,7 @@ namespace ElansAddonHub.Lodge
             UpdateJump();
             // the overlay and toasts sit on top of WoW: nothing to place while it isn't running (unless they are pinned to the desktop / being previewed)
             var st = Session.Settings;
-            if (WowWatch.Shared.Running || st.OverlayAlways || OverlayPreview || ForceOverlayForTest || ForceToastsForTest || (overlay != null && overlay.IsVisible) || (toastWin != null && toastWin.IsVisible) || Session.Toasts?.NeedsTick == true)
+            if (WowWatch.Shared.Running || st.OverlayAlways || OverlayPreview || ForceOverlayForTest || ForceToastsForTest || (overlay != null && overlay.IsVisible) || (toastWin != null && toastWin.IsVisible) || (bossWin != null && bossWin.IsVisible) || Session.Toasts?.NeedsTick == true)
                 UpdateOverlay();
         }
 
@@ -1420,34 +1420,54 @@ namespace ElansAddonHub.Lodge
         public bool ForceToastsForTest;
         public ToastWindow ToastWindowForTest => toastWin;
 
-        // the toast stack: shown over WoW (or anywhere with "Also when WoW isn't in front"), hidden when empty
+        BossToastWindow bossWin;
+        public BossToastWindow BossWindowForTest => bossWin;
+
+        // the toast stack: shown over WoW (or anywhere with "Also when WoW isn't in front"), hidden when empty.
+        // Toast style "boss": the Camp Boss says them one at a time in her own window; Security notices stay cards (ToastCenter.BossFor).
         void UpdateToasts()
         {
             var t = Session.Toasts;
             if (t == null) return;
             var s = Session.Settings;
             var wow = OverlayWindow.WowInFront();
-            bool show = t.Visible.Count > 0 && !s.ToastsOff && (wow != IntPtr.Zero || s.OverlayAlways || ForceToastsForTest);
-            if (!show) { if (toastWin != null && toastWin.IsVisible) toastWin.Hide(); return; }
-            if (toastWin == null) toastWin = new ToastWindow(t.Visible);
-            if (!toastWin.IsVisible) toastWin.Show();
+            bool canShow = !s.ToastsOff && (wow != IntPtr.Zero || s.OverlayAlways || ForceToastsForTest);
             var main = Window.GetWindow(this);
             var near = wow != IntPtr.Zero ? wow : main != null ? new System.Windows.Interop.WindowInteropHelper(main).Handle : IntPtr.Zero;
-            toastWin.UpdateLayout();
-            toastWin.Place(near, s.ToastCorner ?? "tr");
+
+            bool cards = canShow && t.Visible.Any(v => !v.Boss);
+            if (!cards) { if (toastWin != null && toastWin.IsVisible) toastWin.Hide(); }
+            else
+            {
+                if (toastWin == null) toastWin = new ToastWindow(new System.Windows.Data.ListCollectionView(t.Visible) { Filter = o => !((ToastVM)o).Boss });
+                if (!toastWin.IsVisible) toastWin.Show();
+                toastWin.UpdateLayout();
+                toastWin.Place(near, s.ToastCorner ?? "tr");
+            }
+
+            var boss = canShow ? t.Visible.FirstOrDefault(v => v.Boss) : null;
+            if (boss == null) { if (bossWin != null && bossWin.IsVisible) { bossWin.Say(null, s.BossFace); bossWin.Hide(); } return; }
+            if (bossWin == null) bossWin = new BossToastWindow();
+            bossWin.Say(boss, s.BossFace);
+            if (!bossWin.IsVisible) bossWin.Show();
+            bossWin.Place(near, wow != IntPtr.Zero, s);
         }
 
-        public void SnapshotToasts(string file)
+        public void SnapshotToasts(string file) => Snapshot(toastWin, file);
+        public void SnapshotBoss(string file) => Snapshot(bossWin, file);
+
+        static void Snapshot(Window win, string file)
         {
-            if (toastWin == null || !toastWin.IsVisible) return;
-            toastWin.UpdateLayout();
-            var w = (int)toastWin.ActualWidth; var h = (int)toastWin.ActualHeight;
+            if (win == null || !win.IsVisible) return;
+            win.UpdateLayout();
+            var w = (int)win.ActualWidth; var h = (int)win.ActualHeight;
+            if (w < 1 || h < 1) return;
             var bmp = new RenderTargetBitmap(w * 2, h * 2, 192, 192, PixelFormats.Pbgra32);
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
             {
                 dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x3A, 0x4A, 0x3A)), null, new Rect(0, 0, w, h));
-                dc.DrawRectangle(new VisualBrush((Visual)toastWin.Content), null, new Rect(0, 0, w, h));
+                dc.DrawRectangle(new VisualBrush((Visual)win.Content), null, new Rect(0, 0, w, h));
             }
             bmp.Render(dv);
             var enc = new PngBitmapEncoder();
