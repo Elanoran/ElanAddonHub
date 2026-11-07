@@ -12,6 +12,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Heal frames**: compact tiles with health, mana, range, aggro and a dispel mark, plus your Renew, Power Word: Shield,
   Weakened Soul, Prayer of Mending and Fear Ward with the seconds left. A tile shows "REZ name" when another priest with
   this addon is already resurrecting that player.
+- **Incoming heals and heal reach**: a green bar after the health shows the heals on the way. A white mark shows where your
+  left click heal would end and a gold one your Shift+left. No mark on the bar means that heal would overheal, so use a smaller one.
 - **Click-casting**: nine clicks (left, right, Shift, Ctrl, middle, mouse buttons 4 and 5), each with a spell *and a
   rank*, so you can downrank. The **Smart** click resurrects a dead player out of combat, buffs a missing or running-out Fortitude (not in
   the first 20 seconds after a fight, and you can turn this off), and otherwise heals (Flash Heal unless you choose another). Defaults: left = Smart, right = Renew, Shift+left = Greater Heal,
