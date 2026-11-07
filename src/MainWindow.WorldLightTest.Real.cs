@@ -62,7 +62,9 @@ namespace ElansAddonHub
                 foreach (var n in set.Notes) notes.Add("info real light: " + n);
                 int z0 = set.Zones?.Count(z => z.Map == 0 && z.Points.Count >= 3) ?? 0, z1 = set.Zones?.Count(z => z.Map == 1 && z.Points.Count >= 3) ?? 0;
                 int pts = set.Zones?.Sum(z => z.Points.Count) ?? 0;
-                Check("real game files: the zone light polygons of the two continents (9 on the Eastern Kingdoms, 9 on Kalimdor); 645 of ZoneLightPoint's 649 points (the other 4 belong to the key-locked ZoneLight row)", z0 == 9 && z1 == 9 && pts == 645, z0 + " " + z1 + " " + pts);
+                if (set.Zones != null) notes.Add("info real light: zone polygons (map:points) " + string.Join(", ", set.Zones.Select(z => z.Map + ":" + z.Points.Count)));
+                // the Forever launch patch (1.60.1.70862) took one zone light off the Eastern Kingdoms: 9 -> 8 there, 645 -> 612 points read
+                Check("real game files: the zone light polygons of the two continents (8 on the Eastern Kingdoms since build 70862, 9 on Kalimdor); 612 points read (the key-locked ZoneLight row's are not there)", z0 == 8 && z1 == 9 && pts == 612, z0 + " " + z1 + " " + pts);
 
                 // ---- the light at noon in the zones of the data check
                 var def = WorldLight.LightAt(set, 0, -5000, 5000, 0, WorldLight.Noon);
