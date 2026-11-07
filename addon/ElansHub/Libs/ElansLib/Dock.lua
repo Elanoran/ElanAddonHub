@@ -7,8 +7,9 @@
 --       status = function() return "text", "good" end,   -- optional: one short line for the dock button's tooltip
 --       actions = { { label = "Open bags", icon = "INV_Misc_Bag_08", run = fn }, ... },  -- optional rows under the heading
 --       slash = "/ehh",                                   -- optional: shown in the heading's tooltip
---       settingsTab = "settings",                         -- the tab that goes in the Settings group (default: the tab
---                                                         -- with id "settings", else the bottom tab)
+--       settingsTab = "settings",                         -- the addon's settings tab: listed last under its heading and
+--                                                         -- searched by "Search all settings" (default: the tab with
+--                                                         -- id "settings", else the bottom tab)
 --       ownFrame = function() return frame end,           -- an addon whose own UI is not the Window (Elan's Bags): its
 --       openOwn = function(tab, arg) end,                 -- own frame, and how to open it once undocked
 --       contentWidth = 648, contentHeight = 498,          -- the content size, when the Window is never shown itself
@@ -17,8 +18,9 @@
 --     settings frame itself while undocked (UI\Settings.lua).
 --
 -- The docked window (ElansDockFrame), sized to the largest registered window: a left strip with one heading per addon
--- (its icon and name; the open addon shows its tabs and action rows under it), a Settings group at the bottom (one search
--- across every addon's settings pages, then each addon's settings tab), the open tab on the right. While docked, an
+-- (its icon and name; the open addon shows its tabs, its settings tab last, and its action rows under it), one "Search all
+-- settings" row at the bottom (one search across every addon's settings pages; MINOR 2: each addon is listed once, its
+-- settings no longer repeated in a group of their own), the open tab on the right. While docked, an
 -- addon's own Show / Select / Toggle / Hide / IsShown (so its slash commands and buttons) act on its section here.
 -- Tabs: ONE panel per tab (Window:HostPage). It is built the first time any host shows it, with the tab's own build, and
 -- moved (SetParent) to the host that shows it next: never built twice, so what a tab keeps of its widgets stays right.
@@ -45,7 +47,7 @@
 local Lib = _G.ElansLib
 local prev = Lib:Get("Dock")
 local carried, carriedEvents = prev and prev.entries, prev and prev.events
-local M = Lib:NewModule("Dock", 1)
+local M = Lib:NewModule("Dock", 2)
 if not M then return end
 
 M.entries = carried or {}
@@ -341,7 +343,11 @@ function layout()
     r:SetPoint("TOPLEFT", 0, y) r:SetPoint("TOPRIGHT", -1, y)
     y = y - HEAD_H
     if open then
-      for _, t in ipairs(regularTabs(e)) do
+      -- its tabs, its settings tab last (each addon is listed once: no second list of settings below)
+      local tabs = regularTabs(e)
+      local stId = settingsTab(e)
+      if stId then tabs[#tabs + 1] = e.win.byId[stId] end
+      for _, t in ipairs(tabs) do
         n = n + 1
         local sel = M.current == e and M.currentTab == t.id
         local tr = placeRow(n, "tab", t.icon or e.win.icon, t.label or t.id, nil, sel, function() M.Select(e, t.id) end)
@@ -359,19 +365,10 @@ function layout()
       y = y - 4
     end
   end
-  -- the Settings group, from the bottom up
+  -- at the bottom: one row, the search across every addon's settings (each addon's own settings is a tab under it)
   local list = {}
   local sOpen = M.group == "settings"
-  list[#list + 1] = { "head", "INV_Misc_Gear_01", "Settings", sOpen and C.accent or C.text, false, function() M.OpenSearch() end, nil, "settings" }
-  if sOpen then
-    list[#list + 1] = { "tab", "INV_Misc_Spyglass_02", "Search all", nil, M.currentTab == "search" and M.current == nil, function() M.OpenSearch() end, nil, "search" }
-    for _, e in ipairs(M.Members()) do
-      local st = settingsTab(e)
-      if st then
-        list[#list + 1] = { "tab", e.win.icon, short(e), nil, M.current == e and M.currentTab == st, function() M.Select(e, st) end, e, st }
-      end
-    end
-  end
+  list[#list + 1] = { "head", "INV_Misc_Spyglass_02", "Search all settings", sOpen and C.accent or C.text, sOpen, function() M.OpenSearch() end, nil, "search" }
   local by = 8
   for _, l in ipairs(list) do by = by + (l[1] == "head" and HEAD_H or TAB_H) end
   for _, l in ipairs(list) do
@@ -596,7 +593,7 @@ function M.Select(x, id, arg)
   M.page = page
   page:Show()
   M.current, M.currentTab = e, id
-  M.group = (id == settingsTab(e) and #regularTabs(e) > 0) and "settings" or e.name
+  M.group = e.name
   W.current = id
   local d = dbOf(e)
   if d then d[W.posKey .. "Tab"] = id end
