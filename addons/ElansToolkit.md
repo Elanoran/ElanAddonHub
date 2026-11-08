@@ -13,7 +13,10 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   countdown** that learns how long each route takes ("~" marks an estimate). Elan's class addons add their own pieces to it.
 - **Center bars** (off by default, `/etk bars`): curved health and power bars around your character, you on the left and your
   target on the right, with a label beside the right arc: level badge, name and range. In combat a thin arc inside the right arc
-  shows your threat, and the label says who holds aggro, like Pet tanking.
+  shows your threat, and the label says who holds aggro, like Pet tanking. Under each arc: health and power as numbers
+  (current / max; when the game hides them in a fight, its own number or nothing). Under the right arc: your target's cast
+  bar, and whether your interrupt is ready (Kick, Pummel, Counterspell, Earth Shock, Hammer of Justice, War Stomp and more),
+  green with a pulsing edge when it is, else its cooldown, "too far" or "Can't interrupt".
 - **Tooltip** (`/etk tooltip`, everything off by default): choose where each kind of tooltip goes (world units, world objects, unit
   frames, buttons): the corner, the mouse, next to it or a spot you drag, with offsets. Also a dark background with a border by class, reaction or item quality, the name in that colour, Horde and Alliance as icons, who it is targeting (YOU when it is you), a mana, rage or energy bar, a slim health bar, and the item ID on
   Shift. Each switch works by itself.
