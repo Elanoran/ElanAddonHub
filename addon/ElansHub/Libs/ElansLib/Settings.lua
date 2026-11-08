@@ -41,6 +41,8 @@
 --     stronger the fuller the page. The texture is square (a 5:4 picture squashed; TexCoord crops it back).
 --   S:ArtItem() -> a "Background art" check item (S:DB().pageArt, on by default) for the addon's page
 --   S:UpdateArt()                               shows / hides the art on every built page (after the check changes)
+--   ElansLib:Get("Settings").ArtLayer(parent, UI, path) (MINOR 5): the same art layer for a page of your own (the dock's
+--     search page uses it with Elan's Hub's picture)
 --   S.built[pageId] -> { page, ... }            every built copy of a page (MINOR 3; the dock's search jumps into one)
 --
 -- Items (positional fields after the kind, the rest by name; every item takes tip, indent, enabled, when, get, set):
@@ -65,7 +67,7 @@
 local Lib = _G.ElansLib
 local prev = Lib:Get("Settings")
 local carried = prev and prev.instances
-local M = Lib:NewModule("Settings", 4)
+local M = Lib:NewModule("Settings", 5)
 if not M then return end
 
 M.instances = carried or {} -- every addon's S (a newer copy takes them over)
@@ -316,6 +318,76 @@ end
 -------------------------------------------------------------------------------
 local function call(fn, ...) if fn then return fn(...) end end
 
+-- The art layer of a page (also the dock's search page): `path` (a square texture of a 5:4 picture) on `parent`'s
+-- BACKGROUND, out to the window edge at the lower right (the 16 / 14 px content inset of Window and Dock), cropped like
+-- "cover" by TexCoord, at 0.8; over it four gradients (two stops each) in the page colour fade the text side (left, top).
+-- SetStrength(contentH, viewH): 0.5 for a page that fills half its view or less, up to 1 for a full one.
+-- Returns { art, fades, sizer, Place(), SetStrength(contentH, viewH), Strength(), SetShown(on), onSize = fn }.
+-- An empty frame of our own over the parent tells it when the parent changes size (no hooks on the parent).
+function M.ArtLayer(parent, UI, path)
+  local BLEED_X, BLEED_Y = 16, 14
+  local ASPECT = 1.25
+  local bg = UI.C.bg
+  local L = { fades = {} }
+  local art = parent:CreateTexture(nil, "BACKGROUND", nil, -6)
+  art:SetTexture(path)
+  art:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+  art:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", BLEED_X, -BLEED_Y)
+  art:SetAlpha(0.8)
+  L.art = art
+  -- { from, to (fractions of the width / height), alpha at from, alpha at to, horizontal }
+  local FADE = { { 0, 0.45, 0.92, 0.75, true }, { 0.45, 0.92, 0.75, 0, true },
+                 { 0, 0.40, 0.85, 0.45, false }, { 0.40, 0.75, 0.45, 0, false } }
+  for i = 1, #FADE do
+    local t = parent:CreateTexture(nil, "BACKGROUND", nil, -5)
+    t:SetTexture(UI.WHITE)
+    L.fades[i] = t
+  end
+  local strength = 1
+  function L.Place()
+    local w, h = parent:GetWidth(), parent:GetHeight()
+    if not w or not h or w <= 0 or h <= 0 then return end
+    w, h = w + BLEED_X, h + BLEED_Y
+    -- cover, anchored at the lower right: crop the top (wide area) or the left (tall area)
+    local r = w / h
+    if r > ASPECT then art:SetTexCoord(0, 1, 1 - ASPECT / r, 1) else art:SetTexCoord(1 - r / ASPECT, 1, 0, 1) end
+    for i, f in ipairs(FADE) do
+      local t = L.fades[i]
+      local a1, a2 = f[3] * strength, f[4] * strength
+      t:ClearAllPoints()
+      if f[5] then
+        t:SetPoint("TOPLEFT", parent, "TOPLEFT", w * f[1], 0)
+        t:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", w * f[1], -BLEED_Y)
+        t:SetWidth(w * (f[2] - f[1]))
+        UI.Gradient(t, "HORIZONTAL", { bg[1], bg[2], bg[3], a1 }, { bg[1], bg[2], bg[3], a2 })
+      else
+        t:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -h * f[1])
+        t:SetPoint("TOPRIGHT", parent, "TOPRIGHT", BLEED_X, -h * f[1])
+        t:SetHeight(h * (f[2] - f[1]))
+        -- VERTICAL gradients run bottom (c1) to top (c2)
+        UI.Gradient(t, "VERTICAL", { bg[1], bg[2], bg[3], a2 }, { bg[1], bg[2], bg[3], a1 })
+      end
+    end
+  end
+  function L.SetStrength(contentH, viewH)
+    local s2 = 1
+    if viewH and viewH > 0 and contentH then s2 = math.max(0.5, math.min(1, contentH / viewH)) end
+    if s2 ~= strength then strength = s2 L.Place() end
+  end
+  function L.Strength() return strength end
+  function L.SetShown(on)
+    on = on and true or false
+    art:SetShown(on)
+    for _, t in ipairs(L.fades) do t:SetShown(on) end
+    if on then L.Place() end
+  end
+  local sizer = CreateFrame("Frame", nil, parent)
+  sizer:SetAllPoints(parent)
+  sizer:SetScript("OnSizeChanged", function() L.Place() if L.onSize then L.onSize() end end)
+  L.sizer = sizer
+  return L
+end
+
 function S:Build(parent, id)
   local def = self.pages[id]
   assert(def, "ElansLib.Settings: no page " .. tostring(id))
@@ -335,79 +407,16 @@ function S:Build(parent, id)
   local c = sf.child
   page.frame, page.child = sf, c
 
-  -- page art: the picture (lower right, out to the window edge) and the fade over the text side, all on the parent's
-  -- BACKGROUND so the scroll frame and its widgets draw above it. The fade is four gradients (two stops each) in the
-  -- page colour; its strength follows how full the page is (a short page keeps more of the picture).
+  -- page art (M.ArtLayer): the picture behind the page, the fade over the text side, stronger the fuller the page
   local artPath = def.art or self.art
   if artPath then
-    local BLEED_X, BLEED_Y = 16, 14   -- the content inset of Window and Dock: reach the window edge
-    local ASPECT = 1.25               -- the picture's real shape (5:4)
-    local bg = C.bg
-    local art = parent:CreateTexture(nil, "BACKGROUND", nil, -6)
-    art:SetTexture(artPath)
-    art:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-    art:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", BLEED_X, -BLEED_Y)
-    art:SetAlpha(0.8)
-    local fades = {}
-    -- { from, to (fractions of the width / height), alpha at from, alpha at to, horizontal }
-    local FADE = { { 0, 0.45, 0.92, 0.75, true }, { 0.45, 0.92, 0.75, 0, true },
-                   { 0, 0.40, 0.85, 0.45, false }, { 0.40, 0.75, 0.45, 0, false } }
-    for i = 1, #FADE do
-      local t = parent:CreateTexture(nil, "BACKGROUND", nil, -5)
-      t:SetTexture(UI.WHITE)
-      fades[i] = t
-    end
-    page.art, page.artFades = art, fades
-
-    local strength = 1
-    local function place()
-      local w, h = parent:GetWidth(), parent:GetHeight()
-      if not w or not h or w <= 0 or h <= 0 then return end
-      w, h = w + BLEED_X, h + BLEED_Y
-      -- cover, anchored at the lower right: crop the top (wide area) or the left (tall area)
-      local r = w / h
-      if r > ASPECT then art:SetTexCoord(0, 1, 1 - ASPECT / r, 1) else art:SetTexCoord(1 - r / ASPECT, 1, 0, 1) end
-      for i, f in ipairs(FADE) do
-        local t = fades[i]
-        local a1, a2 = f[3] * strength, f[4] * strength
-        t:ClearAllPoints()
-        if f[5] then
-          t:SetPoint("TOPLEFT", parent, "TOPLEFT", w * f[1], 0)
-          t:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", w * f[1], -BLEED_Y)
-          t:SetWidth(w * (f[2] - f[1]))
-          UI.Gradient(t, "HORIZONTAL", { bg[1], bg[2], bg[3], a1 }, { bg[1], bg[2], bg[3], a2 })
-        else
-          t:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -h * f[1])
-          t:SetPoint("TOPRIGHT", parent, "TOPRIGHT", BLEED_X, -h * f[1])
-          t:SetHeight(h * (f[2] - f[1]))
-          -- VERTICAL gradients run bottom (c1) to top (c2)
-          UI.Gradient(t, "VERTICAL", { bg[1], bg[2], bg[3], a2 }, { bg[1], bg[2], bg[3], a1 })
-        end
-      end
-    end
-    page.PlaceArt = place
-
-    -- fullness = page height / visible height: 0.5 for a page that fills half or less, 1 for a full one
-    function page:SetArtStrength(contentH)
-      local vh = sf:GetHeight()
-      local s2 = 1
-      if vh and vh > 0 and contentH then s2 = math.max(0.5, math.min(1, contentH / vh)) end
-      if s2 ~= strength then strength = s2 place() end
-    end
-    function page:ArtStrength() return strength end
-
-    function page:UpdateArt()
-      local on = s:ArtOn()
-      art:SetShown(on)
-      for _, t in ipairs(fades) do t:SetShown(on) end
-      if on then place() end
-    end
-
-    -- an empty frame of our own over the parent tells us when it changes size (no hooks on the parent)
-    local sizer = CreateFrame("Frame", nil, parent)
-    sizer:SetAllPoints(parent)
-    sizer:SetScript("OnSizeChanged", function() place() page:SetArtStrength(c:GetHeight()) end)
-    page.artSizer = sizer
+    local layer = M.ArtLayer(parent, UI, artPath)
+    page.artLayer, page.art, page.artFades, page.artSizer = layer, layer.art, layer.fades, layer.sizer
+    page.PlaceArt = layer.Place
+    function page:SetArtStrength(contentH) layer.SetStrength(contentH, sf:GetHeight()) end
+    function page:ArtStrength() return layer.Strength() end
+    function page:UpdateArt() layer.SetShown(s:ArtOn()) end
+    layer.onSize = function() page:SetArtStrength(c:GetHeight()) end
   end
 
   local function pdb()

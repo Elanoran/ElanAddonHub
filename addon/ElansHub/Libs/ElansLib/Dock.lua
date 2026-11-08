@@ -47,7 +47,7 @@
 local Lib = _G.ElansLib
 local prev = Lib:Get("Dock")
 local carried, carriedEvents = prev and prev.entries, prev and prev.events
-local M = Lib:NewModule("Dock", 2)
+local M = Lib:NewModule("Dock", 3)
 if not M then return end
 
 M.entries = carried or {}
@@ -402,11 +402,31 @@ local function savePos()
   touch(function(r) r.pos = { p, rp, x, y } end)
 end
 
+-- the search page's picture lives in Elan's Hub; shown while the Hub is loaded and its "Background art" is on
+M.SEARCH_ART = "Interface\\AddOns\\ElansHub\\Media\\page_art_all"
+function M.SearchPanel() return searchPanel end -- (tests)
+
+function M.SearchArtOn()
+  local loaded = (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElansHub")) or (IsAddOnLoaded and IsAddOnLoaded("ElansHub"))
+  if not loaded then return false end
+  local SM = Lib:Get("Settings")
+  for _, S in ipairs(SM and SM.All() or {}) do
+    if S.title == "Elan's Hub" and S.ArtOn then return S:ArtOn() end
+  end
+  return true
+end
+
 local function buildSearch()
   local UI, C = dns.UI, dns.UI.C
   searchPanel = CreateFrame("Frame", nil, content)
   searchPanel:SetAllPoints()
   searchPanel:Hide()
+  -- the page art: Elan's Hub's shared picture (the Hub is the companion every Elan setup has), light fade (a short page)
+  local SM = Lib:Get("Settings")
+  if SM and SM.ArtLayer then
+    searchPanel.art = SM.ArtLayer(searchPanel, UI, M.SEARCH_ART)
+    searchPanel.art.SetStrength(0, 1)
+  end
   local t = UI.Text(searchPanel, 15, C.text)
   t:SetPoint("TOPLEFT", 0, 0)
   t:SetText("Search every addon's settings")
@@ -631,6 +651,7 @@ function M.OpenSearch(text)
   M.page = nil
   M.current, M.currentTab, M.group = nil, "search", "settings"
   searchPanel:Show()
+  if searchPanel.art then searchPanel.art.SetShown(M.SearchArtOn()) end
   if text then searchPanel.box:SetText(text) end
   M.RefreshSearch()
   remember()

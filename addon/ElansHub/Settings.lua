@@ -37,7 +37,8 @@ local TABS = {
 }
 EHUB.SettingsTabs = TABS
 
-local Settings = Lib:Get("Settings").New{ ns = EHUB, db = function() return EHUB.DB() end, title = "Elan's Hub" }
+local Settings = Lib:Get("Settings").New{ ns = EHUB, db = function() return EHUB.DB() end, title = "Elan's Hub",
+  art = "Interface\\AddOns\\ElansHub\\Media\\page_art" }
 EHUB.Settings = Settings
 
 -- ------------------------------------------------------------ General
@@ -55,6 +56,7 @@ Settings:Page{
         get = function() return EHUB.DB().rl ~= false end,
         set = function(v) EHUB.DB().rl = v and true or false end },
       Lib:Get("Dock").SettingItem(),
+      Settings:ArtItem(),
     } },
     { title = "Elan's Outpost", columns = 1, colWidth = 450, sub = "What the Outpost on this PC can see. The addon itself sends nothing anywhere.", items = {
       { "check", "Detect my character live (pixel strip)", "pixel",
