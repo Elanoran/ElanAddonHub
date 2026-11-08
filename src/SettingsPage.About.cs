@@ -296,8 +296,35 @@ namespace ElansAddonHub
             AddVisualChild(card);
             AddLogicalChild(card);
             card.KeyDown += (s, e) => { if (e.Key == Key.Escape) { Dismiss?.Invoke(); e.Handled = true; } };
-            Loaded += (s, e) => Motion.DialogIn(card);
+            Loaded += (s, e) => { Motion.DialogIn(card); linger.Start(); };
+            Unloaded += (s, e) => linger.Stop();
+            // 3.9.5: it goes by itself after a while, so it doesn't sit over the page; never while the mouse or the keyboard is on it.
+            // Hovering a fading note brings it back. Gone = the same as Dismiss (it was remembered when it showed; the tab keeps its dot).
+            linger = new System.Windows.Threading.DispatcherTimer { Interval = Linger };
+            linger.Tick += (s, e) =>
+            {
+                if (card.IsMouseOver || card.IsKeyboardFocusWithin) return;   // ask again next tick
+                linger.Stop();
+                fading = true;
+                var fade = new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(SystemParameters.ClientAreaAnimation ? 700 : 1));
+                fade.Completed += (o, a) => { if (fading) { FadedForTest = true; Dismiss?.Invoke(); } };
+                card.BeginAnimation(OpacityProperty, fade);
+            };
+            card.MouseEnter += (s, e) =>
+            {
+                if (!fading) return;
+                fading = false;
+                card.BeginAnimation(OpacityProperty, null);
+                card.Opacity = 1;
+                linger.Start();
+            };
         }
+
+        // how long the note stays before it fades (the self-test shortens it)
+        public static TimeSpan Linger = TimeSpan.FromSeconds(15);
+        readonly System.Windows.Threading.DispatcherTimer linger;
+        bool fading;
+        public bool FadedForTest { get; private set; }
 
         protected override int VisualChildrenCount => 1;
         protected override Visual GetVisualChild(int index) => card;

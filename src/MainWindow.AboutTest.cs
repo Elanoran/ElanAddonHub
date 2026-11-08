@@ -177,6 +177,23 @@ namespace ElansAddonHub
                 notes.Add("note: See what's new took " + openSync + " ms on the click, " + openClock.ElapsedMilliseconds + " ms until laid out");
                 Check("note: 'See what's new' opens Settings > About > What's new and goes away", await Until(() => SettingsPage.IsVisible && SettingsPage.AboutNewsVisibleForTest) && SettingsPage.NoteForTest == null && !SettingsPage.NewsDotForTest);
 
+                // 3.9.5: left alone it fades out by itself; not while the keyboard is on it
+                WhatsNewNote.Linger = TimeSpan.FromMilliseconds(1200);
+                ShowTab("addons"); await Settle();
+                SettingsPage.ShowWhatsNewNote(); await Settle();
+                var fadeNote = SettingsPage.NoteForTest;
+                Check("note: it stays a moment", fadeNote != null && fadeNote.CardForTest.IsVisible);
+                Check("note: left alone it fades out by itself and is gone", await Until(() => SettingsPage.NoteForTest == null, 6000) && fadeNote?.FadedForTest == true && settings.WhatsNewSeen == App.Version);
+                SettingsPage.ShowWhatsNewNote(); await Settle();
+                var held = SettingsPage.NoteForTest;
+                var btn = held == null ? null : Descendants<Button>(held.CardForTest).FirstOrDefault();
+                btn?.Focus(); System.Windows.Input.Keyboard.Focus(btn);
+                await Task.Delay(3500); await Settle();
+                Check("note: while the keyboard is on it, it stays", held != null && SettingsPage.NoteForTest == held && held.CardForTest.Opacity > 0.9 && !held.FadedForTest,
+                    "focus within: " + held?.CardForTest.IsKeyboardFocusWithin);
+                SettingsPage.CloseWhatsNewNote();
+                WhatsNewNote.Linger = TimeSpan.FromSeconds(15);
+
                 // ============================================================================================ the log viewer
                 var logPath = P("about-hub.log");
                 var red = new LogRedactor("Testy", "TESTPC", @"C:\Users\Testy");
@@ -292,6 +309,7 @@ namespace ElansAddonHub
             {
                 try { viewer?.Close(); } catch { }
                 SettingsPage.CloseWhatsNewNote();
+                WhatsNewNote.Linger = TimeSpan.FromSeconds(15);
                 manifest = savedMan; settings.WhatsNewSeen = savedSeen;
                 Width = savedW; Height = savedH; WindowState = savedState;
                 SettingsPage.ShowAboutTab("about");

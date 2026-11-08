@@ -4,6 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
 ## 3.9.5
+- **The "What's new" note goes by itself.** After an update it now fades out after about 15 seconds, so it doesn't stay over the page. It waits while your mouse or keyboard is on it, and hovering it while it fades brings it back. The full notes stay under Settings > About > What's new.
 - **The gold paw is surer.** An Outpost newer than the newest stable release now always shows as a preview build, also when GitHub's release list couldn't be read or the build was installed by hand.
 
 ## 3.9.4
