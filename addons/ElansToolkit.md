@@ -17,7 +17,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   (current / max; when the game hides them in a fight, its own number or nothing). Under the level and range: your target's cast
   bar, and whether your interrupt is ready (Kick, Pummel, Counterspell, Earth Shock, Hammer of Justice, War Stomp and more),
   green with a pulsing edge when it is, else its cooldown, "too far" or "Can't interrupt". Above the label: your
-  target's debuffs as icons (all, or only yours), with the time left, stacks and a border by debuff type.
+  target's debuffs as icons (all, or only yours), with the time left and stacks, in combat too.
 - **Tooltip** (`/etk tooltip`, everything off by default): choose where each kind of tooltip goes (world units, world objects, unit
   frames, buttons): the corner, the mouse, next to it or a spot you drag, with offsets. Also a dark background with a border by class, reaction or item quality, the name in that colour, Horde and Alliance as icons, who it is targeting (YOU when it is you), a mana, rage or energy bar, a slim health bar, and the item ID on
   Shift. Each switch works by itself.
