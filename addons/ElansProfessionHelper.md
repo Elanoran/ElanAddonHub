@@ -1,6 +1,6 @@
 # Elan's Profession Helper
 
-**Your professions in one addon** for every class on WoW Forever: fishing on one key, your skills and the nearest
+**Your professions in one addon** for every class on WoW Forever: fishing on one key, a cooking guide, your skills and the nearest
 trainers with pins on the map, and the profession guides you follow from Elan's Outpost.
 
 [![Download ElansProfessionHelper.zip](https://img.shields.io/badge/Download-ElansProfessionHelper.zip-2da44e?style=flat-square&logo=github)](https://github.com/Elanoran/ElanAddonHub/releases/latest/download/ElansProfessionHelper.zip)
@@ -33,6 +33,19 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   where to fish for your skill, your next rank (a trainer up to 150, the Expert book in Booty Bay, Nat Pagle), which
   fish to catch for your class's food (Attack Power or Spell Damage) and what to cook, with waypoints. The fishing card
   shows the next step. Zone skill values are approximate. Fishing supplier pins on the world map (`/angler pins`).
+
+### Cooking
+
+- **Cook with a purpose.** On the Cooking tab, pick *Level my Cooking*, *Buff food for my class* or *Money*, and it says what
+  to do next from your Cooking skill, level, class and side.
+- **Levelling:** the three best recipes for you right now, in the colour the game gives them at your skill, about how many
+  crafts they stay worth it, what they need, and where the meat drops at your level. A waypoint to the recipe vendor, and your
+  next rank: Journeyman at a trainer, the Expert Cookbook at 125, the Artisan quest at 225.
+- **Buff food:** the strongest food you can cook and eat for your class. On Forever most food gives one stat (Strength,
+  Agility, Stamina, Intellect; the new teas Healing Power) plus 5% XP from kills.
+- **Forever's own numbers:** skill-up ranges, reagents and buffs come from the Forever client, with the Forever-new recipes
+  and the ones that need an Iron Oven next to the fire.
+- **Recipes around your skill** in their colours, and **recipe seller pins** on the world map for your side.
 
 ### Skills and trainers
 
