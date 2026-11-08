@@ -14,7 +14,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Center bars** (off by default, `/etk bars`): curved health and power bars around your character, you on the left and your
   target on the right, with a label beside the right arc: level badge, name and range. In combat a thin arc inside the right arc
   shows your threat, and the label says who holds aggro, like Pet tanking. Under each arc: health and power as numbers
-  (current / max; when the game hides them in a fight, its own number or nothing). Under the right arc: your target's cast
+  (current / max; when the game hides them in a fight, its own number or nothing). Under the level and range: your target's cast
   bar, and whether your interrupt is ready (Kick, Pummel, Counterspell, Earth Shock, Hammer of Justice, War Stomp and more),
   green with a pulsing edge when it is, else its cooldown, "too far" or "Can't interrupt".
 - **Tooltip** (`/etk tooltip`, everything off by default): choose where each kind of tooltip goes (world units, world objects, unit
