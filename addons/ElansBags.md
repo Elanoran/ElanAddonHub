@@ -11,6 +11,9 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 
 - **One window** for all your bags: B and the bag buttons open it. Search by name, type or quality (every word must
   match; "junk" finds grey items). The title counts new items, and the footer shows free slots and your money.
+  Hover the money for every character's gold and the total.
+- **Your other characters**: the **Alts** button (or a click on the money) shows any character's bags and bank as they
+  were last saved, with a search.
 - **Categories view**: New, Equipment, Consumables, Pet food (with Elan's Hunter Helper: what your pet eats), Trade goods,
   Quest, Ammo and quiver, Junk and Other. Click a heading to fold it.
 - **Special bags** (quiver, ammo pouch, soul pouch, profession bags, key ring, reagent bag) get their own block and
@@ -38,6 +41,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 | `/ebags sort` | let the game sort your bags |
 | `/ebags sell` | sell junk (at a merchant) · `/ebags junk`: the marked items · `/ebags junk auto`: auto-sell on/off |
 | `/ebags chars` | the characters it knows · `/ebags forget <name>`: hide one |
+| `/ebags alt <name>` | see that character's bags and bank |
 | `/ebags bank on\|off` | use the Bags bank window or the game's |
 | `/ebags mail on\|off` | show or hide the list next to the mailbox |
 | `/ebags minimap` | show or hide the minimap button |
