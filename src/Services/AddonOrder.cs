@@ -19,6 +19,34 @@ namespace ElansAddonHub.Services
     {
         public static readonly string[] Known = { "ElansHub", "ElansToolkit", "ElansHunterHelper", "ElansPaladinHelper", "ElansPriestHelper", "ElansBags", "ElansProfessionHelper" };
 
+        // 3.9.4: their names, for a card of one that is installed but missing from the release information in use (an older one, e.g. stable
+        // after the test release couldn't be read): it stays among our own cards instead of dropping into "Other addons"
+        public static readonly Dictionary<string, string> KnownNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ElansHub"] = "Elan's Hub", ["ElansToolkit"] = "Elan's Toolkit", ["ElansHunterHelper"] = "Elan's Hunter Helper",
+            ["ElansPaladinHelper"] = "Elan's Paladin Helper", ["ElansPriestHelper"] = "Elan's Priest Helper", ["ElansBags"] = "Elan's Bags",
+            ["ElansProfessionHelper"] = "Elan's Profession Helper",
+        };
+
+        // the manifest's addons plus, for each known addon it doesn't list but that is installed, a stand-in at the installed version (nothing to
+        // download: it shows Up to date until a release information that lists it comes back). installedVersion: id -> version or null.
+        public static List<AddonInfo> WithInstalledOwn(IList<AddonInfo> listed, Func<AddonInfo, string> installedVersion)
+        {
+            var o = (listed ?? new List<AddonInfo>()).Where(a => a != null).ToList();
+            var proto = o.FirstOrDefault(a => !string.IsNullOrEmpty(a.Flavor));
+            if (proto == null || installedVersion == null) return o;
+            foreach (var id in Known)
+            {
+                if (o.Any(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase))) continue;
+                var stub = new AddonInfo { Id = id, Name = KnownNames.TryGetValue(id, out var n) ? n : id, Flavor = proto.Flavor, FlavorName = proto.FlavorName, Folders = new List<string> { id } };
+                var v = installedVersion(stub);
+                if (string.IsNullOrEmpty(v)) continue;
+                stub.Version = v;
+                o.Add(stub);
+            }
+            return o;
+        }
+
         // from the addons' TOC files: ElansHunterHelper has "## Dependencies: ElansToolkit"; the others only have OptionalDeps
         public static readonly Dictionary<string, string[]> FallbackNeeds = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {

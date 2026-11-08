@@ -49,7 +49,7 @@ namespace ElansAddonHub
 
         IEnumerable<string> OwnFolders() =>
             (manifest?.Addons?.SelectMany(a => a.Folders ?? new List<string>()) ?? Enumerable.Empty<string>())
-            .Concat(new[] { "ElansHunterHelper", "ElansHub" }).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            .Concat(AddonOrder.Known).Distinct(StringComparer.OrdinalIgnoreCase).ToList();   // 3.9.4: all of ours, even when this manifest lacks one
 
         // scan Interface\AddOns and update the cards (cheap: local files only)
         async Task RefreshOthers()

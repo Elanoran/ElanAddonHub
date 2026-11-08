@@ -607,6 +607,15 @@ she speaks, so nothing at her spot covers anything.
   manifest that is older (logged), so a replayed old release - on GitHub or a home - cannot roll addons back. Stable
   manifests are compared with the newest stable one seen, a pre-release with everything seen, so switching from the test
   channel back to stable still works. A refused manifest from GitHub counts as a GitHub failure (the homes are asked).
+- **Test folder** (3.9.4): every home has `<home>test/` for the test channel, same layout and checks; downloads right inside
+  it are trusted like the home's own. An Outpost on Test whose pre-release can't be read from GitHub (or whose whole GitHub
+  check fails) asks the homes' test folder first, read as a pre-release (never older than anything seen), and only then
+  GitHub's stable release and the homes' stable folder. A failure in the test folder starts no rest. `release.py --publish
+  --test` sends the release there by default (`--no-mirror` skips it); `--promote` sends the promoted release to both
+  folders, so the test folder is never older than stable.
+- **Own addons the manifest lacks** (3.9.4): an Elan's addon (`AddonOrder.Known`) that is installed but missing from the
+  manifest in use gets a stand-in card at its installed version with no download address (the installer refuses it), and
+  it never appears under Other addons.
 
 ### Game data start, progress and updates
 

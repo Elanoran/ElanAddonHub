@@ -78,8 +78,12 @@ namespace ElansAddonHub.Services
 
         public static ChannelChoice Stable(Settings s) => new ChannelChoice { Url = s.ManifestUrl };
 
+        // self-test only (the "update" section): what Resolve answers, so the test channel can be played against the fake update server
+        public static Func<ChannelChoice> SelfTestChoice;
+
         public static async Task<ChannelChoice> Resolve(Settings s)
         {
+            if (ReleaseSignature.SelfTestRun && SelfTestChoice != null) return SelfTestChoice();
             // a custom manifest URL (testing) always wins
             if (!IsTest(s) || s.ManifestUrl != SettingsStore.DefaultManifestUrl) return Stable(s);
             try

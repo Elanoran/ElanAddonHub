@@ -17,8 +17,11 @@ namespace ElansAddonHub.Services
     // https only, install paths unchanged. And for both sources: never older - a manifest whose Outpost version is older than the newest one this
     // Outpost already accepted is refused (stable is compared with stable, a pre-release with everything seen, so the test channel still works).
     // Only for the normal update source (settings.manifestUrl = the GitHub default); a custom manifest address (a developer, the self-test) is left alone.
+    // 3.9.4: the test channel has its own folder in every home, <home>test/ (the newest test release, or the stable one right after a promote).
+    // An Outpost on Test that can't read its pre-release from GitHub asks <home>test/ first, and only then falls back to stable.
     public static class UpdateHomes
     {
+        public const string TestFolder = "test/";
         // the built-in home: nothing is served there until the day it is needed (until then the address may not even resolve)
         public const string BuiltIn = "https://updates.nasferatu.dk/outpost/";
         public const int MaxHomes = 4;
@@ -78,7 +81,8 @@ namespace ElansAddonHub.Services
             foreach (var a in m?.Addons ?? Enumerable.Empty<AddonInfo>()) if (!string.IsNullOrEmpty(a.Url)) a.Url = On(a.Url);
         }
 
-        // an address right inside one of the trusted homes (same scheme, host and port; nothing but a plain file name after the home's path)
+        // an address right inside one of the trusted homes or its test folder (same scheme, host and port; nothing but a plain file name after
+        // the home's path, or after <home>test/)
         public static bool Covers(Uri u)
         {
             if (u == null) return false;
@@ -88,6 +92,7 @@ namespace ElansAddonHub.Services
                 if (u.Scheme != hu.Scheme || !string.Equals(u.Host, hu.Host, StringComparison.OrdinalIgnoreCase) || u.Port != hu.Port) continue;
                 if (!u.AbsolutePath.StartsWith(hu.AbsolutePath, StringComparison.Ordinal)) continue;
                 var rest = u.AbsolutePath.Substring(hu.AbsolutePath.Length);
+                if (rest.StartsWith(TestFolder, StringComparison.Ordinal)) rest = rest.Substring(TestFolder.Length);
                 if (rest.Length > 0 && !rest.Contains('/') && FileName(u.GetLeftPart(UriPartial.Path)) != null) return true;
             }
             return false;
@@ -141,8 +146,9 @@ namespace ElansAddonHub.Services
         static void LogOnce(string key, string msg) { lock (logged) if (!logged.Add(key)) return; Util.Log(msg); }
 
         // after GitHub failed (why): the first home whose signed manifest reads (read = the same signed check GitHub's goes through), its downloads
-        // pointed at that home; null when there is none or all failed (then they rest)
-        public static async Task<Manifest> TryHomes(Settings s, Exception why, Func<string, Task<Manifest>> read)
+        // pointed at that home; null when there is none or all failed (then they rest). test: the homes' test folder - a failure there starts no
+        // rest, because the stable folder is asked right after.
+        public static async Task<Manifest> TryHomes(Settings s, Exception why, Func<string, Task<Manifest>> read, bool test = false)
         {
             if (!Applies(s)) return null;
             if (Resting(s)) { LogOnce("rest", "update homes: GitHub failed (" + why?.Message + "); the homes rest until " + DateTimeOffset.FromUnixTimeSeconds(s.HomesRestUntil).ToLocalTime().ToString("yyyy-MM-dd HH:mm")); return null; }
@@ -151,15 +157,21 @@ namespace ElansAddonHub.Services
             var fails = new List<string>();
             foreach (var home in homes)
             {
+                var at = test ? home + TestFolder : home;
                 try
                 {
-                    var m = await read(home + "manifest.json");
-                    Rewrite(m, home);
+                    var m = await read(at + "manifest.json");
+                    Rewrite(m, at);
                     if (s.HomesRestUntil != 0) { s.HomesRestUntil = 0; SettingsStore.Save(s); }
-                    LogOnce("ok " + home, "update information from " + home + " (GitHub failed: " + why?.Message + ")");
+                    LogOnce("ok " + at, "update information from " + at + " (GitHub failed: " + why?.Message + ")");
                     return m;
                 }
-                catch (Exception e) { fails.Add(home + ": " + e.Message); }
+                catch (Exception e) { fails.Add(at + ": " + e.Message); }
+            }
+            if (test)
+            {
+                LogOnce("fail test", "update homes: no test release there either (" + string.Join("; ", fails) + ")");
+                return null;
             }
             s.HomesRestUntil = new DateTimeOffset(Now()).Add(Rest).ToUnixTimeSeconds();
             SettingsStore.Save(s);
@@ -201,7 +213,8 @@ namespace ElansAddonHub.Services
                 Ck("a name that is not a plain file name gets no address", m.Addons[1].Url == null && FileName("https://x/a/") == null && FileName("https://x/.hidden") == null);
                 Use(gh);
                 Ck("downloads are trusted right inside the home only",
-                    Covers(BuiltIn + "ElansBags-1.2.0.zip") && !Covers(BuiltIn + "sub/ElansBags.zip") && !Covers("https://updates.nasferatu.dk/other/x.zip")
+                    Covers(BuiltIn + "ElansBags-1.2.0.zip") && Covers(BuiltIn + "test/ElansBags-1.2.0.zip") && !Covers(BuiltIn + "sub/ElansBags.zip")
+                    && !Covers(BuiltIn + "test/sub/x.zip") && !Covers(BuiltIn + "test/") && !Covers(BuiltIn + "test/test/x.zip") && !Covers("https://updates.nasferatu.dk/other/x.zip")
                     && !Covers("http://updates.nasferatu.dk/outpost/x.zip") && !Covers("https://updates.nasferatu.dk:8443/outpost/x.zip") && !Covers(BuiltIn));
                 var wasDev = Net.AllowDevSources; Net.AllowDevSources = false;
                 try

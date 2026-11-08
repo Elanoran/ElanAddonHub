@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.9.4
+- **Test builds keep working when GitHub has trouble.** If your Outpost is on Test and can't get the test release from GitHub, it now gets the test release from the second update source instead of quietly falling back to the older stable release.
+- **Your Elan's addons stay with your Elan's addons.** If the update information in use is older and doesn't list one you have installed yet, it still shows as one of your own cards (marked up to date) instead of turning up under Other addons.
+- The log now says why a test release couldn't be read.
+
 ## 3.9.3
 - **Elan's Profession Helper** is on the Addons page: one optional addon for your professions in game, for every class. Fishing on one key (cast and hook, your pole and lure on one press, a louder splash, auto loot, your catches counted), your skills and the nearest trainers with map pins, and the profession guides you follow from here. It takes over the profession parts of Elan's Toolkit, with your settings.
 - **Follow in game** on the Professions page now shows the guide through Elan's Profession Helper, and the page says so. Your Lodge sees its version like the other addons, and the Health window reads its error log (`/eprof diag`).

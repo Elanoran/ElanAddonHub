@@ -902,25 +902,44 @@ namespace ElansAddonHub
             {
                 UpdateHomes.Use(settings);
                 var ch = await UpdateChannel.Resolve(settings);
-                Manifest m;
+                Manifest m = null;
+                bool triedTestHomes = false;
+                // 3.9.4: on Test, the homes' test folder before stable (null = none of them has a test release this Outpost takes)
+                async Task<Manifest> TestFromHomes(Exception why)
+                {
+                    triedTestHomes = true;
+                    if (!UpdateChannel.IsTest(settings) || !UpdateHomes.Applies(settings)) return null;
+                    var t = await UpdateHomes.TryHomes(settings, why, u => SignedManifest(u, true), test: true);
+                    if (t != null) ch = new ChannelChoice { Url = ch.Url, Pre = true };
+                    return t;
+                }
                 try
                 {
                     try { m = await SignedManifest(ch.Url, ch.Pre); }
-                    catch (Exception) when (ch.Pre)
+                    catch (Exception e) when (ch.Pre)
                     {
-                        // the pre-release's manifest can't be read: stay on stable rather than failing the check
-                        Util.Log("test manifest failed, using stable");
-                        ch = UpdateChannel.Stable(settings);
-                        m = await SignedManifest(ch.Url, false);
+                        // the pre-release's manifest can't be read on GitHub: the update homes' test release, else stable rather than failing the check
+                        Util.Log("test manifest failed (" + e.Message + ")");
+                        m = await TestFromHomes(e);
+                        if (m == null)
+                        {
+                            Util.Log("no test release reachable, using stable");
+                            ch = UpdateChannel.Stable(settings);
+                            m = await SignedManifest(ch.Url, false);
+                        }
                     }
                 }
                 catch (Exception e) when (UpdateHomes.Applies(settings))
                 {
                     // 3.8.1: GitHub failed - the update homes, one after the other, with the same signed check (and their own rest after a failure).
-                    // None worked: the check fails exactly as before, with GitHub's error.
-                    m = await UpdateHomes.TryHomes(settings, e, u => SignedManifest(u, false));
-                    if (m == null) throw;
-                    ch = UpdateChannel.Stable(settings);
+                    // None worked: the check fails exactly as before, with GitHub's error. 3.9.4: on Test their test folder first.
+                    if (!triedTestHomes) m = await TestFromHomes(e);
+                    if (m == null)
+                    {
+                        m = await UpdateHomes.TryHomes(settings, e, u => SignedManifest(u, false));
+                        if (m == null) throw;
+                        ch = UpdateChannel.Stable(settings);
+                    }
                 }
                 manifest = m;
                 manifestPre = ch.Pre;
@@ -1012,6 +1031,7 @@ namespace ElansAddonHub
             void Ck(string what, bool ok, string info = null) => sb.AppendLine($"homes check {what}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
             var savedUrl = settings.ManifestUrl;
             var saved = (settings.UpdateHomes, settings.HomesRestUntil, settings.SeenHub, settings.SeenHubAny);
+            var savedChannel = settings.Channel; var savedTestBuild = settings.TestBuild;
             void Clear() { settings.UpdateHomes = null; settings.HomesRestUntil = 0; settings.SeenHub = null; settings.SeenHubAny = null; }
             FakeUpdateServer.Home home = null, home2 = null;
             try
@@ -1115,13 +1135,33 @@ namespace ElansAddonHub
                 FakeUpdateServer.Sign = FakeUpdateServer.Signing.Signed; FakeUpdateServer.Homes = null;
                 await CheckNow();
                 Ck("a signed manifest without homes = the built-in one again", lastError == null && settings.UpdateHomes == null, lastError);
+
+                // 3.9.4: the test channel. GitHub's pre-release can't be read -> the home's test folder; none there -> the home's stable release
+                settings.Channel = "test";
+                UpdateChannel.SelfTestChoice = () => new ChannelChoice { Url = FakeUpdateServer.ManifestUrl, Pre = true };
+                foreach (var kv in FakeUpdateServer.Release(Gh, App.Version)) home.Files[UpdateHomes.TestFolder + kv.Key] = kv.Value;
+                FakeUpdateServer.FailStatus = 503; settings.HomesRestUntil = 0;
+                await CheckNow();
+                Ck("Test, GitHub 503: the home's test release is used", lastError == null && manifestPre && manifest.Addons.All(a => a.Url == home.Url + "test/" + a.Id + "-1.0.0.zip"),
+                    lastError ?? manifest?.Addons?.FirstOrDefault()?.Url);
+                var wasDev2 = Net.AllowDevSources; Net.AllowDevSources = false;
+                try { Ck("a download from the home's test folder passes the update rule", Net.UpdateUrlProblem(manifest.Addons[0].Url) == null, manifest.Addons[0].Url); }
+                finally { Net.AllowDevSources = wasDev2; }
+                foreach (var k in home.Files.Keys.Where(k => k.StartsWith(UpdateHomes.TestFolder)).ToList()) home.Files.Remove(k);
+                await CheckNow();
+                Ck("Test, no test release at the home: its stable release, and no rest", lastError == null && !manifestPre && settings.HomesRestUntil == 0
+                    && manifest.Addons.All(a => a.Url == home.Url + a.Id + "-1.0.0.zip"), lastError ?? manifest?.Addons?.FirstOrDefault()?.Url);
+                FakeUpdateServer.FailStatus = 0;
+                await CheckNow();
+                Ck("Test, GitHub back: its pre-release again, the home not asked", lastError == null && manifestPre && manifest.Addons.All(a => a.Url.StartsWith(FakeUpdateServer.ManifestUrl.Replace("manifest.json", ""))), lastError);
             }
             catch (Exception e) { Ck("run", false, e.Message); }
             finally
             {
                 FakeUpdateServer.FailStatus = 0; FakeUpdateServer.Homes = null; FakeUpdateServer.Sign = FakeUpdateServer.Signing.Signed; FakeUpdateServer.HubVersion = null;
                 FakeUpdateServer.Start();
-                UpdateHomes.SelfTestPrimary = null; UpdateHomes.SelfTestBuiltIn = null;
+                UpdateHomes.SelfTestPrimary = null; UpdateHomes.SelfTestBuiltIn = null; UpdateChannel.SelfTestChoice = null;
+                settings.Channel = savedChannel; settings.TestBuild = savedTestBuild;
                 home?.Dispose(); home2?.Dispose();
                 settings.ManifestUrl = savedUrl;
                 (settings.UpdateHomes, settings.HomesRestUntil, settings.SeenHub, settings.SeenHubAny) = saved;
@@ -1160,16 +1200,19 @@ namespace ElansAddonHub
         void RebuildCards()
         {
             AddonCard.ClassHint = Session?.Presence?.LastClassFile ?? AddonCard.ClassHint;
-            foreach (var a in manifest.Addons ?? Enumerable.Empty<AddonInfo>())
+            // 3.9.4: plus our own addons that are installed but not in this release information (stand-ins, nothing to download)
+            var root = settings.WowRoot;
+            var list = AddonOrder.WithInstalledOwn(manifest.Addons, a => root == null || !WowLocator.HasFlavor(root, a.Flavor) ? null : Installer.InstalledVersion(root, a));
+            foreach (var a in list)
             {
                 var card = cards.FirstOrDefault(c => c.Info.Id == a.Id);
                 if (card == null) { card = new AddonCard(a) { Catalog = ManifestEntry }; cards.Add(card); }
                 if (!card.Busy) card.Update(a, settings.WowRoot);
             }
-            foreach (var gone in cards.Where(c => manifest.Addons == null || manifest.Addons.All(a => a.Id != c.Info.Id)).ToList())
+            foreach (var gone in cards.Where(c => list.All(a => a.Id != c.Info.Id)).ToList())
                 cards.Remove(gone);
             // 3.8.2: a fixed, explained order (AddonOrder: required, needed by another, class helpers, the rest), not the manifest's
-            var order = AddonOrder.Sort(manifest.Addons).Select(a => a.Id).ToList();
+            var order = AddonOrder.Sort(list).Select(a => a.Id).ToList();
             for (int i = 0; i < order.Count; i++)
             {
                 var at = cards.ToList().FindIndex(c => c.Info.Id == order[i]);

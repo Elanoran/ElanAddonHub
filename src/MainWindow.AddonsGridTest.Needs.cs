@@ -75,6 +75,25 @@ namespace ElansAddonHub
             Check("bulk install: the needs come first, each once", string.Join(",", AddonOrder.WithNeedsFirst(new[] { "ElansHunterHelper", "ElansBags", "ElansToolkit" }, six)) == "ElansToolkit,ElansHunterHelper,ElansBags",
                 string.Join(",", AddonOrder.WithNeedsFirst(new[] { "ElansHunterHelper", "ElansBags", "ElansToolkit" }, six)));
 
+            // ---- 3.9.4: our own addon installed but missing from the release information (an older one in use) -> a stand-in, not "Other addons"
+            var six2 = RealSix(); foreach (var a in six2) a.Flavor = "_classic_beta_";
+            var inst = new Dictionary<string, string> { ["ElansProfessionHelper"] = "0.2.0", ["ElansBags"] = "9.9.9" };
+            var withOwn = AddonOrder.WithInstalledOwn(six2, a => inst.TryGetValue(a.Id, out var v) ? v : null);
+            var stub = withOwn.FirstOrDefault(a => a.Id == "ElansProfessionHelper");
+            Check("stand-in: an installed known addon the manifest lacks gets a card at its installed version, nothing to download",
+                withOwn.Count == 7 && stub != null && stub.Version == "0.2.0" && stub.Name == "Elan's Profession Helper" && stub.Url == null && stub.Flavor == "_classic_beta_"
+                && stub.Folders.SequenceEqual(new[] { "ElansProfessionHelper" }), Ids(withOwn));
+            Check("stand-in: a listed addon keeps the manifest's entry; not installed = no stand-in; no manifest flavor = none",
+                ReferenceEquals(withOwn.First(a => a.Id == "ElansBags"), six2.First(a => a.Id == "ElansBags")) && AddonOrder.WithInstalledOwn(six2, a => null).Count == 6
+                && AddonOrder.WithInstalledOwn(new List<AddonInfo>(), a => "1.0").Count == 0);
+            Check("stand-in: sorted where it belongs", Ids(AddonOrder.Sort(withOwn)) == expected + ",ElansProfessionHelper", Ids(AddonOrder.Sort(withOwn)));
+            Check("stand-in: the installer refuses it before touching anything", await Task.Run(async () =>
+            {
+                try { await Installer.Install(dir, stub, null); return false; }
+                catch (InvalidOperationException e) { return e.Message.StartsWith("Not in the update information"); }
+                catch { return false; }
+            }));
+
             // ---- the page with the real six on a fixture WoW folder
             var savedMan = manifest; var savedRoot = settings.WowRoot; var savedHook = Dialog.TestHook;
             var savedSkip = settings.SkipVersions == null ? null : new Dictionary<string, string>(settings.SkipVersions);

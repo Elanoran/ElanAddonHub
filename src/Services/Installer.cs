@@ -43,6 +43,8 @@ namespace ElansAddonHub.Services
                 Util.Log($"install refused for {PathSafety.Show(a?.Id)}: {unsafeName}");
                 throw new InvalidOperationException($"Install refused: {unsafeName}. Nothing on this PC was changed. The update information looks wrong - tell Elan.");
             }
+            // 3.9.4: a stand-in card (our addon, installed, missing from the release information in use) has nothing to download
+            if (string.IsNullOrEmpty(a?.Url)) throw new InvalidOperationException("Not in the update information right now - nothing was changed. Try again after the next check.");
             if (!replaceDevCopy && IsDevCopy(root, a)) throw new InvalidOperationException("This is a development copy (git) - not touching it.");
             var addOns = WowLocator.AddOnsDir(root, a.Flavor);
             if (!WowLocator.HasFlavor(root, a.Flavor))
