@@ -112,7 +112,15 @@ namespace ElansAddonHub.Services
             return before != s.TestBuild;
         }
 
-        public static bool RunningTestBuild(Settings s) => s.TestBuild != null && Util.CompareVersions(App.Version, s.TestBuild) == 0;
+        // this Outpost is a preview build: the pre-release it was seen as, or (3.9.5) newer than the newest stable release ever accepted here -
+        // so it shows as one even when the releases API was refused or it was installed by hand; a promote catches SeenHub up and it is stable again
+        public static bool RunningTestBuild(Settings s, string running = null)
+        {
+            if (s == null) return false;
+            running = running ?? App.Version;
+            return (s.TestBuild != null && Util.CompareVersions(running, s.TestBuild) == 0)
+                || (!string.IsNullOrEmpty(s.SeenHub) && Util.CompareVersions(running, s.SeenHub) > 0);
+        }
 
         // shown under the channel setting when stable is behind what runs here
         public static string StableOlderNote(Settings s, string stableHubVersion, string running) =>
@@ -164,6 +172,11 @@ namespace ElansAddonHub.Services
             Ck("older stable keeps the mark", t.TestBuild == "2.25.0");
             Track(t, "2.25.0", false);
             Ck("promotion clears the mark", t.TestBuild == null);
+            Ck("preview build: seen as the pre-release", RunningTestBuild(new Settings { TestBuild = "3.9.4" }, "3.9.4") && !RunningTestBuild(new Settings { TestBuild = "3.9.3" }, "3.9.2"));
+            Ck("preview build: newer than the newest stable seen, even unseen as a pre-release (API refused, installed by hand)",
+                RunningTestBuild(new Settings { TestBuild = "3.9.3", SeenHub = "3.9.0" }, "3.9.4"));
+            Ck("not a preview build: the newest stable itself, or nothing seen yet",
+                !RunningTestBuild(new Settings { SeenHub = "3.9.4" }, "3.9.4") && !RunningTestBuild(new Settings { SeenHub = "3.9.5" }, "3.9.4") && !RunningTestBuild(new Settings(), "3.9.4") && !RunningTestBuild(null));
             Ck("stable-older note", StableOlderNote(new Settings(), "2.24.0", "2.25.0") != null && StableOlderNote(new Settings(), "2.26.0", "2.25.0") == null);
             return sb.ToString().TrimEnd();
         }
