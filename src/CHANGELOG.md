@@ -4,7 +4,8 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
 ## 3.9.4
-- **Test builds keep working when GitHub has trouble.** If your Outpost is on Test and can't get the test release from GitHub, it now gets the test release from the second update source instead of quietly falling back to the older stable release.
+- **Test is now called Preview.** Same channel, same setting (Settings > General), a clearer name. While you run a preview build the paw logo in the corner turns gold (hover it to see which release), instead of the old "Test build" line, and the version under it sits centred.
+- **Preview builds keep working when GitHub has trouble.** If your Outpost is on Preview and can't get the preview release from GitHub, it now gets it from the second update source instead of quietly falling back to the older stable release.
 - **Your Elan's addons stay with your Elan's addons.** If the update information in use is older and doesn't list one you have installed yet, it still shows as one of your own cards (marked up to date) instead of turning up under Other addons.
 - The log now says why a test release couldn't be read.
 

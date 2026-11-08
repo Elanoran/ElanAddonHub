@@ -260,7 +260,7 @@ namespace ElansAddonHub
         {
             if (aboutScene == null) return;
             var st = host.HubUpdateStatus;
-            aboutScene.SetStatus($"Version {App.Version}{(host.IsTestBuild ? " (test build)" : "")}  ·  {st}", AboutStill ? -10 : aboutClock.Elapsed.TotalSeconds, 1);
+            aboutScene.SetStatus($"Version {App.Version}{(host.IsTestBuild ? " (preview build)" : "")}  ·  {st}", AboutStill ? -10 : aboutClock.Elapsed.TotalSeconds, 1);
             if (AboutStill) aboutScene.Update(3.0);
         }
 
@@ -394,7 +394,7 @@ namespace ElansAddonHub
         }
 
         string ChannelText() => UpdateChannel.IsTest(settings)
-            ? "Test: you get new Outpost and addon builds before they are released to everyone. They can still have rough edges. Switching back to Stable never downgrades anything."
+            ? "Preview: you get new Outpost and addon builds before they are released to everyone. They can still have rough edges. Switching back to Stable never downgrades anything."
             : "Stable: only releases that were tested and promoted." + (host.ChannelNote != null ? "\n" + host.ChannelNote : "");
 
         async void Channel_Changed(object sender, RoutedEventArgs e)

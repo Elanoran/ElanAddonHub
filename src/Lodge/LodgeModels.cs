@@ -280,14 +280,14 @@ namespace ElansAddonHub.Lodge
         public bool IsBehind => behind.Count > 0;
         public Visibility OldVisibility => behind.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         public string OldTip => behind.Count == 0 ? "" : "Not up to date: " + string.Join(", ", behind) + " (can't use the newest features yet)";
-        // "Outpost 3.9.1 · Test channel" (the channel only when their Outpost said it)
+        // "Outpost 3.9.1 · Preview channel" (the channel only when their Outpost said it)
         public string CardVersionLine
         {
             get
             {
                 if (app == null && versionsInfo == null) return "";
                 var s = "Outpost " + (app ?? "?");
-                if (versionsInfo?.Channel == "test") s += " · Test channel";
+                if (versionsInfo?.Channel == "test") s += " · Preview channel";
                 else if (versionsInfo?.Channel == "stable") s += " · Stable";
                 return s;
             }

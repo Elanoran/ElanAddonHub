@@ -172,15 +172,19 @@ namespace ElansAddonHub
             if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brush.Warn"] });
             RailVersion.Inlines.Add("v" + App.Version);
             bool testBuild = IsTestBuild;
-            if (testBuild)
+            // 3.9.4: a preview build shows the gold paw (instead of the old "Test build" line); hovering it says which release
+            bool running = UpdateChannel.RunningTestBuild(settings);
+            var logo = running ? "hub-preview.png" : "hub.png";
+            if (!(RailLogo.Tag is string shown) || shown != logo)
             {
-                RailVersion.Inlines.Add(new System.Windows.Documents.LineBreak());
-                RailVersion.Inlines.Add(new System.Windows.Documents.Run("Test build") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brush.Warn"] });
+                RailLogo.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/" + logo));
+                RailLogo.Tag = logo;
             }
+            RailLogo.ToolTip = Brand.Name + " v" + App.Version + (running ? "\nPreview build (a pre-release: new things first, can have rough edges)" : "")
+                + (manifestPre && hubNew ? $"\nPreview build v{manifest.Hub.Version} is ready" : "") + "\nClick for About";
             RailVersion.Opacity = hubNew || testBuild ? 1 : 0.6;
-            var testTip = UpdateChannel.RunningTestBuild(settings) ? "\nThis is a test build (pre-release)." : manifestPre && hubNew ? "\nThe offered version is a test build (pre-release)." : "";
-            RailVersion.ToolTip = (hubNew ? $"Update available: v{manifest.Hub.Version} - click to update" : "Version " + App.Version) + testTip;
-            UpdateBadgeText.Text = n > 9 ? "9+" : n.ToString();
+            var testTip = UpdateChannel.RunningTestBuild(settings) ? "\nThis is a preview build (pre-release)." : manifestPre && hubNew ? "\nThe offered version is a preview build (pre-release)." : "";
+            RailVersion.ToolTip = (hubNew ? $"Update available: v{manifest.Hub.Version} - click to update" : "Version " + App.Version) + testTip;            UpdateBadgeText.Text = n > 9 ? "9+" : n.ToString();
             TabAddons.ToolTip = n > 0 ? $"Addons  (Ctrl+1)\n{n} update{(n == 1 ? "" : "s")} available" : "Addons  (Ctrl+1)";
             RefreshHealthUi();
         }
@@ -225,8 +229,8 @@ namespace ElansAddonHub
         // ---- for the Settings page
         public string CheckStatus => statusText;
         public string HubUpdateStatus => checking ? "Checking..." : manifest == null ? (lastError ?? "Not checked yet")
-            : SelfUpdater.IsNewer(manifest.Hub) ? "Update available: v" + manifest.Hub.Version + (manifestPre ? " (test build)" : "")
-            : IsTestBuild ? "Test build" : "Up to date";
+            : SelfUpdater.IsNewer(manifest.Hub) ? "Update available: v" + manifest.Hub.Version + (manifestPre ? " (preview build)" : "")
+            : IsTestBuild ? "Preview build" : "Up to date";
         public Task CheckForUpdates() => CheckAll();
         public Manifest ManifestForAbout => manifest;                                          // Settings > About > What's new: newer version, addon notes
         public System.Collections.Generic.IEnumerable<AddonCard> CardsForAbout => cards;       // ... and the installed addon versions

@@ -98,7 +98,7 @@ namespace ElansAddonHub
                 if (bob == null || mia == null || zed == null || tess == null) return "memberversions selftest: FAILED\r\n  " + string.Join("\r\n  ", notes);
                 Ck("the server feature is read", Session.SupportsVersions);
                 Ck("Bob (Stable, everything from Stable): no mark, \"Outpost 3.9.0 · Stable\"", !bob.IsBehind && bob.OldVisibility == Visibility.Collapsed && bob.CardVersionLine == "Outpost 3.9.0 · Stable", bob.CardVersionLine);
-                Ck("Mia (Test): marked, behind on the Hub and the Toolkit, not the Outpost", mia.IsBehind && mia.CardVersionLine == "Outpost 3.9.1 · Test channel"
+                Ck("Mia (Test): marked, behind on the Hub and the Toolkit, not the Outpost", mia.IsBehind && mia.CardVersionLine == "Outpost 3.9.1 · Preview channel"
                     && mia.CardBehindLine.Contains("Elan's Toolkit 0.22.0 → 0.22.1") && mia.CardBehindLine.Contains("Elan's Hub 1.18.4 → 1.19.0") && !mia.CardBehindLine.Contains("Outpost"), mia.CardBehindLine);
                 Ck("Mia's tooltip and the mark's tip say it too", mia.Tip.Contains("Behind: ") && mia.OldTip.StartsWith("Not up to date: "), mia.OldTip);
                 Ck("Zed (an older Outpost): behind on the Outpost against Stable, no channel shown", zed.IsBehind && zed.Behind.Count == 1 && zed.Behind[0].Newest == "3.9.0" && zed.CardVersionLine == "Outpost 3.8.0", zed.CardVersionLine + " / " + zed.CardBehindLine);

@@ -258,7 +258,7 @@
             <Border Style="{StaticResource SegmentHost}">
               <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="ChannelStable" Style="{StaticResource Segment}" Content="Stable" GroupName="channel" Checked="Channel_Changed" />
-                <RadioButton x:Name="ChannelTest" Style="{StaticResource Segment}" Content="Test (get new builds first)" GroupName="channel" Checked="Channel_Changed" />
+                <RadioButton x:Name="ChannelTest" Style="{StaticResource Segment}" Content="Preview (get new builds first)" GroupName="channel" Checked="Channel_Changed" />
               </StackPanel>
             </Border>
             <TextBlock x:Name="ChannelHint" Style="{StaticResource Note}" Margin="4,8,0,24" />

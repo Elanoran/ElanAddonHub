@@ -117,7 +117,7 @@ namespace ElansAddonHub.Services
         // shown under the channel setting when stable is behind what runs here
         public static string StableOlderNote(Settings s, string stableHubVersion, string running) =>
             !IsTest(s) && !string.IsNullOrEmpty(stableHubVersion) && Util.CompareVersions(stableHubVersion, running) < 0
-                ? "Stable is older than your test build - you'll get the next stable." : null;
+                ? "Stable is older than your preview build - you'll get the next stable." : null;
 
         public static string SelfTest()
         {
