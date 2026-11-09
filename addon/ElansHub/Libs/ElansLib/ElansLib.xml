@@ -9,6 +9,7 @@
   <Script file="Theme.lua"/>
   <Script file="Widgets.lua"/>
   <Script file="Settings.lua"/>
+  <Script file="Share.lua"/>
   <Script file="Tip.lua"/>
   <Script file="MinimapButton.lua"/>
   <Script file="Pins.lua"/>
