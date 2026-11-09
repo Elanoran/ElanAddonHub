@@ -47,7 +47,7 @@
 local Lib = _G.ElansLib
 local prev = Lib:Get("Dock")
 local carried, carriedEvents = prev and prev.entries, prev and prev.events
-local M = Lib:NewModule("Dock", 3)
+local M = Lib:NewModule("Dock", 4)
 if not M then return end
 
 M.entries = carried or {}
@@ -436,6 +436,19 @@ local function buildSearch()
   local box = UI.Edit(searchPanel, 320, 24, "Search settings...")
   box:SetPoint("TOPLEFT", 0, -46)
   searchPanel.box = box
+  -- MINOR 4: share / import settings for every Elan addon at once (ElansLib Share)
+  local Share = Lib:Get("Share")
+  if Share and Share.ShowExportAll then
+    local ex = UI.Button(searchPanel, "Share all settings...", 150, 24)
+    ex:SetPoint("LEFT", box, "RIGHT", 10, 0)
+    ex.tip = "The settings of every Elan addon you have, as one text to copy: share it in your Lodge's Library or send it to a friend."
+    ex:SetScript("OnClick", function() Share.ShowExportAll(dns) end)
+    local im = UI.Button(searchPanel, "Import settings...", 130, 24)
+    im:SetPoint("LEFT", ex, "RIGHT", 6, 0)
+    im.tip = "Paste settings someone shared, for one or all Elan addons. You see every change first, and can undo it."
+    im:SetScript("OnClick", function() Share.ShowImport(dns) end)
+    searchPanel.shareButton, searchPanel.importButton = ex, im
+  end
   local list = UI.List(searchPanel, {
     rowHeight = 26,
     create = function(row)
