@@ -587,6 +587,7 @@ namespace ElansAddonHub
         async void CheckNow_Click(object sender, RoutedEventArgs e)
         {
             CheckText.Text = "Checking...";
+            UpdateChannel.Invalidate(); // a click asks GitHub again, not the 10-minute release list
             await host.CheckForUpdates();
             CheckText.Text = host.CheckStatus;
         }

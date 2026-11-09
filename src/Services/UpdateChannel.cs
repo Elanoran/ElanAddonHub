@@ -156,6 +156,12 @@ namespace ElansAddonHub.Services
                 Ck("test channel uses the pre-release manifest", c.Pre && c.Tag == "t3" && calls == 1, c.Url);
                 c = Resolve(s).GetAwaiter().GetResult();
                 Ck("API answer is cached", calls == 1);
+                // a manual check (the Check button, Settings' Check now) clears the cache first: a release published since
+                // the last check shows at once instead of up to 10 minutes later
+                reply = "[" + Rel("t4", true, "2026-10-13T10:00:00Z") + "," + Rel("t3", true, "2026-10-12T10:00:00Z") + "]";
+                Invalidate();
+                c = Resolve(s).GetAwaiter().GetResult();
+                Ck("a manual check (cache cleared) asks again and finds the newer release", calls == 2 && c.Tag == "t4", c.Tag);
                 Invalidate(); reply = null;
                 c = Resolve(s).GetAwaiter().GetResult();
                 Ck("rate limit / failure falls back to stable", c.FellBack && c.Url == s.ManifestUrl && !c.Pre);

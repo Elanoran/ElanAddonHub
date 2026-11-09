@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.9.8
+- **Check for updates finds a release published minutes ago.** On the test channel the list of releases was kept for 10 minutes, so a check right after a release could still say there was nothing new. A click on Check (or Settings > Check now) now always asks again; only the automatic checks use the kept list.
+
 ## 3.9.7
 - **The addon health report shows the right installed versions.** With an old beta client folder still next to the WoW Forever client, the report took the versions from the old folder. It now reads the client you play first.
 

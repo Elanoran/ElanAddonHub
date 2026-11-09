@@ -848,7 +848,9 @@ namespace ElansAddonHub
         // One click checks everything: the hub itself + our addons (manifest), linked third-party addons (forced past the
         // disk cache, within GitHub's rate-limit guard) and CurseForge's local file (CurseForge itself is only asked when
         // the user's "let CurseForge check" setting allows it; otherwise the file is just re-read).
-        async void CheckAll_Click(object sender, RoutedEventArgs e) => await CheckAll();
+        // a click always asks GitHub again: the test channel's release list is otherwise kept for 10 minutes, so a release
+        // published just after the last check stayed hidden from a manual check (seen 2026-11-09)
+        async void CheckAll_Click(object sender, RoutedEventArgs e) { UpdateChannel.Invalidate(); await CheckAll(); }
 
         bool checkAllRunning;
         System.Windows.Threading.DispatcherTimer resultFade;
