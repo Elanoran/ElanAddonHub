@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.9.7
+- **The addon health report shows the right installed versions.** With an old beta client folder still next to the WoW Forever client, the report took the versions from the old folder. It now reads the client you play first.
+
 ## 3.9.6
 - **Elan addon settings in the Library.** Settings shared from an Elan addon (Settings > Share my settings... in game) are recognised when you add them to your Lodge's Library as text: the card says Elan's settings, names the addons and versions in it, and sorts with the WeakAuras and profiles. Copy it, then in game open an Elan addon's Settings > Import settings... and paste it.
 

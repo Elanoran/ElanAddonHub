@@ -89,12 +89,18 @@ namespace ElansAddonHub.Services
             new HealthAddonDef { Id = "ElansHub", Title = "Elan's Hub companion", DbName = "ElansHubDB", Slash = "/ehub diag" },
         };
 
-        // version from the toc of the installed addon (first flavor that has it)
+        // version from the toc of the installed addon: the Forever client the Outpost uses first (WowLocator: a real _forever_ client, else
+        // _classic_beta_), then any other client folder that has it. 3.9.7: it used to take the first folder by name, so an old
+        // _classic_beta_ left next to _forever_ reported the beta's versions.
         static string InstalledVersion(string root, string folder)
         {
             try
             {
-                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
+                var used = WowLocator.Resolve(root, WowLocator.ForeverFolder);
+                var flavors = Directory.GetDirectories(root, "_*_")
+                    .OrderBy(d => string.Equals(Path.GetFileName(d), used, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                    .ThenBy(d => d, StringComparer.OrdinalIgnoreCase);
+                foreach (var flavor in flavors)
                 {
                     var dir = Path.Combine(flavor, "Interface", "AddOns", folder);
                     if (!Directory.Exists(dir)) continue;

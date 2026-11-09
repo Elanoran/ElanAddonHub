@@ -180,6 +180,29 @@ namespace ElansAddonHub
                 Check("report: third-party addon errors are not in it", !text.Contains("Questie") && !text.Contains("other people's problem"));
                 Check("report: both addons with installed vs diag version", text.Contains("Installed: v0.3.1 · diag: v0.3.1") && text.Contains("Installed: v1.23.1 · diag: v1.23.0"));
 
+                // 3.9.7: an old _classic_beta_ left next to the real _forever_ client: Installed is the _forever_ toc, not the first folder by name
+                {
+                    var r2 = Path.Combine(dir, "healthwow2");
+                    if (Directory.Exists(r2)) Directory.Delete(r2, true);
+                    void Toc2(string fl, string folder, string version)
+                    {
+                        var d = Path.Combine(r2, fl, "Interface", "AddOns", folder);
+                        Directory.CreateDirectory(d);
+                        File.WriteAllText(Path.Combine(d, folder + "_Camelot.toc"), "## Interface: 16001\n## Version: " + version + "\n");
+                    }
+                    Toc2("_classic_beta_", "ElansToolkit", "0.5.14"); Toc2("_forever_", "ElansToolkit", "0.24.1");
+                    Toc2("_classic_beta_", "ElansBags", "0.4.25");    // only in the old folder: still found there
+                    File.WriteAllText(Path.Combine(r2, "_forever_", "Wow.exe"), "");
+                    var rep2 = HealthReader.Read(r2);
+                    string Inst(string id) => rep2.Addons.FirstOrDefault(a => a.Def.Id == id)?.Installed;
+                    Check("installed (3.9.7): the Forever client's folder wins over an old _classic_beta_ (" + Inst("ElansToolkit") + ", " + Inst("ElansBags") + ")",
+                        Inst("ElansToolkit") == "0.24.1" && Inst("ElansBags") == "0.4.25");
+                    File.Delete(Path.Combine(r2, "_forever_", "Wow.exe"));
+                    var rep3 = HealthReader.Read(r2);
+                    var t3 = rep3.Addons.FirstOrDefault(a => a.Def.Id == "ElansToolkit")?.Installed;
+                    Check("installed (3.9.7): with no real _forever_ client the beta folder is the one in use (" + t3 + ")", t3 == "0.5.14");
+                }
+
                 // the file being written by WoW (open for writing, shared) is still readable
                 hold = new FileStream(Path.Combine(sv, "ElansBags.lua"), FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
                 health.ReloadNow();
