@@ -290,6 +290,7 @@ namespace ElansAddonHub.Lodge
         {
             var t = (text ?? "").TrimStart('\uFEFF', ' ', '\t', '\r', '\n');
             if (t.Length == 0) return "import";
+            if (t.StartsWith(ElansMagic + " ", StringComparison.Ordinal)) return "elans";       // 3.9.6: Elan addon settings (ElansLib Share)
             if (t.StartsWith("!WA:", StringComparison.Ordinal)) return "weakaura";
             if (t.StartsWith("!PLATER", StringComparison.OrdinalIgnoreCase)) return "plater";
             if (t.IndexOf("::profile", StringComparison.Ordinal) > 0 || t.IndexOf("::private", StringComparison.Ordinal) > 0) return "elvui";
@@ -300,15 +301,41 @@ namespace ElansAddonHub.Lodge
 
         public static string Label(string kind) =>
             kind == "macro" ? "Macro" : kind == "weakaura" ? "WeakAura" : kind == "plater" ? "Plater profile" : kind == "elvui" ? "ElvUI profile"
-            : kind == "talents" ? "Talent build" : "Import string";
+            : kind == "talents" ? "Talent build" : kind == "elans" ? "Elan's settings" : "Import string";
 
-        // the Library's group: macros, WeakAuras and profiles, talent builds (with the files of that category), the rest as import strings
+        // the Library's group: macros, WeakAuras and profiles (Elan's settings too), talent builds (with the files of that category), the rest as import strings
         public static string Group(string kind) =>
-            kind == "macro" ? "macro" : kind == "weakaura" || kind == "plater" || kind == "elvui" ? "profile" : kind == "talents" ? "build" : "text";
+            kind == "macro" ? "macro" : kind == "weakaura" || kind == "plater" || kind == "elvui" || kind == "elans" ? "profile" : kind == "talents" ? "build" : "text";
 
         // where it goes in the game, for the Copy note
         public static string PasteHint(string kind) =>
             kind == "macro" ? "paste it into a new macro (/macro)" : kind == "weakaura" ? "paste it into WeakAuras' Import (/wa)" : kind == "plater" ? "paste it into Plater's profile import (/plater)"
-            : kind == "elvui" ? "paste it into ElvUI's profile import (/ec)" : kind == "talents" ? "open it in the Outpost's talent calculator (Import)" : "paste it in the game";
+            : kind == "elvui" ? "paste it into ElvUI's profile import (/ec)" : kind == "talents" ? "open it in the Outpost's talent calculator (Import)"
+            : kind == "elans" ? "paste it in game: an Elan addon's Settings > Import settings..." : "paste it in the game";
+
+        // 3.9.6: Elan addon settings (ElansLib Share in the addons): "ELANS1 <addon> (<version>)" starts each addon's block
+        public const string ElansMagic = "ELANS1";
+
+        // the line a card shows under its name: for Elan's settings the addons in it ("Elan's Hunter Helper 1.27.7 · Elan's Toolkit 0.24.1"),
+        // for everything else the text's first line
+        public static string FirstLine(string text, string kind)
+        {
+            var lines = (text ?? "").TrimStart('﻿').Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
+            if (kind != "elans") return lines.FirstOrDefault() ?? "";
+            var addons = new List<string>();
+            foreach (var l in lines)
+            {
+                if (!l.StartsWith(ElansMagic + " ", StringComparison.Ordinal)) continue;
+                var m = System.Text.RegularExpressions.Regex.Match(l.Substring(ElansMagic.Length + 1), @"^(.*?)\s*\(([^()]*)\)\s*$");
+                var name = (m.Success ? m.Groups[1].Value : l.Substring(ElansMagic.Length + 1)).Trim();
+                var ver = m.Success ? m.Groups[2].Value.Trim() : "";
+                if (name.Length == 0) continue;
+                addons.Add(ver.Length > 0 && ver != "?" ? name + " " + ver : name);
+            }
+            if (addons.Count == 0) return "";
+            const int show = 3;
+            var shown = string.Join(" · ", addons.Take(show));
+            return addons.Count > show ? shown + " and " + (addons.Count - show) + " more" : shown;
+        }
     }
 }

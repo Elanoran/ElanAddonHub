@@ -971,6 +971,15 @@ namespace ElansAddonHub
                         ImportText.Kind("#showtooltip\n/cast Lesser Heal") == "macro" && ImportText.Kind("\n  /targetenemy [noharm]") == "macro" && ImportText.Kind("!WA:2!abc") == "weakaura"
                         && ImportText.Kind("!PLATER:2!abc") == "plater" && ImportText.Kind("abc::profile::Elan") == "elvui" && ImportText.Kind("ETB1-AAAB") == "talents" && ImportText.Kind("hello") == "import" && ImportText.Kind("") == "import"
                         && ImportText.Group("weakaura") == "profile" && ImportText.Group("macro") == "macro" && ImportText.Group("talents") == "build" && ImportText.Group("import") == "text");
+                    const string elansText = "﻿ELANS1 Elan's Hunter Helper (1.27.7)\r\n# Elan's addon settings\r\ngeneral.tooltip = true\r\n\r\nELANS1 Elan's Toolkit (0.24.1)\r\nhud.scale = 1\r\n";
+                    check("kinds (3.9.6): Elan's settings text is its own kind, grouped with the profiles, with the in-game paste hint",
+                        ImportText.Kind(elansText) == "elans" && ImportText.Kind("ELANS1x") == "import" && ImportText.Label("elans") == "Elan's settings" && ImportText.Group("elans") == "profile"
+                        && ImportText.PasteHint("elans").Contains("Import settings"));
+                    var fl = ImportText.FirstLine(elansText, "elans");
+                    var fl5 = ImportText.FirstLine(string.Join("\n", Enumerable.Range(1, 5).Select(i => "ELANS1 Elan's Addon " + i + " (?)")), "elans");
+                    check("kinds (3.9.6): an Elan's settings card names the addons in it, not the header (" + fl + " / " + fl5 + ")",
+                        fl == "Elan's Hunter Helper 1.27.7 · Elan's Toolkit 0.24.1" && fl5 == "Elan's Addon 1 · Elan's Addon 2 · Elan's Addon 3 and 2 more"
+                        && ImportText.FirstLine("\n  !WA:2!abc\nmore", "weakaura") == "!WA:2!abc");
                     check("kinds: the page reads the texts by itself and names them (Raid WA " + fc.KindOfForTest("Raid WA") + ", Heal macro " + fc.KindOfForTest("Heal macro") + ")",
                         await Until(() => fc.KindOfForTest("Raid WA") == "WeakAura" && fc.KindOfForTest("Heal macro") == "Macro", 5000));
                     var chips = fc.ChipsForTest;

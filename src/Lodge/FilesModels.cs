@@ -95,7 +95,7 @@ namespace ElansAddonHub.Lodge
         {
             if (Newest == null) return;
             kindOf = ImportText.Kind(text); kindSha = Newest.Sha256;
-            firstLine = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? "";
+            firstLine = ImportText.FirstLine(text, kindOf);
             RaiseAll();
         }
 
