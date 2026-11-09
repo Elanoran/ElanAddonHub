@@ -5,6 +5,9 @@
 --   * Every ElansLib.Window registers itself (Window.New calls Dock.Register(W, cfg.dock)): title, icon, version, tabs with
 --     build / onShow, and cfg.dock = {
 --       status = function() return "text", "good" end,   -- optional: one short line for the dock button's tooltip
+--       tooltip = function(Tip) end,                      -- optional (MINOR 5): more lines for that tooltip, under all the
+--                                                         -- addons' lines (what the addon's own button showed, e.g. the
+--                                                         -- Toolkit's layer readings)
 --       actions = { { label = "Open bags", icon = "INV_Misc_Bag_08", run = fn }, ... },  -- optional rows under the heading
 --       slash = "/ehh",                                   -- optional: shown in the heading's tooltip
 --       settingsTab = "settings",                         -- the addon's settings tab: listed last under its heading and
@@ -47,7 +50,7 @@
 local Lib = _G.ElansLib
 local prev = Lib:Get("Dock")
 local carried, carriedEvents = prev and prev.entries, prev and prev.events
-local M = Lib:NewModule("Dock", 4)
+local M = Lib:NewModule("Dock", 5)
 if not M then return end
 
 M.entries = carried or {}
@@ -885,6 +888,12 @@ function M.Tooltip(Tip)
       for _, e in ipairs(members) do
         local v, c = statusOf(e)
         Tip.Pair(short(e), v or ("v" .. tostring(e.win.version or "?")), c)
+      end
+      for _, e in ipairs(members) do -- each addon's extra lines (MINOR 5); one failing never breaks the tooltip
+        if e.opts.tooltip then
+          local ok, err = pcall(e.opts.tooltip, Tip)
+          if not ok and geterrorhandler then geterrorhandler()(err) end
+        end
       end
     end,
     actions = { { "Left-click", "open / close" }, { "Right-click", "pick an addon" }, { "Shift-click", "search all settings" } },
