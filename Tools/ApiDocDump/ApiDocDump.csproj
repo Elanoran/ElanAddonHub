@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ApiDocDump: copies Blizzard's in-client API documentation (Blizzard_APIDocumentationGenerated) out of a WoW client's CASC storage,
+       using the Outpost's own reader. ElansHunterHelper/Tools/fetch_apidocs.py runs it to keep the addons' API map (what can be secret)
+       in step with the installed client. Not part of the Outpost build and never shipped. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>ApiDocDump</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/Services/Casc.cs" />
+    <Compile Include="../../src/Services/WowLocator.cs" />
+  </ItemGroup>
+
+</Project>
