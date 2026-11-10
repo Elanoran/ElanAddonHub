@@ -47,6 +47,16 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   and the ones that need an Iron Oven next to the fire.
 - **Recipes around your skill** in their colours, and **recipe seller pins** on the world map for your side.
 
+### What to make next
+
+- **Every crafting profession:** Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, First Aid and
+  Mining's smelting. `/eprof next` lists the three best recipes to level with right now, in the colour the game gives them
+  at your skill, with about how many crafts they stay worth it.
+- **Your bags and bank:** whether you can make each one now, or which reagents are missing (and when you can make a missing
+  one yourself, like Bolt of Linen Cloth). The bank counts as of your last visit.
+- **Forever's own numbers** from the client: skill-up ranges, reagents, recipe items and where to craft. Recipes from a
+  pattern or plans are only suggested once the game says you know them; for trainer recipes the learn skill is an estimate.
+
 ### Skills and trainers
 
 - **Skills & trainers tab**: every profession you have learned with its skill bar, a note when you are near your cap, and
@@ -82,6 +92,7 @@ Right-click the minimap button for Fishing. It is also under Options > AddOns.
 | `/angler bind <key>`, `/angler bindgear <key>` | the Cast / hook key and the Pole / weapons key |
 | `/eprof skills` | the Skills & trainers tab · `/eprof skills map`, `minimap`, `outgrown`: the trainer pins |
 | `/eprof guide` | the Guide tab · `/eprof guide show\|hide\|next\|prev`: the tracker |
+| `/eprof next` | what to make next in each crafting profession · `/eprof next tailoring`: one profession · `/eprof next bank`: count the bank or not |
 | `/eprof minimap` | show or hide the minimap button |
 | `/eprof changes`, `bugs`, `diag` | what's new, its Bug Trap, a diagnostics run for the Outpost's Health window |
 
