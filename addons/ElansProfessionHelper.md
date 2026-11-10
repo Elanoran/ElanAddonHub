@@ -58,6 +58,10 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Shopping list to your cap:** unfold it under the panel. The recipes from your skill to your cap, and every reagent they
   take minus what you have; bars say how much ore Mining smelts them from. The crafts are an average, since skill-ups past
   orange are luck.
+- **Where to get each reagent:** mined, skinned, herbs, cloth from humanoids, disenchanted, fished, the nearest vendor of
+  your side (click the line for a waypoint), or the zones where beasts drop it at your level.
+- **Your other characters:** with [Elan's Bags](ElansBags.md) the list says who has a reagent you still need, in their bags or
+  bank. Switch it off on the Skills & trainers tab.
 - **It learns from the game:** the profession window tells it which recipes you know, and a trainer's window the skill each
   recipe is taught at. Recipes from a pattern or plans are only suggested once you know them.
 - **Forever's own numbers** from the client: skill-up ranges, reagents, recipe items and where to craft.
@@ -97,7 +101,7 @@ Right-click the minimap button for Fishing. It is also under Options > AddOns.
 | `/angler bind <key>`, `/angler bindgear <key>` | the Cast / hook key and the Pole / weapons key |
 | `/eprof skills` | the Skills & trainers tab · `/eprof skills map`, `minimap`, `outgrown`: the trainer pins |
 | `/eprof guide` | the Guide tab · `/eprof guide show\|hide\|next\|prev`: the tracker |
-| `/eprof next` | what to make next in each crafting profession · `/eprof next tailoring`: one profession · `/eprof next shop [profession]`: the plan and shopping list to your cap · `/eprof next panel`, `bank`: the panel, count the bank |
+| `/eprof next` | what to make next in each crafting profession · `/eprof next tailoring`: one profession · `/eprof next shop [profession]`: the plan and shopping list to your cap · `/eprof next panel`, `bank`: the panel, count the bank · `/eprof next gap 40`: the panel further from the window |
 | `/eprof minimap` | show or hide the minimap button |
 | `/eprof changes`, `bugs`, `diag` | what's new, its Bug Trap, a diagnostics run for the Outpost's Health window |
 
