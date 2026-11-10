@@ -24,6 +24,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Mailbox list**: on the Send Mail tab, your other characters on this realm and faction, and your friends: this character's, your other characters' and
   Battle.net friends (remembered once seen playing). Click a name to
   put it in the To: field. Your other characters need [Elan's Hub](ElansHub.md) and one login each.
+  Right-click a name to give it a note ("bank alt: herbs"): it shows next to the name and in full on hover.
+  The last five people you mailed are on top, under **Recent**.
 - **Junk seller**: Alt+right-click an item to mark it as junk. At a merchant a **Sell junk** button sells grey and marked
   items; selling automatically is a setting (off by default).
 - **Your other characters** on item tooltips, for example "Elan: 3 (bags) · Measley: 12 (bank)". This needs
