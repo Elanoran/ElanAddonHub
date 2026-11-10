@@ -50,7 +50,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 ### What to make next
 
 - **A panel beside your profession window** for Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring,
-  First Aid and Mining's smelting: the five best recipes to level with right now, in the colour the game gives them at your
+  First Aid, Mining's smelting and Cooking: the five best recipes to level with right now, in the colour the game gives them at your
   skill, with about how many crafts they stay worth it. Hover one for its reagents (have / need); click one you know and the
   window opens it. It only sits beside the window and changes nothing in it.
 - **Your bags and bank:** `x3` when you can make it now, or which reagents are missing (and when you can make a missing one
@@ -58,6 +58,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Shopping list to your cap:** unfold it under the panel. The recipes from your skill to your cap, and every reagent they
   take minus what you have; bars say how much ore Mining smelts them from. The crafts are an average, since skill-ups past
   orange are luck.
+- **Cooking** also shows the best buff food for your class as its own row, and recipes you buy say so: hover for the
+  nearest seller of your side, click for a waypoint.
 - **Where to get each reagent:** mined, skinned, herbs, cloth from humanoids, disenchanted, fished, the nearest vendor of
   your side (click the line for a waypoint), or the zones where beasts drop it at your level.
 - **Your other characters:** with [Elan's Bags](ElansBags.md) the list says who has a reagent you still need, in their bags or
