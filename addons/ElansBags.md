@@ -26,7 +26,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   put it in the To: field. Your other characters need [Elan's Hub](ElansHub.md) and one login each.
   Right-click a name to give it a note ("bank alt: herbs"): a small note icon marks the name, and hovering it shows the note.
   The last five people you mailed are listed under **Recent**. Tick **Bank alt** in that note box for one of your characters
-  and it sits on top of the list, one click away (one per realm and faction).
+  and it gets a card on top of the list, one click away (one per realm and faction). A search box finds any name,
+  a click on a heading folds that section, and online friends have a green dot.
 - **Junk seller**: Alt+right-click an item to mark it as junk. At a merchant a **Sell junk** button sells grey and marked
   items; selling automatically is a setting (off by default).
 - **Your other characters** on item tooltips, for example "Elan: 3 (bags) · Measley: 12 (bank)". This needs
