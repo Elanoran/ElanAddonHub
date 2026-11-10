@@ -49,13 +49,18 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 
 ### What to make next
 
-- **Every crafting profession:** Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring, First Aid and
-  Mining's smelting. `/eprof next` lists the three best recipes to level with right now, in the colour the game gives them
-  at your skill, with about how many crafts they stay worth it.
-- **Your bags and bank:** whether you can make each one now, or which reagents are missing (and when you can make a missing
-  one yourself, like Bolt of Linen Cloth). The bank counts as of your last visit.
-- **Forever's own numbers** from the client: skill-up ranges, reagents, recipe items and where to craft. Recipes from a
-  pattern or plans are only suggested once the game says you know them; for trainer recipes the learn skill is an estimate.
+- **A panel beside your profession window** for Alchemy, Blacksmithing, Enchanting, Engineering, Leatherworking, Tailoring,
+  First Aid and Mining's smelting: the five best recipes to level with right now, in the colour the game gives them at your
+  skill, with about how many crafts they stay worth it. Hover one for its reagents (have / need); click one you know and the
+  window opens it. It only sits beside the window and changes nothing in it.
+- **Your bags and bank:** `x3` when you can make it now, or which reagents are missing (and when you can make a missing one
+  yourself, like Bolt of Linen Cloth). The bank counts as of your last visit.
+- **Shopping list to your cap:** unfold it under the panel. The recipes from your skill to your cap, and every reagent they
+  take minus what you have; bars say how much ore Mining smelts them from. The crafts are an average, since skill-ups past
+  orange are luck.
+- **It learns from the game:** the profession window tells it which recipes you know, and a trainer's window the skill each
+  recipe is taught at. Recipes from a pattern or plans are only suggested once you know them.
+- **Forever's own numbers** from the client: skill-up ranges, reagents, recipe items and where to craft.
 
 ### Skills and trainers
 
@@ -92,7 +97,7 @@ Right-click the minimap button for Fishing. It is also under Options > AddOns.
 | `/angler bind <key>`, `/angler bindgear <key>` | the Cast / hook key and the Pole / weapons key |
 | `/eprof skills` | the Skills & trainers tab · `/eprof skills map`, `minimap`, `outgrown`: the trainer pins |
 | `/eprof guide` | the Guide tab · `/eprof guide show\|hide\|next\|prev`: the tracker |
-| `/eprof next` | what to make next in each crafting profession · `/eprof next tailoring`: one profession · `/eprof next bank`: count the bank or not |
+| `/eprof next` | what to make next in each crafting profession · `/eprof next tailoring`: one profession · `/eprof next shop [profession]`: the plan and shopping list to your cap · `/eprof next panel`, `bank`: the panel, count the bank |
 | `/eprof minimap` | show or hide the minimap button |
 | `/eprof changes`, `bugs`, `diag` | what's new, its Bug Trap, a diagnostics run for the Outpost's Health window |
 
