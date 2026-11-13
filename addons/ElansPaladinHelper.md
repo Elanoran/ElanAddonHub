@@ -22,12 +22,17 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Trainer help**: the **Paladin Skills** tab lists every rank by level (train now, level N, known), with costs once you
   have visited a trainer and a mark on spells WoW Forever changed; a chat line at level-up; paladin trainers on the world
   map (click one for a waypoint).
+- **Bar Plan**: a suggested level-60 action bar layout for each spec (Holy, Protection, Retribution), so you can put
+  spells in their final place while levelling. Easy keys for the spells you press most, the same lifesavers and blessings
+  on the same keys in every spec, a reason for every spot in the tooltip. Swap buttons to make it yours and drag a known
+  spell onto your action bar.
 
 ## Commands
 
 | Command | |
 |---|---|
 | `/eph` | open the window |
+| `/eph bars` | the Bar Plan tab |
 | `/eph skills`, `/eph settings` | open that tab |
 | `/eph layout` | move the HUD and the party frames |
 | `/eph hud`, `/eph frames` | turn the HUD / party frames on or off |
