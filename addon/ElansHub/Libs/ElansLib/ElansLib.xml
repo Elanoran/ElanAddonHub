@@ -16,4 +16,5 @@
   <Script file="Window.lua"/>
   <Script file="Dock.lua"/>
   <Script file="Grid.lua"/>
+  <Script file="BarPlan.lua"/>
 </Ui>

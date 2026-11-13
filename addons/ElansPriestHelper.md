@@ -37,13 +37,17 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Healer coach**: after each fight of 15 seconds or more, a short report in chat (casts, mana spent, time spent
   regenerating, a tip); the Coach tab compares the heal per mana of your ranks.
 - **Trainer help**: the **Priest Skills** tab, a chat line at level-up, and priest trainers on the world map.
+- **Bar Plan**: a suggested level-60 action bar layout for each spec (Discipline, Holy, Shadow), so you can put
+  spells in their final place while levelling. Easy keys for the spells you press most, escapes and your race's own
+  spells on the same keys in every spec, a reason for every spot in the tooltip. Swap buttons to make it yours and drag a
+  known spell onto your action bar.
 
 ## Commands
 
 | Command | |
 |---|---|
 | `/epr` | open the window |
-| `/epr buffs`, `/epr book`, `/epr skills`, `/epr settings` | open that tab |
+| `/epr buffs`, `/epr book`, `/epr skills`, `/epr bars`, `/epr settings` | open that tab |
 | `/epr layout` | move the HUD and the heal frames |
 | `/epr hud`, `/epr frames` | turn the HUD / heal frames on or off |
 | `/epr minimap` | show or hide the minimap button |
