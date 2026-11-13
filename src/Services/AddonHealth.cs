@@ -20,6 +20,7 @@ namespace ElansAddonHub.Services
     public class HealthBug
     {
         public string Addon, Msg, Stack, Version, Time;
+        public string Trail = "";                 // what happened in the game just before (BugTrap 5+), "HH:MM:SS text" lines
         public int Count = 1;
         public long At;
         public bool IsNew, Older;                 // Older: seen with an older version than the installed one (probably fixed)
@@ -299,7 +300,7 @@ namespace ElansAddonHub.Services
                 }
                 var b = new HealthBug
                 {
-                    Addon = id, Msg = t.Text("msg") ?? "?", Stack = t.Text("stack") ?? "", Version = t.Text("version"),
+                    Addon = id, Msg = t.Text("msg") ?? "?", Stack = t.Text("stack") ?? "", Trail = t.Text("trail") ?? "", Version = t.Text("version"),
                     Count = Math.Max(1, t.Int("count")), Time = t.Text("time"), At = t.Long("at"),
                 };
                 if (b.At <= 0) b.At = ParseLocal(b.Time);
@@ -463,6 +464,12 @@ namespace ElansAddonHub.Services
                     sb.AppendLine($" [{++i}] x{b.Count} · v{b.Version ?? "?"}{(b.Older ? " (older version)" : "")} · {Stamp(b.At, b.Time)}{(b.IsNew ? " · NEW" : "")}");
                     sb.AppendLine("     " + b.Msg.Replace("\r", "").Replace("\n", "\n     "));
                     foreach (var line in (b.Stack ?? "").Replace("\r", "").Split('\n').Where(l => l.Trim().Length > 0).Take(8)) sb.AppendLine("       " + line.Trim());
+                    var trail = (b.Trail ?? "").Replace("\r", "").Split('\n').Where(l => l.Trim().Length > 0).TakeLast(15).ToList();
+                    if (trail.Count > 0)
+                    {
+                        sb.AppendLine("     Just before:");
+                        foreach (var line in trail) sb.AppendLine("       " + line.Trim());
+                    }
                 }
                 if (h.Last != null)
                 {

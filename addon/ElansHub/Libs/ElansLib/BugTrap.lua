@@ -26,19 +26,76 @@
 -- registered are stored only in mode "all", in the host's db.bugs with addon = the real folder name; in mode "mine" they
 -- (and every error in mode "off") go to the handler that was installed before.
 -- Mode lives in the host's db.bugTrap: "mine" (default; only Elan's addons) | "all" | "off".
--- Saved shape of a bug (read by Elan's Outpost, DON'T change): { msg, stack, addon, count, time, at, version }, max 40 per list.
+-- Saved shape of a bug (read by Elan's Outpost, DON'T change): { msg, stack, addon, count, time, at, version, trail }, max 40
+-- per list. trail (BugTrap 5) = what happened in the game just before the error, one "HH:MM:SS text" line each, oldest first.
 -- The error handler chain (seterrorhandler / geterrorhandler) is the only hook; no Blizzard frame is hooked.
+--
+-- The trail: the host's event frame notes a few plain game events (mailbox, bank, vendor, combat, a player reported...)
+-- by NAME only - event arguments are never read, so a secret value can't get in. Addons add their own lines with
+-- BugTrap.Note(text) (slash commands, lib windows opening). The last TRAIL_KEEP lines go with each error.
 local Lib = _G.ElansLib
-local M = Lib:NewModule("BugTrap", 4)
+local M = Lib:NewModule("BugTrap", 5)
 if not M then return end
 
 local MAX_BUGS = 40
+local TRAIL_MAX, TRAIL_KEEP = 30, 15
 
 -- shared by every copy of this module (a module upgrade empties M, so the state lives on the registry table)
 local S = Lib.bugTrapState
 if not S then
   S = { owners = {}, byName = {} } -- owners: registration order; byName: addon folder -> owner
   Lib.bugTrapState = S
+end
+
+-------------------------------------------------------------------------------
+-- the trail: what happened just before an error
+-------------------------------------------------------------------------------
+-- game events worth a line (names only; their arguments are never read)
+M.TrailEvents = {
+  PLAYER_REPORT_SUBMITTED = "reported a player",
+  MAIL_SHOW = "mailbox opened", MAIL_CLOSED = "mailbox closed", MAIL_SEND_SUCCESS = "mail sent",
+  BANKFRAME_OPENED = "bank opened", BANKFRAME_CLOSED = "bank closed",
+  GUILDBANKFRAME_OPENED = "guild bank opened", GUILDBANKFRAME_CLOSED = "guild bank closed",
+  MERCHANT_SHOW = "vendor opened", MERCHANT_CLOSED = "vendor closed",
+  AUCTION_HOUSE_SHOW = "auction house opened", AUCTION_HOUSE_CLOSED = "auction house closed",
+  TRADE_SHOW = "trade opened", TRADE_CLOSED = "trade closed",
+  TRAINER_SHOW = "trainer opened", TRAINER_CLOSED = "trainer closed",
+  GOSSIP_SHOW = "NPC talk opened", GOSSIP_CLOSED = "NPC talk closed",
+  LOOT_OPENED = "loot opened", LOOT_CLOSED = "loot closed",
+  TAXIMAP_OPENED = "flight map opened",
+  PLAYER_REGEN_DISABLED = "combat started", PLAYER_REGEN_ENABLED = "combat ended",
+  PLAYER_DEAD = "died", PLAYER_ENTERING_WORLD = "loading screen done", ZONE_CHANGED_NEW_AREA = "new zone",
+  ADDON_ACTION_BLOCKED = "an addon action was blocked", ADDON_ACTION_FORBIDDEN = "an addon action was forbidden",
+}
+
+S.trail = S.trail or {}
+
+local function clock() return date and date("%H:%M:%S") or "?" end
+
+-- add a line to the trail (the same text right after itself only counts up)
+function M.Note(text)
+  if text == nil then return end
+  local ok, t = pcall(tostring, text)
+  if not ok then t = "?" end
+  if #t > 80 then t = t:sub(1, 77) .. "..." end
+  local trail = S.trail
+  local last = trail[#trail]
+  if last and last.text == t then
+    last.n, last.time = last.n + 1, clock()
+    return
+  end
+  trail[#trail + 1] = { time = clock(), text = t, n = 1 }
+  while #trail > TRAIL_MAX do table.remove(trail, 1) end
+end
+
+-- the last lines as one text, oldest first ("" when nothing happened yet)
+function M.TrailText(keep)
+  local trail, out = S.trail, {}
+  for i = math.max(1, #trail - (keep or TRAIL_KEEP) + 1), #trail do
+    local e = trail[i]
+    out[#out + 1] = e.time .. " " .. e.text .. (e.n > 1 and (" (x" .. e.n .. ")") or "")
+  end
+  return table.concat(out, "\n")
 end
 
 M.Modes = {
@@ -166,6 +223,7 @@ local function trap(msg, forced)
       b.count = b.count + 1
       b.time = date("%Y-%m-%d %H:%M:%S")
       b.at = time()
+      b.trail = M.TrailText()
       table.remove(bugs, i)
       table.insert(bugs, 1, b)
       showToast(b)
@@ -180,7 +238,7 @@ local function trap(msg, forced)
   end
   local ok, version = pcall(owner.version or function() end)
   local b = { msg = text, stack = table.concat(lines, "\n"), addon = name, count = 1,
-              time = date("%Y-%m-%d %H:%M:%S"), at = time(), version = ok and version or nil }
+              time = date("%Y-%m-%d %H:%M:%S"), at = time(), version = ok and version or nil, trail = M.TrailText() }
   table.insert(bugs, 1, b)
   while #bugs > MAX_BUGS do table.remove(bugs) end
   showToast(b)
@@ -259,6 +317,7 @@ function M.Text(filter)
       for i, b in ipairs(g.items) do
         part[#part + 1] = string.format("#%d  %s  %s  x%d  (%s %s)\n%s\n%s", i, b.time or "?", b.addon or "?", b.count or 1,
           g.label or "?", b.version or "?", b.msg or "", b.stack or "")
+          .. ((b.trail and b.trail ~= "") and ("\nJust before:\n" .. b.trail) or "")
       end
       out[#out + 1] = table.concat(part, "\n\n")
     end
@@ -304,7 +363,7 @@ local function plainBugs(list, keep)
   for _, b in ipairs(list) do
     if #out >= MAX_BUGS then break end
     if type(b) == "table" and (not keep or keep(b)) then
-      out[#out + 1] = { msg = b.msg, stack = b.stack, count = b.count, time = b.time, at = b.at, version = b.version, addon = b.addon }
+      out[#out + 1] = { msg = b.msg, stack = b.stack, count = b.count, time = b.time, at = b.at, version = b.version, addon = b.addon, trail = b.trail }
     end
   end
   return out
@@ -434,7 +493,14 @@ function M.Host(cfg)
   pcall(ev.RegisterEvent, ev, "PLAYER_LOGIN")
   pcall(ev.RegisterEvent, ev, "PLAYER_LEAVING_WORLD")
   pcall(ev.RegisterEvent, ev, "PLAYER_REGEN_ENABLED")
+  for event in pairs(M.TrailEvents) do pcall(ev.RegisterEvent, ev, event) end
   ev:SetScript("OnEvent", function(_, event, addon, func)
+    local line = M.TrailEvents[event]
+    if line then pcall(M.Note, line) end
+    -- trail-only events stop here; the ones below also have work of their own
+    if line and event ~= "PLAYER_REGEN_ENABLED" and event ~= "ADDON_ACTION_BLOCKED" and event ~= "ADDON_ACTION_FORBIDDEN" then
+      return
+    end
     if event == "PLAYER_LOGIN" then return M.Poke() end -- first copy for the Hub, once everything is loaded
     if event == "PLAYER_REGEN_ENABLED" then -- a change that had to wait for the end of a fight
       if S.healthPending then M.Poke() end

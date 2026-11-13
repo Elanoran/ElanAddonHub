@@ -42,7 +42,7 @@
 -- Only OUR OWN frames are created and no Blizzard frame is hooked. The window uses plain (non-secure) frames, so it can be
 -- opened in combat like Hunter Helper's window; nothing in it is built before the first Show.
 local Lib = _G.ElansLib
-local M = Lib:NewModule("Window", 3)
+local M = Lib:NewModule("Window", 4)
 if not M then return end
 
 local WinMT = {}
@@ -324,6 +324,8 @@ function WinMT:Build()
     if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_CLOSE then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_CLOSE) end
   end)
   main:SetScript("OnShow", function()
+    local BT = Lib:Get("BugTrap")
+    if BT and BT.Note then pcall(BT.Note, "window opened: " .. tostring(self.name)) end
     if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_OPEN then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_OPEN) end
   end)
 

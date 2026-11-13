@@ -50,8 +50,12 @@ namespace ElansAddonHub
         static List<object> Lst(params object[] items) => items.ToList();
         static string SvFile(string db, Dictionary<string, object> body) => db + " = " + LuaText(body) + "\n";
 
-        static Dictionary<string, object> HealthBugLua(string addon, string msg, string stack, int count, string version, long at) =>
-            D("msg", msg, "stack", stack, "count", count, "time", DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"), "at", at, "version", version, "addon", addon);
+        static Dictionary<string, object> HealthBugLua(string addon, string msg, string stack, int count, string version, long at, string trail = null)
+        {
+            var d = D("msg", msg, "stack", stack, "count", count, "time", DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"), "at", at, "version", version, "addon", addon);
+            if (trail != null) d["trail"] = trail;
+            return d;
+        }
 
         // Addon health from synthetic SavedVariables of two addons in a fake WoW folder (2.26.0)
         async Task<string> HealthTest(string dir)
@@ -94,7 +98,7 @@ namespace ElansAddonHub
                     "Forever-Brenna", D("name", "Brenna", "realm", "Forever", "class", "PALADIN"),
                     "Forever-Elan", D("name", "Elan", "realm", "Forever", "class", "MAGE"));
                 File.WriteAllText(Path.Combine(sv, "ElansBags.lua"), SvFile("ElansBagsDB", D("lastVersion", "0.3.1", "hintVersion", "0.3.1", "chars", chars,
-                    "bugs", Lst(HealthBugLua("ElansBags", msg1, stack, 3, "0.3.1", now - 600),
+                    "bugs", Lst(HealthBugLua("ElansBags", msg1, stack, 3, "0.3.1", now - 600, "11:17:52 mailbox opened\n11:18:03 reported a player (x2)\n11:18:04 /ebags alt Aldrin"),
                                 HealthBugLua("ElansBags", "Interface/AddOns/ElansBags/Junk.lua:12: bad argument #1 to 'ipairs' (table expected, got nil)", "ElansBags/Junk.lua:12: in function `Sell'", 1, "0.3.0", now - 86400 * 2)),
                     "diag", D("autoVersion", "0.3.1", "runs", Lst(run, runCombat)))));
                 File.WriteAllText(Path.Combine(sv, "ElansHunterHelper.lua"), SvFile("ElansHunterHelperDB", D("lastVersion", "1.23.1",
@@ -177,6 +181,9 @@ namespace ElansAddonHub
                 Check("report: the brand 'Elan's Bags' survives a character called Elan", text.Contains("Elan's Bags") && text.Contains("Elan's Hunter Helper") && !text.Contains("char3's"));
                 Check("report: no account folder, no Windows user", !text.Contains("TESTACC") && !text.Contains(Environment.UserName + "\\"));
                 Check("report: errors, stack and diag results are in it", text.Contains("attempt to index field 'slots'") && text.Contains("Window.lua:88") && text.Contains("unit:player:UnitHealth = S") && text.Contains("x3") && text.Contains("(older version)"));
+                Check("report: 3.9.9 the trail is under the error (Just before:, oldest first)", text.Contains("     Just before:") && text.Contains("       11:17:52 mailbox opened")
+                    && text.IndexOf("mailbox opened", StringComparison.Ordinal) < text.IndexOf("reported a player (x2)", StringComparison.Ordinal), text);
+                Check("report: 3.9.9 a bug without a trail has no Just before line", text.Split(new[] { "Just before:" }, StringSplitOptions.None).Length == 2);
                 Check("report: third-party addon errors are not in it", !text.Contains("Questie") && !text.Contains("other people's problem"));
                 Check("report: both addons with installed vs diag version", text.Contains("Installed: v0.3.1 · diag: v0.3.1") && text.Contains("Installed: v1.23.1 · diag: v1.23.0"));
 

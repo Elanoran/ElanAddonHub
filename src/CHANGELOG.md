@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.9.9
+- **Addon errors say what you were doing.** The addon health report and the error list show, under each error, what happened in the game just before it (from the addons' Bug Trap: mailbox, bank, combat, a reported player, slash commands...), so a pasted report explains itself. Needs the updated Elan addons.
+
 ## 3.9.8
 - **Check for updates finds a release published minutes ago.** On the test channel the list of releases was kept for 10 minutes, so a check right after a release could still say there was nothing new. A click on Check (or Settings > Check now) now always asks again; only the automatic checks use the kept list.
 

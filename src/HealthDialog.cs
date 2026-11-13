@@ -249,6 +249,12 @@ namespace ElansAddonHub
             inner.Children.Add(new TextBox { Text = b.Msg, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("Brush.Text.Primary"), FontSize = 12, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 8) });
             if (!string.IsNullOrWhiteSpace(b.Stack))
                 inner.Children.Add(new TextBox { Text = b.Stack.Replace("\r", ""), IsReadOnly = true, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("Brush.Text.Secondary"), FontFamily = (FontFamily)Application.Current.Resources["Font.Mono"], FontSize = 11, Padding = new Thickness(0), TextWrapping = TextWrapping.NoWrap });
+            // 3.9.9: what happened in the game just before the error (BugTrap 5+)
+            if (!string.IsNullOrWhiteSpace(b.Trail))
+            {
+                inner.Children.Add(new TextBlock { Text = "Just before", Foreground = Res("Brush.Text.Secondary"), FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) });
+                inner.Children.Add(new TextBox { Text = b.Trail.Replace("\r", ""), IsReadOnly = true, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("Brush.Text.Secondary"), FontFamily = (FontFamily)Application.Current.Resources["Font.Mono"], FontSize = 11, Padding = new Thickness(0), TextWrapping = TextWrapping.NoWrap });
+            }
             // grows / shrinks (Motion.Expand) instead of popping
             var detail = new Border { Padding = new Thickness(12, 0, 12, 12), Child = inner };
             if (!expandAll) detail.Visibility = Visibility.Collapsed;

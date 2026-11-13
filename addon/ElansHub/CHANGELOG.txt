@@ -68,3 +68,5 @@
 1.20.1 A quiet painted scene behind the Hub's settings pages (a lantern-lit watchtower), and the picture of the one Elan window's Search all settings page (an old stone gate above a misty valley). Switch both off with "Background art" in General. Quit WoW fully once (new picture files).
 
 1.20.2 Shared library update for sharing Elan addon settings (Share my settings... / Import settings... in the other Elan addons); nothing changes in the Hub itself - quit WoW fully once, a /reload is not enough
+
+1.20.3 Shared library update: Bug Trap keeps what happened just before an error (mailbox, bank, combat, a reported player, slash commands) with it; nothing changes in the Hub itself
