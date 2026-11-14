@@ -41,6 +41,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   spells in their final place while levelling. Easy keys for the spells you press most, escapes and your race's own
   spells on the same keys in every spec, a reason for every spot in the tooltip. Swap buttons to make it yours and drag a
   known spell onto your action bar.
+- **Action bar skin**: a thin painted border on your action buttons for your spec (gold Holy, silver Discipline, gunmetal
+  Shadow), full colour on your best keys and a little dimmer on the rest. Settings > Action bar skin.
 
 ## Commands
 
