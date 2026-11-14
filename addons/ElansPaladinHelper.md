@@ -23,8 +23,9 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   have visited a trainer and a mark on spells WoW Forever changed; a chat line at level-up; paladin trainers on the world
   map (click one for a waypoint).
 - **Bar Plan**: a suggested level-60 action bar layout for each spec (Holy, Protection, Retribution), so you can put
-  spells in their final place while levelling. Easy keys for the spells you press most, the same lifesavers and blessings
-  on the same keys in every spec, a reason for every spot in the tooltip. Swap buttons to make it yours and drag a known
+  spells in their final place while levelling, drawn on your keyboard: each easy key with a spell and its Shift spell,
+  the same lifesavers on the same keys in every spec, blessings and auras in an out-of-combat pocket, a reason for every
+  spot in the tooltip. Swap buttons to make it yours and drag a known
   spell onto your action bar.
 
 ## Commands

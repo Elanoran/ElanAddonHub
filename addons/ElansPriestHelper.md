@@ -38,8 +38,9 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   regenerating, a tip); the Coach tab compares the heal per mana of your ranks.
 - **Trainer help**: the **Priest Skills** tab, a chat line at level-up, and priest trainers on the world map.
 - **Bar Plan**: a suggested level-60 action bar layout for each spec (Discipline, Holy, Shadow), so you can put
-  spells in their final place while levelling. Easy keys for the spells you press most, escapes and your race's own
-  spells on the same keys in every spec, a reason for every spot in the tooltip. Swap buttons to make it yours and drag a
+  spells in their final place while levelling, drawn on your keyboard: each easy key with a spell and its Shift spell,
+  escapes and your race's own spells on the same keys in every spec, buffs in an out-of-combat pocket, a reason for
+  every spot in the tooltip. Swap buttons to make it yours and drag a
   known spell onto your action bar.
 - **Action bar skin**: a thin painted border on your action buttons for your spec (gold Holy, silver Discipline, gunmetal
   Shadow), full colour on your best keys and a little dimmer on the rest. Settings > Action bar skin.
