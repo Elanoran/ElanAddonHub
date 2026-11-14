@@ -13,8 +13,8 @@ Needs [Elan's Toolkit](ElansToolkit.md); get both with [Elan's Outpost](../READM
 - **My Pet**: your pet's training plan (what it can still learn, and from which beasts) and what it eats.
 - **Stable**: a snapshot of each pet you have had out, and which pets are stabled.
 - **Pet Build**: a training-point planner (a rank costs its own training points, at most 4 active abilities).
-- **Feeding**: a Feed button that glows when your pet needs food and picks the right food. WoW Forever hides pet
-  happiness, so a feed timer stands in for it.
+- **Feeding**: a Feed button that glows when your pet needs food and picks the right food. It reads happiness from the game's pet and stable info where it can;
+  when WoW Forever hides it, it guesses from how fast your pet lost a level before (or a feed timer until it has learned that).
 - **Pet spell bar**: a paw button that opens Call, Dismiss, Revive, Mend, Feed, Tame and Beast Lore, usable in combat.
 
 **Taming**
