@@ -1040,6 +1040,12 @@
                   </StackPanel>
                 </RadioButton>
                 <RadioButton x:Name="AboutTabPatches" Style="{StaticResource EntityTab}" GroupName="abouttab" Content="Game patches" Checked="AboutTab_Checked" ToolTip="What each game build changed: Blizzard's notes and what the Outpost found in your game files" />
+                <RadioButton x:Name="AboutTabBlizzard" Style="{StaticResource EntityTab}" GroupName="abouttab" Checked="AboutTab_Checked" ToolTip="What Blizzard's staff post about WoW Forever on the forums: hotfixes, server trouble, news">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Blizzard news" />
+                    <Ellipse x:Name="AboutBlizzardDot" Width="8" Height="8" Fill="{StaticResource Brush.Accent}" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
+                  </StackPanel>
+                </RadioButton>
               </StackPanel>
             </Grid>
 
@@ -1118,6 +1124,11 @@
             <StackPanel x:Name="AboutPanePatches" Visibility="Collapsed">
               <Border x:Name="PatchPickHost" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,16"><StackPanel x:Name="PatchPick" Orientation="Horizontal" /></Border>
               <StackPanel x:Name="PatchBody" />
+            </StackPanel>
+
+            <!-- Blizzard news: Blizzard's forum posts about WoW Forever (SettingsPage.BlizzardNews.cs) -->
+            <StackPanel x:Name="AboutPaneBlizzard" Visibility="Collapsed">
+              <StackPanel x:Name="BlizzardBody" />
             </StackPanel>
           </StackPanel>
         </Grid>

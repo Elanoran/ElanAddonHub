@@ -492,6 +492,7 @@ namespace ElansAddonHub
             await RealSec("zonelorereal", ZoneLoreRealTest);
             if (Begin("about")) { result += "\r\n" + await AboutTest(dir); End(); }
             if (Begin("gamepatches")) { result += "\r\n" + await GamePatchesTest(dir); End(); }
+            if (Begin("blizzardnews")) { result += "\r\n" + await BlizzardNewsTest(dir); End(); }
             if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             if (Begin("coldstart")) { result += "\r\n" + await ColdStartTest(dir); End(); }

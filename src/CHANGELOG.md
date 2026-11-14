@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.10.0
+- **Blizzard news.** A new tab in Settings > About lists what Blizzard's staff post about WoW Forever on the forums: hotfixes, refunds, server trouble and other news, newest first, with a link to each post. Pick the EU or US forum. Nothing is fetched until you click Load Blizzard's news once; after that the Outpost checks every half hour, without your account or anything about you, and keeps only the text.
+- **A note when Blizzard posts.** A new post puts a dot on the tab and a short note in the window's corner, once per post. Posts about servers or logins stand out. You can turn the note off on the tab. Notices Blizzard only posts on X don't reach the forums, so they don't show here.
+
 ## 3.9.9
 - **Addon errors say what you were doing.** The addon health report and the error list show, under each error, what happened in the game just before it (from the addons' Bug Trap: mailbox, bank, combat, a reported player, slash commands...), so a pasted report explains itself. Needs the updated Elan addons.
 

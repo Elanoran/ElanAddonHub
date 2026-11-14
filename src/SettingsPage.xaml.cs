@@ -245,6 +245,7 @@ namespace ElansAddonHub
             Loaded += (s, e) => { var w = Window.GetWindow(this); if (w != null) w.StateChanged += (s2, e2) => AboutRun(); };
             UpdateAbout();
             InitWhatsNewNote();
+            InitBlizzardNews();
         }
 
         void AboutRun()

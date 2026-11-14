@@ -128,6 +128,11 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; }
         [DataMember(Name = "videoPreviewsAuto")] public bool VideoPreviewsAuto { get; set; } // false (default) = a YouTube link in chat fetches its thumbnail + title only after a click on "Load preview"; true = by itself
         [DataMember(Name = "patchNotesLoad")] public bool PatchNotesLoad { get; set; }      // false (default) = Settings > About > Game patches asks Blizzard's forum for its notes only after a click on "Load Blizzard's notes"; true = clicked once
+        [DataMember(Name = "blizzardNewsLoad")] public bool BlizzardNewsLoad { get; set; }  // false (default) = Settings > About > Blizzard news asks the forum only after a click on "Load Blizzard's news"; true = clicked once (then also every 30 min while the Outpost runs)
+        [DataMember(Name = "blizzardNewsRegion")] public string BlizzardNewsRegion { get; set; }   // "eu" (default) or "us": which forum's Blizzard posts
+        [DataMember(Name = "blizzardNewsSeen")] public long BlizzardNewsSeen { get; set; }  // the newest Blizzard news post id the reader has seen (0 = none yet: the first load marks all as seen)
+        [DataMember(Name = "blizzardNewsNoted")] public long BlizzardNewsNoted { get; set; }  // the newest Blizzard news post the corner note was shown for (each post gets one note, also across restarts)
+        [DataMember(Name = "blizzardNewsAlertsOff")] public bool BlizzardNewsAlertsOff { get; set; }   // false (default) = a new Blizzard post shows a note in the window's corner
         [DataMember(Name = "eventsStripOff")] public bool EventsStripOff { get; set; }      // false (default) = the next events show in a strip above the Lodge chat
         // the filter chips above the Calendar: which kinds are hidden (all false = everything shown). "Show in-game WoW events" (WowEventsOff) stays the master switch for the three WoW kinds.
         [DataMember(Name = "calHideLodge")] public bool CalHideLodge { get; set; }

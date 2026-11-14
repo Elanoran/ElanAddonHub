@@ -10,9 +10,9 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub
 {
-    // --selftest "about": Settings > About. Three tabs (EntityTab): About (the campfire scene centred, View log / What's new / GitHub / welcome
+    // --selftest "about": Settings > About. Four tabs (EntityTab): About (the campfire scene centred, View log / What's new / GitHub / welcome
     // guide, credits, the trademark line on one line when it fits) and What's new (the version history: the Outpost's CHANGELOG.md inside the
-    // exe, the Elan's Hub companion's CHANGELOG.txt, the other addons' notes from the update manifest; this version / installed / newer marked) and Game patches (SettingsPage.Patches.cs).
+    // exe, the Elan's Hub companion's CHANGELOG.txt, the other addons' notes from the update manifest; this version / installed / newer marked) and Game patches (SettingsPage.Patches.cs) and Blizzard news (SettingsPage.BlizzardNews.cs).
     // After an update a one-time "What's new in x.y.z" note shows in the window's corner (WhatsNewNote) with a link to the tab.
     public partial class SettingsPage
     {
@@ -25,23 +25,25 @@ namespace ElansAddonHub
 
         void AboutTab_Checked(object sender, RoutedEventArgs e)
         {
-            if (AboutTabNews == null || AboutPaneNews == null || AboutTabPatches == null || AboutPanePatches == null) return;   // not while the XAML is still being read
-            ShowAboutTab(AboutTabPatches.IsChecked == true ? "patches" : AboutTabNews.IsChecked == true ? "news" : "about");
+            if (AboutTabNews == null || AboutPaneNews == null || AboutTabPatches == null || AboutPanePatches == null || AboutTabBlizzard == null || AboutPaneBlizzard == null) return;   // not while the XAML is still being read
+            ShowAboutTab(AboutTabBlizzard.IsChecked == true ? "blizzard" : AboutTabPatches.IsChecked == true ? "patches" : AboutTabNews.IsChecked == true ? "news" : "about");
         }
 
         public void ShowAboutTab(string tab)
         {
-            if (AboutPaneAbout == null || AboutPaneNews == null || AboutPanePatches == null) return;
-            if (tab != "news" && tab != "patches") tab = "about";
-            var radio = tab == "news" ? AboutTabNews : tab == "patches" ? AboutTabPatches : AboutTabAbout;
+            if (AboutPaneAbout == null || AboutPaneNews == null || AboutPanePatches == null || AboutPaneBlizzard == null) return;
+            if (tab != "news" && tab != "patches" && tab != "blizzard") tab = "about";
+            var radio = tab == "news" ? AboutTabNews : tab == "patches" ? AboutTabPatches : tab == "blizzard" ? AboutTabBlizzard : AboutTabAbout;
             if (radio.IsChecked != true) { radio.IsChecked = true; return; }
-            FrameworkElement pane = tab == "news" ? AboutPaneNews : tab == "patches" ? AboutPanePatches : (FrameworkElement)AboutPaneAbout;
+            FrameworkElement pane = tab == "news" ? AboutPaneNews : tab == "patches" ? AboutPanePatches : tab == "blizzard" ? AboutPaneBlizzard : (FrameworkElement)AboutPaneAbout;
             var was = pane.Visibility == Visibility.Visible;
             AboutPaneAbout.Visibility = tab == "about" ? Visibility.Visible : Visibility.Collapsed;
             AboutPaneNews.Visibility = tab == "news" ? Visibility.Visible : Visibility.Collapsed;
             AboutPanePatches.Visibility = tab == "patches" ? Visibility.Visible : Visibility.Collapsed;
+            AboutPaneBlizzard.Visibility = tab == "blizzard" ? Visibility.Visible : Visibility.Collapsed;
             if (tab == "news") { newsUnseen = false; AboutNewsDot.Visibility = Visibility.Collapsed; FillNews(); }
             if (tab == "patches") FillPatches();
+            if (tab == "blizzard") FillBlizzard();
             if (IsLoaded && !was) Motion.PageIn(pane);
             if (aboutTimer != null) AboutRun();
         }
@@ -251,16 +253,27 @@ namespace ElansAddonHub
         public void ViewLogForTest() => ViewLog_Click(this, null);
     }
 
-    // the one-time "What's new in x.y.z" card, over the window's bottom right corner (an adorner: nothing in the window's own layout moves).
-    // An overlay (Surface3, hairline, radius 14, elevation 2); the first three lead-ins of the version's notes, "See what's new" and "Dismiss".
-    public class WhatsNewNote : System.Windows.Documents.Adorner
+    // the one-time "What's new in x.y.z" card (CornerNote): the first three lead-ins of the version's notes, "See what's new" and "Dismiss".
+    public class WhatsNewNote : CornerNote
+    {
+        public WhatsNewNote(UIElement adorned, ChangelogRelease rel, string product)
+            : base(adorned, "What's new in " + rel.Version, "Updated to " + rel.Version, "What's new in " + product + " " + rel.Version,
+                   rel.Items.Take(3).Select(it => string.Concat(Changelog.Spans(it.Lead ?? (it.Text.Length > 90 ? it.Text.Substring(0, 90).TrimEnd() + "…" : it.Text)).Select(x => x.Value))),
+                   rel.Items.Count > 3 ? $"and {rel.Items.Count - 3} more" : null, "See what's new", false) { }
+    }
+
+    // a card over the window's bottom right corner (an adorner: nothing in the window's own layout moves): the What's new note and the Blizzard
+    // news note (3.10). An overlay (Surface3, hairline, radius 14, elevation 2): an eyebrow line (accent, or warn), a title, up to three bullet
+    // lines, an optional caption, the open button and "Dismiss".
+    public class CornerNote : System.Windows.Documents.Adorner
     {
         readonly Border card;
         public event Action Open, Dismiss;
         public Border CardForTest => card;
         public void OpenForTest() => Open?.Invoke();
+        public void DismissForTest() => Dismiss?.Invoke();
 
-        public WhatsNewNote(UIElement adorned, ChangelogRelease rel, string product) : base(adorned)
+        public CornerNote(UIElement adorned, string name, string eyebrow, string title, IEnumerable<string> lines, string caption, string openText, bool warn) : base(adorned)
         {
             Brush B(string k) => (Brush)Application.Current.Resources[k];
             Style S(string k) => (Style)Application.Current.Resources[k];
@@ -269,24 +282,23 @@ namespace ElansAddonHub
                 Width = 360, Background = B("Brush.Surface3"), BorderBrush = B("Brush.Divider"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(16), Effect = Application.Current.TryFindResource("Elevation.2") as System.Windows.Media.Effects.Effect,
             };
-            System.Windows.Automation.AutomationProperties.SetName(card, "What's new in " + rel.Version);
+            System.Windows.Automation.AutomationProperties.SetName(card, name);
             var sp = new StackPanel();
-            sp.Children.Add(new TextBlock { Text = "Updated to " + rel.Version, Style = S("Text.Caption"), Foreground = B("Brush.Accent") });
-            sp.Children.Add(new TextBlock { Text = "What's new in " + product + " " + rel.Version, Style = S("Text.Section"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8) });
-            foreach (var it in rel.Items.Take(3))
+            sp.Children.Add(new TextBlock { Text = eyebrow, Style = S("Text.Caption"), Foreground = B(warn ? "Brush.Warn" : "Brush.Accent") });
+            sp.Children.Add(new TextBlock { Text = title, Style = S("Text.Section"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8) });
+            foreach (var line in lines ?? Enumerable.Empty<string>())
             {
-                var line = it.Lead ?? (it.Text.Length > 90 ? it.Text.Substring(0, 90).TrimEnd() + "…" : it.Text);
                 var g = new Grid { Margin = new Thickness(0, 2, 0, 2) };
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
                 g.ColumnDefinitions.Add(new ColumnDefinition());
                 g.Children.Add(new TextBlock { Text = "•", Style = S("Text.Secondary"), Foreground = B("Brush.Text.Tertiary") });
-                var t = new TextBlock { Text = string.Concat(Changelog.Spans(line).Select(x => x.Value)), Style = S("Text.Secondary"), TextWrapping = TextWrapping.Wrap };
+                var t = new TextBlock { Text = line, Style = S("Text.Secondary"), TextWrapping = TextWrapping.Wrap };
                 Grid.SetColumn(t, 1); g.Children.Add(t);
                 sp.Children.Add(g);
             }
-            if (rel.Items.Count > 3) sp.Children.Add(new TextBlock { Text = $"and {rel.Items.Count - 3} more", Style = S("Text.Caption"), Margin = new Thickness(16, 2, 0, 0) });
+            if (caption != null) sp.Children.Add(new TextBlock { Text = caption, Style = S("Text.Caption"), Margin = new Thickness(16, 2, 0, 0) });
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
-            var open = new Button { Content = "See what's new", Style = S("Button.Primary.S") };
+            var open = new Button { Content = openText, Style = S("Button.Primary.S") };
             open.Click += (s, e) => Open?.Invoke();
             var dismiss = new Button { Content = "Dismiss", Style = S("GhostButton"), Margin = new Thickness(8, 0, 0, 0) };
             dismiss.Click += (s, e) => Dismiss?.Invoke();
