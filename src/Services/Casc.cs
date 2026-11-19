@@ -175,12 +175,36 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // self-test: every encoding key this storage opens after Open (the encoding file's own key is EncodingEKeyForTest)
+        internal Action<byte[]> EKeyOpenedForTest;
+        internal byte[] EncodingEKeyForTest => encodingEKey;
+        internal BlteFile OpenEKeyForTest(byte[] ekey) => OpenEKey(ekey);
+
         // the BLTE file behind an encoding key
         BlteFile OpenEKey(byte[] ekey)
         {
             if (disposed) throw new ObjectDisposedException("CascStorage", "the game storage is closed");
             if (!TryFind(ekey, out var loc)) throw new FileNotFoundException("file is not in the local storage (ekey " + BitConverter.ToString(ekey, 0, 9).Replace("-", "") + ")");
-            return new BlteFile(Archive(loc.Archive), loc.Offset + 30, loc.Size - 30, ZeroFillEncrypted);
+            EKeyOpenedForTest?.Invoke(ekey);
+            // Most installs put a 30 byte local header (reversed ekey, size, flags, checksums) before the BLTE data.
+            // Some Forever installs store entries with that header zeroed or left out entirely (BLTE right at the offset),
+            // mixed in the same data files, so look for the magic in both places. The header itself is never checked.
+            var fs = Archive(loc.Archive);
+            if (loc.Size > 30 && HasBlteMagic(fs, loc.Offset + 30)) return new BlteFile(fs, loc.Offset + 30, loc.Size - 30, ZeroFillEncrypted);
+            if (HasBlteMagic(fs, loc.Offset)) return new BlteFile(fs, loc.Offset, loc.Size, ZeroFillEncrypted);
+            throw new IOException("not a BLTE block (ekey " + BitConverter.ToString(ekey, 0, 9).Replace("-", "") + ", data." + loc.Archive.ToString("D3") + " @" + loc.Offset + ")");
+        }
+
+        static bool HasBlteMagic(FileStream fs, long pos)
+        {
+            var m = new byte[4];
+            lock (fs)
+            {
+                if (pos + 4 > fs.Length) return false;
+                fs.Position = pos;
+                ReadFull(fs, m, 0, 4);
+            }
+            return m[0] == 'B' && m[1] == 'L' && m[2] == 'T' && m[3] == 'E';
         }
 
         void OpenEncoding()

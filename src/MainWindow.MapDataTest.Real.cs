@@ -60,6 +60,7 @@ namespace ElansAddonHub
                 long cacheMs = sw2.ElapsedMilliseconds;
                 Check("real game files: the next start comes from the saved index (not the game files)", MapData.Ready && MapData.LastLoadFrom == "cache file" && MapData.Index.UiMapCount == idx.UiMapCount, MapData.LastLoadFrom);
                 idx = MapData.Index;
+                CascLayoutChecks(real, Path.Combine(rw, "casclayout"), idx.ArtFor(1411)?.Tiles.Select(t => t.FileDataId).ToList(), Check, notes);
                 var dur = idx.Get(1411);
                 idx.PictureSize(1411, out int dw, out int dh);
                 Check("real game files: Durotar is uiMap 1411 under Kalimdor, a zone with a 1002 x 668 picture of 12 tiles", dur != null && dur.Name == "Durotar" && dur.ParentId == 1414 && dur.Type == UiMapInfo.Zone && dw == 1002 && dh == 668 && idx.ArtFor(1411).Tiles.Length == 12 && string.Join(" > ", idx.Breadcrumb(1411).Select(m => m.Name)) == "Azeroth > Kalimdor > Durotar", dur?.Name + " " + dw + "x" + dh);
@@ -197,6 +198,114 @@ namespace ElansAddonHub
             {
                 MapData.ResetForTest();
             }
+        }
+
+        // 3.10.1: some Forever installs store data entries with the 30 byte local header zeroed or left out (BLTE right at the indexed offset), mixed
+        // in the same archives; the reader only looked behind a header ("not a BLTE block" for talents, map art, class data). This copies what reading
+        // Durotar's tiles needs (encoding, root, the tiles) from the real storage into a small storage of its own, every entry in one of the three
+        // layouts in turn, and reads the tiles again: same bytes. Plus one entry with BLTE in neither place, which must still fail.
+        void CascLayoutChecks(string real, string mini, List<int> fids, CheckFn Check, List<string> notes)
+        {
+            if (fids == null || fids.Count == 0) { Check("CASC layouts: Durotar has tiles to read", false); return; }
+            var flavor = MapData.Flavor() ?? "_classic_beta_";
+            var want = new HashSet<int>(fids);
+            var opened = new List<byte[]>();
+            var before = new Dictionary<int, byte[]>();
+            var locs = new List<KeyValuePair<byte[], CascStorage.Loc>>();
+            byte[] junkKey = null;
+            using (var casc = CascStorage.Open(real, flavor))
+            {
+                casc.UseRootIndex = true;
+                opened.Add(casc.EncodingEKeyForTest);
+                casc.EKeyOpenedForTest = k => { lock (opened) opened.Add((byte[])k.Clone()); };
+                var keys = casc.ResolveFileIds(want);
+                foreach (var kv in keys) { var b = casc.ReadByContentKey(kv.Value); if (b != null) before[kv.Key] = b; }
+                casc.EKeyOpenedForTest = null;
+                var seen = new HashSet<string>();
+                foreach (var k in opened)
+                    if (seen.Add(BitConverter.ToString(k, 0, 9)) && casc.TryFind(k, out var loc)) locs.Add(new KeyValuePair<byte[], CascStorage.Loc>(k, loc));
+                // a key the storage does not need, for the entry with no BLTE anywhere: the encoding key with its last index byte changed
+                junkKey = (byte[])casc.EncodingEKeyForTest.Clone(); junkKey[8] ^= 0x5A;
+            }
+            Check("CASC layouts: Durotar's " + want.Count + " tiles read from the real storage (" + locs.Count + " entries with the encoding and root files)", before.Count == want.Count && locs.Count >= want.Count + 2, before.Count + " read, " + locs.Count + " entries");
+
+            // the small storage: .build.info, the configs it names, the client folders' .flavor.info, one index (bucket 0) and data.000
+            if (Directory.Exists(mini)) Util.DeleteDir(mini);
+            var dd = Path.Combine(mini, "Data", "data");
+            Directory.CreateDirectory(dd);
+            var biText = File.ReadAllText(Path.Combine(real, ".build.info"));
+            File.WriteAllText(Path.Combine(mini, ".build.info"), biText);
+            foreach (var field in biText.Split('|', '\n', '\r', ' '))
+            {
+                var f = field.Trim();
+                if (f.Length != 32 || !f.All(Uri.IsHexDigit)) continue;
+                var src = Path.Combine(real, "Data", "config", f.Substring(0, 2), f.Substring(2, 2), f);
+                if (!File.Exists(src)) continue;
+                var dst = Path.Combine(mini, "Data", "config", f.Substring(0, 2), f.Substring(2, 2), f);
+                Directory.CreateDirectory(Path.GetDirectoryName(dst)); File.Copy(src, dst, true);
+            }
+            foreach (var cd in Directory.GetDirectories(real, "_*_"))
+            {
+                var fi = Path.Combine(cd, ".flavor.info");
+                Directory.CreateDirectory(Path.Combine(mini, Path.GetFileName(cd)));
+                if (File.Exists(fi)) File.Copy(fi, Path.Combine(mini, Path.GetFileName(cd), ".flavor.info"), true);
+            }
+            var entries = new List<Tuple<byte[], long, int>>();   // ekey, offset in data.000, indexed size
+            int[] layouts = new int[3];
+            using (var outFs = new FileStream(Path.Combine(dd, "data.000"), FileMode.Create, FileAccess.Write))
+            {
+                var archives = new Dictionary<int, FileStream>();
+                try
+                {
+                    for (int i = 0; i < locs.Count; i++)
+                    {
+                        var loc = locs[i].Value;
+                        if (!archives.TryGetValue(loc.Archive, out var src)) archives[loc.Archive] = src = new FileStream(Path.Combine(real, "Data", "data", "data." + loc.Archive.ToString("D3")), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                        var raw = new byte[loc.Size];
+                        src.Position = loc.Offset; CascStorage.ReadFull(src, raw, 0, raw.Length);
+                        int layout = i % 3;   // 0 standard header, 1 header all zeros, 2 no header
+                        layouts[layout]++;
+                        long at = outFs.Position;
+                        if (layout == 1) Array.Clear(raw, 0, 30);
+                        if (layout == 2) outFs.Write(raw, 30, raw.Length - 30); else outFs.Write(raw, 0, raw.Length);
+                        entries.Add(Tuple.Create(locs[i].Key, at, layout == 2 ? raw.Length - 30 : raw.Length));
+                    }
+                }
+                finally { foreach (var a in archives.Values) a.Dispose(); }
+                // BLTE in neither place
+                entries.Add(Tuple.Create(junkKey, outFs.Position, 64));
+                outFs.Write(new byte[64], 0, 64);
+            }
+            entries.Sort((a, b) => { for (int i = 0; i < 9; i++) { int c = a.Item1[i].CompareTo(b.Item1[i]); if (c != 0) return c; } return 0; });
+            var idxBytes = new byte[0x28 + entries.Count * 18];
+            BitConverter.GetBytes((ushort)7).CopyTo(idxBytes, 8);
+            idxBytes[0x0C] = 4; idxBytes[0x0D] = 5; idxBytes[0x0E] = 9;
+            BitConverter.GetBytes((uint)(entries.Count * 18)).CopyTo(idxBytes, 0x20);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                int o = 0x28 + i * 18;
+                Buffer.BlockCopy(entries[i].Item1, 0, idxBytes, o, 9);
+                long off = entries[i].Item2;   // archive 0
+                for (int b = 0; b < 5; b++) idxBytes[o + 9 + b] = (byte)(off >> (8 * (4 - b)));
+                BitConverter.GetBytes((uint)entries[i].Item3).CopyTo(idxBytes, o + 14);
+            }
+            File.WriteAllBytes(Path.Combine(dd, "0000000001.idx"), idxBytes);
+
+            int same = 0; string err = null, junkErr = null;
+            try
+            {
+                using (var casc = CascStorage.Open(mini, flavor))
+                {
+                    casc.UseRootIndex = true;
+                    var keys = casc.ResolveFileIds(want);
+                    foreach (var kv in keys) { var b = casc.ReadByContentKey(kv.Value); if (b != null && before.TryGetValue(kv.Key, out var was) && b.AsSpan().SequenceEqual(was)) same++; }
+                    try { casc.OpenEKeyForTest(junkKey).Dispose(); } catch (IOException e) { junkErr = e.Message; }
+                }
+            }
+            catch (Exception e) { err = e.GetType().Name + ": " + e.Message; }
+            Check("CASC layouts: a storage with the standard header (" + layouts[0] + " entries), a zeroed header (" + layouts[1] + ") and no header (" + layouts[2] + ") mixed in one archive opens and reads Durotar's tiles byte for byte", err == null && same == before.Count && layouts.All(n => n > 0), err ?? (same + " / " + before.Count + " same"));
+            Check("CASC layouts: an entry with BLTE neither behind a header nor at its offset is still 'not a BLTE block'", junkErr != null && junkErr.StartsWith("not a BLTE block"), junkErr);
+            try { Util.DeleteDir(mini); } catch (Exception) { }
         }
     }
 }
