@@ -60,6 +60,24 @@ namespace ElansAddonHub
                 && Wire(b1.Frame).List("finds").Count == 1 && AtlasObs.MakeBatch(snap, null, b1.Sigs, includeExtras: true) == null,
                 LodgeJson.Serialize(b0.Frame).Substring(0, Math.Min(300, LodgeJson.Serialize(b0.Frame).Length)) + " || " + LodgeJson.Serialize(b1.Frame).Substring(0, Math.Min(400, LodgeJson.Serialize(b1.Frame).Length)));
 
+            // ---- 3.10.2: dungeon loot has a zone but no position (instances give none): the find stays, without a place
+            var dz = AtlasObs.FromTables(new Dictionary<string, object>
+            {
+                ["finds"] = new Dictionary<string, object>
+                {
+                    ["1"] = new Dictionary<string, object> { ["i"] = 10408.0, ["c"] = 1.0, ["src"] = "npc:255069", ["at"] = 1_790_000_000.0, ["z"] = 1416.0, ["b"] = 70938.0 },
+                    ["2"] = new Dictionary<string, object> { ["i"] = 1806.0, ["c"] = 1.0, ["src"] = "npc:269134", ["at"] = 1_790_000_010.0, ["z"] = 1416.0, ["x"] = 0.5, ["y"] = 0.25 },
+                    ["3"] = new Dictionary<string, object> { ["i"] = 1807.0, ["c"] = 1.0, ["src"] = "npc:269134", ["at"] = 1_790_000_020.0, ["z"] = 1416.0, ["x"] = 7.0, ["y"] = 0.25 },
+                },
+            });
+            var dzf = dz.Finds.OrderBy(f => f.At).ToList();
+            var dzWire = AtlasObs.MakeBatch(dz, null, new Dictionary<string, string>(), includeExtras: true);
+            var dzList = dzWire == null ? new List<object>() : Wire(dzWire.Frame).List("finds").ToList();
+            Check("dungeon finds: a zone without a position keeps the find (no place), a full position stays, a bad coordinate loses only the place (counted as a part left out); every find stays, and the share sends no half position",
+                dzf.Count == 3 && dz.Dropped == 1 && dzf[0].Zone == 0 && dzf[0].Build == 70938 && dzf[1].Zone == 1416 && dzf[1].X == 0.5 && dzf[2].Zone == 0
+                && dzList.Count == 3 && dzList.Cast<Dictionary<string, object>>().All(o => o.ContainsKey("z") == o.ContainsKey("x") && o.ContainsKey("x") == o.ContainsKey("y")),
+                "finds " + dzf.Count + " dropped " + dz.Dropped + " zones " + string.Join(",", dzf.Select(f => f.Zone)) + " wire " + dzList.Count);
+
             // ---- the wording of a rate
             Check("rate text: \"4 of 37 kills (10.8 %)\", and under 30 kills no rate is claimed",
                 AtlasObs.RateText(4, 37, "kill", "kills") == "4 of 37 kills (10.8 %)" && AtlasObs.RateText(2, 12, "kill", "kills") == "2 of 12 kills (too few to tell a rate)" && AtlasObs.RateText(1, 1, "kill", "kills").Contains("1 kill "));

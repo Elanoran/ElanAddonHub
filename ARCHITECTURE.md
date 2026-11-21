@@ -1362,7 +1362,7 @@ Forever keeps its spawn points on the server, so the Toolkit notes them from pla
   - 10 spots per npc (the kind with the most spots gives one up, so kills never push out the one place a vendor
     stands);
   - 1500 npcs (the oldest goes; an npc with an interact / vignette spot counts 30 days newer).
-  - The publish trim (Toolkit 0.26.8+) runs in three phases. First the extras go (fingerprints, older builds, suffixes).
+  - The publish trim (Toolkit 0.26.7+) runs in three phases. First the extras go (fingerprints, older builds, suffixes).
     Then each big section is cut to its share of the 19,000-value budget (`CAP.share`). If the copy is still too big,
     sections go in order: kill spots first, finds last. Within npcspots, kill spots go first and interact / vignette
     spots last.

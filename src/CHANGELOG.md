@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.10.2
+- **Dungeon finds reach your Lodge.** The game gives no map position inside a dungeon, so finds made there came with a zone but no spot, and the Outpost threw them away whole. They are now kept and shared without a spot.
+
 ## 3.10.1
 - **Game data loads on more WoW Forever installs.** On some PCs the game stores part of its files in a slightly different way, and the Outpost could not read them: talent trees, map art, the 3D map, class data and some spell and item details were missing, with "not a BLTE block" in the log. The Outpost now reads both ways.
 

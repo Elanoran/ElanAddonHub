@@ -258,7 +258,9 @@ namespace ElansAddonHub
             // a find the validation refuses is counted, the rest stay
             WriteAtlasHub("ACC1", AtlasLua("finds = { { i = 5, c = 1, src = \"fishspot\", at = " + t0 + " }, { i = 6, c = 1, src = \"fish\", z = 1456, at = " + t0 + " }, { i = 7, c = 1, src = \"fish\", at = " + (t0 + 1) + " } }"));
             var s4 = AtlasObs.Read(atlasRoot);
-            check("finds: an unknown source and a half position are counted as left out, a find without position stays", s4.Finds.Count == 1 && s4.Dropped == 2 && s4.Finds[0].Item == 7);
+            // 3.10.2: a zone without x / y (dungeon loot) keeps the find without a place; before, the whole find was left out
+            check("finds: an unknown source is counted as left out; a zone without a position and a find without position stay (no place)",
+                s4.Finds.Count == 2 && s4.Dropped == 1 && s4.Finds.Any(f => f.Item == 6 && f.Zone == 0) && s4.Finds.Any(f => f.Item == 7));
 
             // finds marked as sent that the Lodge pool does not hold are sent again (once), the ones it holds are not
             Session.AtlasResetForTest();

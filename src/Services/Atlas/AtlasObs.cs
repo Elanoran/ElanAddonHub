@@ -424,11 +424,14 @@ namespace ElansAddonHub.Services
             if (o == null || !o.TryGetValue("i", out var iv) || !Whole(iv, 1, MaxItemId, out var i) || !o.TryGetValue("c", out var cv) || !Whole(cv, 1, 1000, out var c)
                 || !o.TryGetValue("at", out var av) || !Whole(av, MinUnix, MaxAt, out var at) || !(o.TryGetValue("src", out var sv) && sv is string src && ValidSrc(src))) { dropped++; return null; }
             var f = new Find { Item = (int)i, Count = (int)c, At = at, Src = src };
-            if (o.ContainsKey("z") || o.ContainsKey("x") || o.ContainsKey("y"))
+            // 3.10.2: a zone without a full position (dungeon loot: instances give no map position) loses only the position, never the
+            // find; it used to drop the whole find (32 of 500 on a real Toolkit file). The Lodge takes z / x / y only all together.
+            // A zone alone is normal (not counted); a position that is there but bad is a part left out (counted in `dropped`).
+            if (o.TryGetValue("z", out var zv) && Whole(zv, 1, MaxMapId, out var z) && o.TryGetValue("x", out var xv) && Coord(xv, out var x) && o.TryGetValue("y", out var yv) && Coord(yv, out var y))
             {
-                if (!o.TryGetValue("z", out var zv) || !Whole(zv, 1, MaxMapId, out var z) || !o.TryGetValue("x", out var xv) || !Coord(xv, out var x) || !o.TryGetValue("y", out var yv) || !Coord(yv, out var y)) { dropped++; return null; }
                 f.Zone = (int)z; f.X = x; f.Y = y;
             }
+            else if (o.ContainsKey("x") || o.ContainsKey("y")) dropped++;
             if (o.TryGetValue("by", out var bv) && bv is string by) f.By = CleanName(by);
             if (o.TryGetValue("s", out var sq) && Whole(sq, 0, long.MaxValue / 4, out var seq)) f.Seq = seq;
             // the game build: "gb" from the Lodge, "b" from the Toolkit; a bad value only loses the build, never the find
