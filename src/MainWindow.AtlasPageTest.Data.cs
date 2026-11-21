@@ -31,13 +31,13 @@ namespace ElansAddonHub
             return s;
         }
 
-        static ClassicIndex AtlasTestClassic(bool manyWolves = true)
+        static ClassicIndex AtlasTestClassic(bool manyWolves = true, bool worldDrop = false)
         {
             var idx = new ClassicIndex();
             idx.Provenance = new ClassicProvenance { DumpName = "ClassicDB_test.sql.gz", CommitSha = "abc123", CommitDate = "2024-05-02T10:00:00Z", BuiltUtc = "2024-06-01T00:00:00Z", FormatVersion = 1 };
             void It(int id, string name, int q, int il, int rl) => idx.Items[id] = new ClassicItemInfo { Id = id, Name = name, Quality = q, ItemLevel = il, RequiredLevel = rl };
             It(100, "Gnarlfang's Claw", 3, 14, 10); It(101, "Wolf Pelt", 1, 5, 1); It(102, "Linen Cloth", 1, 5, 1); It(103, "Dusty Cloak", 0, 3, 1);
-            It(104, "Crypt Blade", 3, 26, 22); It(105, "Ruby Ring", 4, 28, 24); It(107, "Wanderer's Coin", 1, 1, 1); It(108, "Heavy Linen Bandage", 1, 20, 1); It(109, "Wayfarer's Robe", 2, 20, 15);
+            It(104, "Crypt Blade", 3, 26, 22); It(105, "Ruby Ring", 4, 28, 24); It(107, "Wanderer's Coin", 1, 1, 1); It(108, "Heavy Linen Bandage", 1, 20, 1);
             void Npc(int id, string name, string sub, int min, int max, int rank, int type, int faction, int flags, params ClassicSpawn[] sp)
                 => idx.Npcs[id] = new ClassicNpc { Id = id, Name = name, SubName = sub, MinLevel = min, MaxLevel = max, Rank = rank, Type = type, FactionId = faction, NpcFlags = flags, Spawns = sp };
             Npc(1, "Gnarlfang", "Fanglord", 12, 12, 3, 1, 14, 0, Sp(0, 500, 1500));
@@ -66,13 +66,24 @@ namespace ElansAddonHub
             Src(104, ClassicSourceKind.NpcDrop, 4, 25); Src(105, ClassicSourceKind.NpcDrop, 4, 3); Src(105, ClassicSourceKind.NpcDrop, 5, 2); Src(105, ClassicSourceKind.ObjectLoot, 50, 15);
             for (int i = 10; i < 40; i++) Src(100, ClassicSourceKind.NpcDrop, i, 0.01 + (i - 10) * 0.003);               // 30 world-drop sources far under 0.1 %
             for (int i = 10; i < 18; i++) Src(103, ClassicSourceKind.NpcDrop, i, 0.02 + (i - 10) * 0.004);                // an item with nothing but tiny sources
-            // 3.10.3: a world drop: 30 wanderers of level 11-42 at tiny chances, the level-24 Crypt Lord, and the level-40 Deep Hall Warden with the best chance
-            for (int i = 10; i < 40; i++) Src(109, ClassicSourceKind.NpcDrop, i, 0.02 + (i % 7) * 0.005);
-            Src(109, ClassicSourceKind.NpcDrop, 4, 0.04); Src(109, ClassicSourceKind.NpcDrop, 5, 1.5);
             Src(100, ClassicSourceKind.QuestReward, 7, 0); Src(101, ClassicSourceKind.QuestChoice, 7, 0); Src(102, ClassicSourceKind.QuestChoice, 7, 0, 5, 5);
             Src(101, ClassicSourceKind.QuestObjective, 7, 0, 4, 4);
+            if (worldDrop) AddWorldDrop(Npc, Src, It);
             idx.Finish();
             return idx;
+        }
+
+        // 3.10.3 (only in the world-drop check: the other sections count this world's items and creatures)
+        static void AddWorldDrop(Action<int, string, string, int, int, int, int, int, int, ClassicSpawn[]> Npc, Action<int, ClassicSourceKind, int, double, int, int, int, bool> Src, Action<int, string, int, int, int> It)
+        {
+            It(109, "Wayfarer's Robe", 2, 20, 15);
+            // a world drop: 30 wanderers of level 11-42 at tiny chances, the level-24 Crypt Lord, and the level-40 Deep Hall Warden with the best chance
+            for (int i = 10; i < 40; i++) Src(109, ClassicSourceKind.NpcDrop, i, 0.02 + (i % 7) * 0.005, 1, 1, 0, false);
+            Src(109, ClassicSourceKind.NpcDrop, 4, 0.04, 1, 1, 0, false); Src(109, ClassicSourceKind.NpcDrop, 5, 1.5, 1, 1, 0, false);
+            // to farm: a common strider with 30 spawn points at 0.02 %, and a level-20 rare with one spawn at 1.2 %
+            Npc(7, "Plains Strider", "", 18, 20, 0, 1, 14, 0, Enumerable.Range(0, 30).Select(i => Sp(0, 50 + (i * 29) % 900, 60 + (i * 47) % 1880)).ToArray());
+            Npc(8, "Old Ironjaw", "", 20, 20, 4, 1, 14, 0, new[] { Sp(0, 400, 700) });
+            Src(109, ClassicSourceKind.NpcDrop, 7, 0.02, 1, 1, 0, false); Src(109, ClassicSourceKind.NpcDrop, 8, 1.2, 1, 1, 0, false);
         }
 
         // one atlas.data page, as the Lodge server sends it (see LodgeAtlas.Apply)

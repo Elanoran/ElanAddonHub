@@ -239,8 +239,8 @@ namespace ElansAddonHub.Services.Atlas
             FoldTiny(src, rows, tiny);
             if (wd != null)
             {
-                m.WorldDrop = "A world drop: creatures of about level " + wd.Lo + "-" + wd.Hi + " anywhere can drop it, each only rarely. These fit its level best.";
-                src.Note = (src.Note.Length > 0 ? src.Note + " " : "") + "A world drop: creatures of about level " + wd.Lo + "-" + wd.Hi + " can drop it. The " + wd.Shown + " that fit its level best come first.";
+                m.WorldDrop = "A world drop: creatures of about level " + wd.Lo + "-" + wd.Hi + " anywhere can drop it, each only rarely. These are the best to farm: common, with many spawn points.";
+                src.Note = (src.Note.Length > 0 ? src.Note + " " : "") + "A world drop: creatures of about level " + wd.Lo + "-" + wd.Hi + " can drop it. The " + wd.Shown + " best to farm come first (drop chance times spawn points; rare creatures count less).";
                 if (src.Hidden.Count > 0) src.HiddenText = "+ " + src.Hidden.Count.ToString("N0", CalendarRules.English) + " more creature" + (src.Hidden.Count == 1 ? "" : "s") + " that can drop it (other levels, or fewer)";
             }
             ItemCoverage(src);
@@ -309,7 +309,7 @@ namespace ElansAddonHub.Services.Atlas
         // ---- world drops (3.10.3). In the Classic baseline a world drop is listed under hundreds of creatures, each with a tiny chance, and sorting
         // by chance put level-60 raid trash first for a level-20 robe (its 1% beats a level-20 mob's 0.03%), with an empty map. Players get such
         // an item from any creature around its level, so: when an item has many Classic creature drops and none is better than WorldDropMaxChance,
-        // the creatures whose level is within WorldDropBand of the item level are the sources shown (closest level first, then chance, at most
+        // the creatures whose level is within WorldDropBand of the item level are the sources shown (best to farm first - see FarmScore - at most
         // WorldDropShown), and the others are folded. The map then draws those (AddItemMarkers draws the shown rows).
         public const int WorldDropMinSources = 25, WorldDropBand = 5, WorldDropShown = 10;
         public const double WorldDropMaxChance = 2.0;
@@ -333,14 +333,16 @@ namespace ElansAddonHub.Services.Atlas
                 fit.Add((r, Math.Abs((n.MinLevel + n.MaxLevel) / 2 - center), n));
             }
             if (fit.Count == 0) return null;                  // no creature of its level is known: the plain list stays
-            var shown = fit.OrderBy(f => f.Dist).ThenByDescending(f => f.Row.Sort).ThenBy(f => f.Row.Title, StringComparer.OrdinalIgnoreCase).Take(WorldDropShown).ToList();
+            var shown = fit.OrderByDescending(f => FarmScore(f.Row.Sort, f.Npc, f.Dist)).ThenBy(f => f.Dist).ThenBy(f => f.Row.Title, StringComparer.OrdinalIgnoreCase).Take(WorldDropShown).ToList();
             var shownSet = new HashSet<AtlasRow>(shown.Select(f => f.Row));
             rows.RemoveAll(r => drops.Contains(r)); tiny.RemoveAll(r => drops.Contains(r));
             foreach (var f in shown)
             {
                 var lv = f.Npc.MinLevel == f.Npc.MaxLevel ? f.Npc.MinLevel.ToString(CultureInfo.InvariantCulture) : f.Npc.MinLevel + "-" + f.Npc.MaxLevel;
-                f.Row.Detail = "Level " + lv + " · " + f.Row.Detail;
-                f.Row.Sort = 100 - f.Dist + Math.Min(f.Row.Sort, WorldDropMaxChance) / 100;   // closest level first (and >= 1: the map draws it)
+                int sp = f.Npc.Spawns?.Length ?? 0;
+                f.Row.Detail = "Level " + lv + (f.Npc.RankName.Length > 0 ? " " + f.Npc.RankName.ToLowerInvariant() : "") + " · " + f.Row.Detail
+                    + (sp > 0 ? " · " + AtlasFormat.Count(sp, "spawn point", "spawn points") : "");
+                f.Row.Sort = 100 + FarmScore(f.Row.Sort, f.Npc, f.Dist);   // best to farm first (and >= 1: the map draws it)
                 rows.Add(f.Row);
             }
             // the rest stay one fold away: other creatures of its level first, then the others by chance
@@ -354,6 +356,16 @@ namespace ElansAddonHub.Services.Atlas
             {
                 Lo = Math.Max(lo, fit.Min(f => f.Npc.MinLevel)), Hi = Math.Min(hi, fit.Max(f => f.Npc.MaxLevel)), Shown = shown.Count,
             };
+        }
+
+        // how good a creature is to farm for a world drop: its chance times its spawn points (a common mob with 40 spawns at 0.03 % gives more than a
+        // rare with one spawn at 1 %), a rare / rare elite / boss weighed down (it may be up once an hour or once a dungeon run), an elite a little,
+        // and a creature further from the item's level a little lower
+        static double FarmScore(double chance, ClassicNpc n, int dist)
+        {
+            int spawns = Math.Max(1, n.Spawns?.Length ?? 0);
+            double rank = n.Rank == 2 || n.Rank == 4 ? 0.1 : n.Rank == 3 ? 0.2 : n.Rank == 1 ? 0.5 : 1.0;
+            return Math.Min(chance, WorldDropMaxChance) * Math.Min(spawns, 200) * rank * (1 - 0.05 * dist);
         }
 
         static string CountText(ClassicItemSource s)

@@ -169,17 +169,21 @@ namespace ElansAddonHub
                 var cloak = AtlasQuery.Build("item:103").Section("sources");
                 Check("sources: an item with nothing but tiny sources still shows its 6 best and folds the rest ('+ 2 more world-drop sources under 0.1%')", cloak.Rows.Count == 6 && cloak.Hidden.Count == 2 && cloak.HiddenText == "+ 2 more world-drop sources under 0.1%" && cloak.Rows[0].Sort >= cloak.Rows[5].Sort);
                 // 3.10.3: a world drop lists the creatures of its level (closest first), not the level-40 one with the best chance, and draws them
+                ClassicAtlas.Use(AtlasTestClassic(worldDrop: true));
                 var robe = AtlasQuery.Build("item:109");
                 var robeSrc = robe.Section("sources");
                 var robeKeys = robeSrc.Rows.Where(r => r.Type == "Drop").Select(r => r.Key).ToList();
-                Check("world drop: the 10 creatures nearest its level (20) are shown, closest first, each with its level; the level-40 one with 1.5 % is folded",
-                    robeKeys.Count == AtlasQuery.WorldDropShown && robeKeys[0] == "npc:18" && !robeKeys.Contains("npc:5") && robeSrc.Hidden.Any(r => r.Key == "npc:5")
-                    && robeSrc.Rows[0].Detail.StartsWith("Level 19-21 · ") && robeSrc.HiddenText.StartsWith("+ 22 more creatures that can drop it"),
+                var ironjaw = robeSrc.Rows.FirstOrDefault(r => r.Key == "npc:8");
+                Check("world drop: 10 creatures of its level (15-25) are shown, best to farm first: the common strider with 30 spawn points (0.02 %) before the level-20 rare with one (1.2 %), which says it is rare; the level-40 one with 1.5 % is folded",
+                    robeKeys.Count == AtlasQuery.WorldDropShown && robeKeys[0] == "npc:7" && robeKeys.IndexOf("npc:8") > 0 && !robeKeys.Contains("npc:5") && robeSrc.Hidden.Any(r => r.Key == "npc:5")
+                    && robeSrc.Rows[0].Detail.StartsWith("Level 18-20 · ") && robeSrc.Rows[0].Detail.EndsWith("30 spawn points") && ironjaw != null && ironjaw.Detail.StartsWith("Level 20 rare · ")
+                    && robeSrc.HiddenText.StartsWith("+ 24 more creatures that can drop it"),
                     string.Join(",", robeKeys) + " | " + robeSrc.Rows.FirstOrDefault()?.Detail + " | " + robeSrc.HiddenText);
-                Check("world drop: the page says so with the level range (15-25), and the map draws the shown creature in a mapped instance",
+                Check("world drop: the page says so with the level range (15-25), and the map draws the shown creatures",
                     robe.WorldDrop.StartsWith("A world drop: creatures of about level 15-25") && robeSrc.Note.Contains("A world drop")
-                    && robe.Map.Zones.Any(z => z.Markers.Any(mk => mk.LinkId == "npc:4")), robe.WorldDrop + " | zones " + robe.Map.Zones.Count);
+                    && robe.Map.Zones.Any(z => z.Markers.Any(mk => mk.LinkId == "npc:7")), robe.WorldDrop + " | zones " + robe.Map.Zones.Count);
                 Check("world drop: an item with a real drop (10 %) or few sources is not one", AtlasQuery.Build("item:100").WorldDrop.Length == 0 && AtlasQuery.Build("item:103").WorldDrop.Length == 0);
+                ClassicAtlas.Use(classic);
                 var cloth = AtlasQuery.Build("item:102");
                 var clothVendor = RowOf(cloth, "sources", "vendor:2");
                 Check("sources: a vendor both the Lodge and the baseline know is one row (Lodge price, baseline stock on its second line); the Lodge's 5.9 % drop is listed", clothVendor != null && clothVendor.Detail.StartsWith("25c") && clothVendor.Detail.Contains("stack of 20") && clothVendor.Extra == AtlasLabel.Classic + ": unlimited stock" && RowOf(cloth, "sources", "npc:1")?.Detail.StartsWith("20 of 340 kills (5.9 %)") == true, clothVendor?.ToString());
