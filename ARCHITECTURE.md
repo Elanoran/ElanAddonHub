@@ -1362,7 +1362,10 @@ Forever keeps its spawn points on the server, so the Toolkit notes them from pla
   - 10 spots per npc (the kind with the most spots gives one up, so kills never push out the one place a vendor
     stands);
   - 1500 npcs (the oldest goes; an npc with an interact / vignette spot counts 30 days newer).
-  - The publish trim drops kill spots right after the old `spawns`, interact / vignette spots last.
+  - The publish trim (Toolkit 0.26.8+) runs in three phases. First the extras go (fingerprints, older builds, suffixes).
+    Then each big section is cut to its share of the 19,000-value budget (`CAP.share`). If the copy is still too big,
+    sections go in order: kill spots first, finds last. Within npcspots, kill spots go first and interact / vignette
+    spots last.
 - **Sharing**: the Outpost (`AtlasObs.ParseNpcSpots`) shares it as the `npcspots` section of `atlas.share` (Lodge 2.26,
   feature `atlas8`): `{ "<npcId>": [ { z, x, y, k, n } ] }`.
   - The merge comes back as `npcspots { "<npcId>": [ { z, x, y, k, n, m } ] }`.
