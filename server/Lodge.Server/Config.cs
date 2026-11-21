@@ -44,6 +44,8 @@ public class LodgeConfig
     public bool ArmoryEnabled { get; set; } = true;         // 2.16 "armory" feature: members may share characters; off = not advertised, put answers why "disabled", stored data stays on disk
     public bool ArmoryRepsEnabled { get; set; } = true;     // 2.27 "reputations" (part of the armory): reputations in the snapshots of members who switched it on, and "standing with a faction"; off = not advertised, reputations are dropped from new snapshots and never served
     public HashSet<int> AtlasEventBuilds { get; set; } = new(Atlas.DefaultEventBuilds);   // LODGE_EVENT_BUILDS="70532,70600" / "none": builds whose loot members' Outposts don't get
+    public bool AtlasArchive { get; set; } = true;          // 2.40 LODGE_ATLAS_ARCHIVE=0: finds the caps remove are dropped instead of kept in data/atlas-archive
+    public int AtlasArchiveMb { get; set; } = 50;           // 2.40 LODGE_ATLAS_ARCHIVE_MB: the archive's size cap (the oldest months go first)
     public bool AtlasEnabled { get; set; } = true;          // the owner can switch the feature off (it then isn't advertised; share/get answer "disabled"; stored data stays on disk)
     // ---- hosted datasets (2.17, "classic" feature): the Classic baseline files, stored once for the whole lodge
     public bool ClassicEnabled { get; set; } = true;        // the owner can switch it off (not advertised; upload / download / delete answer 403; the stored bundle stays on disk)
@@ -134,6 +136,8 @@ public class LodgeConfig
             ArmoryRepsEnabled = !(Env("LODGE_REPUTATIONS_ENABLED", "1") is "0" or "false" or "no" or "off"),
             AtlasEnabled = !(Env("LODGE_ATLAS_ENABLED", "1") is "0" or "false" or "no" or "off"),
             AtlasEventBuilds = EventBuilds(Env("LODGE_EVENT_BUILDS", "")),
+            AtlasArchive = !(Env("LODGE_ATLAS_ARCHIVE", "1") is "0" or "false" or "no" or "off"),
+            AtlasArchiveMb = Int("LODGE_ATLAS_ARCHIVE_MB", 50, 1, 100_000),
             ClassicEnabled = !(Env("LODGE_CLASSIC_ENABLED", "1") is "0" or "false" or "no" or "off"),
             ClassicMaxMb = Int("LODGE_CLASSIC_MAX_MB", 40, 1, 1024),
             ClassicDownloadsPerHour = Int("LODGE_CLASSIC_DOWNLOADS_PER_HOUR", 6, 1, 1000),

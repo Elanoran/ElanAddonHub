@@ -34,6 +34,7 @@ namespace ElansAddonHub.Services
         public const int MaxFishSpotsPerMap = 150, MaxFishMaps = 60, MaxFishItemsPerSpot = 50, MaxFishMapsPerShare = 20, MaxFishSpotsPerShare = 600;
         public const double FishMerge = 0.01;
         // 3.10.3: the Lodge keeps 10000 finds since 2.39 (was 2000); MaxFindsGone = removed finds read from one atlas.data answer
+        public const int MaxSuffixId = 9_999_999, MaxFindCtx = 2048 * 256 - 1;   // 3.10.3: find fields "sx" / "cx" (as the Lodge)
         public const int MaxFinds = 10000, MaxHubFinds = 500, MaxSpawnPoints = 50, MaxPointsPerNpcPerShare = 20, MaxFindsGone = 50000;
         public const int MaxNameLength = 80;
         // per share message (the server's frame limit is 64 KB)
@@ -82,6 +83,9 @@ namespace ElansAddonHub.Services
             public string By;                                                  // (lodge aggregate) the member's display name
             public long Seq;                                                   // (lodge aggregate) server revision, orders the list
             public int Build;                                                  // the game build it was found in (Toolkit "b", Lodge "gb"); 0 = unknown (an older find)
+            // 3.10.3, Toolkit 0.26.8: passed to the Lodge as they are (a Lodge before 2.40 ignores them): Inst = "ii" the instance map id inside a
+            // dungeon, Suffix = "sx" the random suffix, Ctx = "cx" the packed loot context (group, faction, level / 5, difficulty; Lodge Atlas.FindCtx). 0 = none.
+            public int Inst, Suffix, Ctx;
         }
 
         public class Revealed
@@ -438,6 +442,10 @@ namespace ElansAddonHub.Services
             // the game build: "gb" from the Lodge, "b" from the Toolkit; a bad value only loses the build, never the find
             if (o.TryGetValue("gb", out var gv) && Whole(gv, 1, MaxSeenBuild, out var gb)) f.Build = (int)gb;
             else if (o.TryGetValue("b", out var tb) && Whole(tb, 1, MaxSeenBuild, out var tbn)) f.Build = (int)tbn;
+            // a bad optional value loses only that value (the same ranges as the Lodge)
+            if (o.TryGetValue("ii", out var iiv) && Whole(iiv, 1, MaxMapId, out var ii)) f.Inst = (int)ii;
+            if (o.TryGetValue("sx", out var sxv) && Whole(sxv, -MaxSuffixId, MaxSuffixId, out var sx) && sx != 0) f.Suffix = (int)sx;
+            if (o.TryGetValue("cx", out var cxv) && Whole(cxv, 1, MaxFindCtx, out var cx)) f.Ctx = (int)cx;
             return f;
         }
 
@@ -793,6 +801,9 @@ namespace ElansAddonHub.Services
                     var o = new Dictionary<string, object> { ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At };
                     if (f.Zone > 0) { o["z"] = f.Zone; o["x"] = f.X; o["y"] = f.Y; }
                     if (f.Build > 0) o["gb"] = f.Build;          // the game build (a Lodge before 2.27 ignores it; the signature stays, so nothing is sent twice)
+                    if (f.Inst > 0) o["ii"] = f.Inst;            // 3.10.3: loot place and context (a Lodge before 2.40 ignores them)
+                    if (f.Suffix != 0) o["sx"] = f.Suffix;
+                    if (f.Ctx > 0) o["cx"] = f.Ctx;
                     Add("finds", "", FindKey(f), "1", o);
                 }
             }

@@ -78,6 +78,25 @@ namespace ElansAddonHub
                 && dzList.Count == 3 && dzList.Cast<Dictionary<string, object>>().All(o => o.ContainsKey("z") == o.ContainsKey("x") && o.ContainsKey("x") == o.ContainsKey("y")),
                 "finds " + dzf.Count + " dropped " + dz.Dropped + " zones " + string.Join(",", dzf.Select(f => f.Zone)) + " wire " + dzList.Count);
 
+            // ---- 3.10.3 (Toolkit 0.26.8, Lodge 2.40): a find's instance, suffix and loot context go to the Lodge as they are; a bad one loses only itself
+            {
+                var cs = AtlasObs.FromTables(new Dictionary<string, object>
+                {
+                    ["finds"] = new Dictionary<string, object>
+                    {
+                        ["1"] = new Dictionary<string, object> { ["i"] = 10408.0, ["c"] = 1.0, ["src"] = "npc:3671", ["at"] = 1_790_000_000.0, ["ii"] = 43.0, ["sx"] = -6.0, ["cx"] = 2.0 + 8 + 80 + 2048 },
+                        ["2"] = new Dictionary<string, object> { ["i"] = 10409.0, ["c"] = 1.0, ["src"] = "npc:3671", ["at"] = 1_790_000_010.0, ["ii"] = "x", ["sx"] = 0.0, ["cx"] = -5.0 },
+                    },
+                });
+                var cf = cs.Finds.OrderBy(f => f.At).ToList();
+                var cw = AtlasObs.MakeBatch(cs, null, new Dictionary<string, string>(), includeExtras: true);
+                var cl = cw == null ? new List<Dictionary<string, object>>() : Wire(cw.Frame).List("finds").Cast<Dictionary<string, object>>().OrderBy(o => Convert.ToDouble(o["at"])).ToList();
+                Check("find context: instance, suffix and loot context are read and shared; bad values are left out and the find stays",
+                    cf.Count == 2 && cf[0].Inst == 43 && cf[0].Suffix == -6 && cf[0].Ctx == 2138 && cf[1].Inst == 0 && cf[1].Suffix == 0 && cf[1].Ctx == 0
+                    && cl.Count == 2 && Convert.ToInt64(cl[0]["ii"]) == 43 && Convert.ToInt64(cl[0]["sx"]) == -6 && Convert.ToInt64(cl[0]["cx"]) == 2138 && !cl[1].ContainsKey("ii") && !cl[1].ContainsKey("cx"),
+                    "finds " + cf.Count + " wire " + cl.Count);
+            }
+
             // ---- 3.10.3 (Lodge 2.39): the finds the Lodge's caps removed (findsGone) leave the Outpost too
             {
                 object F(long s) => new Dictionary<string, object> { ["s"] = (double)s, ["i"] = 100.0 + s, ["c"] = 1.0, ["src"] = "npc:7", ["at"] = 1_790_000_000.0 + s, ["by"] = "Amy" };

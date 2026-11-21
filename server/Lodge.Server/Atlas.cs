@@ -31,6 +31,14 @@ public static partial class Atlas
     // 2.39: 10000 finds, 5000 per member (was 2000 / 700: one evening of play pushed out the day before); about 150 bytes each in atlas.json.
     // MaxFindsGone = the removed finds the store remembers for the members' Outposts (atlas.data `findsGone`); an Outpost further behind gets `full`.
     public const int MaxFinds = 10000, MaxFindsPerMember = 5000, MaxFindsGone = 20000;
+    public const int MaxSuffixId = 9_999_999, MaxFindCtx = 2048 * 256 - 1;   // 2.40 find fields "sx" / "cx"
+
+    // 2.40: the loot context of a find, unpacked ("cx", see Find.Ctx)
+    public readonly record struct FindCtx(int Group, int Faction, int LevelBucket, int Difficulty)
+    {
+        public static FindCtx Of(int cx) => new(cx & 3, (cx >> 2) & 3, (cx >> 4) & 127, cx >> 11);
+        public int Pack() => (Group & 3) | (Faction & 3) << 2 | (LevelBucket & 127) << 4 | (Difficulty & 255) << 11;
+    }
     public const int MaxSpawnPointsPerNpc = 50, MaxSpawnPointsPerNpcPerMember = 10;
     public const int MaxStats = 10;
     public const int MaxNameLength = 80;
@@ -280,6 +288,11 @@ public static partial class Atlas
     {
         public long Rev, At; public int Item, Count, Z; public double X, Y; public string Src, Identity, Who;
         public int GameBuild;                                  // the game build it was found in ("gb", optional; 0 = unknown). Not part of the key: a resend never doubles a find
+        // 2.40 (all optional, never part of the key; kept in atlas.json and the archive, not sent to the Outposts yet):
+        //   Inst = "ii" the instance map id (GetInstanceInfo) when found inside a dungeon / raid; Suffix = "sx" the random suffix id;
+        //   Ctx = "cx" the loot context packed in one number: group (0 unknown, 1 solo, 2 party, 3 raid) + 4 * faction (0 unknown, 1 Alliance,
+        //   2 Horde) + 16 * level bucket (player level / 5, 0..127) + 2048 * difficulty id (0..255). See FindCtx.
+        public int Inst, Suffix, Ctx;
         public string Key => Identity + "|" + Item + "|" + Src + "|" + Z + "|" + X.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "|" + Y.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "|" + At;
     }
 
@@ -296,6 +309,10 @@ public static partial class Atlas
         }
         f = new Find { Item = (int)i, Count = (int)c, At = at, Src = src, Z = z, X = x, Y = y };
         if (o["gb"] != null && Whole(o["gb"], 1, MaxBuildId, out var gb)) f.GameBuild = (int)gb;   // a bad build is dropped, the find stays
+        // 2.40: a bad optional value is dropped, the find stays (like gb)
+        if (o["ii"] != null && Whole(o["ii"], 1, MaxMapId, out var ii)) f.Inst = (int)ii;
+        if (o["sx"] != null && Whole(o["sx"], -MaxSuffixId, MaxSuffixId, out var sx) && sx != 0) f.Suffix = (int)sx;
+        if (o["cx"] != null && Whole(o["cx"], 1, MaxFindCtx, out var cx)) f.Ctx = (int)cx;
         return true;
     }
 }

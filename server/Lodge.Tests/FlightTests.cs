@@ -328,7 +328,7 @@ public class FlightTests
         var features = ((JsonArray)r.Hub.Welcome(elan)["features"]!).Select(x => (string)x!).ToList();
         Assert.Contains("flights", features);
         Assert.Contains("calendar", features);
-        Assert.Equal("2.39.0", LodgeHub.Version);
+        Assert.Equal("2.40.0", LodgeHub.Version);
     }
 
     [Fact]

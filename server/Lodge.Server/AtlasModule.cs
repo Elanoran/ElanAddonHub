@@ -21,6 +21,8 @@ public sealed class AtlasModule : IModule
         this.hub = hub;
         Store = new AtlasStore(hub.Cfg.DataDir, hub.Log, hub.Clock);
         Store.UseEventBuilds(hub.Cfg.AtlasEventBuilds);
+        Store.ArchiveEnabled = hub.Cfg.AtlasArchive;
+        Store.ArchiveCapBytes = hub.Cfg.AtlasArchiveMb * 1024L * 1024;
     }
 
     public bool Enabled => hub.Cfg.AtlasEnabled;
@@ -69,7 +71,7 @@ public sealed class AtlasModule : IModule
             r = Store.Purge(ProfileRules.Key(login));
             if (Store.Dirty) Store.Save();
         }
-        if (r.Total > 0) hub.Log.LogInformation("Atlas: removed {Count} contribution(s) of one member", r.Total);
+        if (r.Total > 0 || r.Archived > 0) hub.Log.LogInformation("Atlas: removed {Count} contribution(s) of one member ({Archived} archived find(s))", r.Total, r.Archived);
         return r;
     }
 

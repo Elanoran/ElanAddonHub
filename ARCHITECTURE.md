@@ -1303,6 +1303,9 @@ Sources per layer:
   build = gameBuild,                                                                                     -- additive (Toolkit 0.5.10)
   -- every counter may carry x = { b = { [build] = n }, q = { [questId] = kills while it wanted an item }, lv = { lo, hi }, cl = { [0..6] = n }, fp = { fingerprints } }
   -- and its items q = questId, sx = { [randomSuffixId] = drops }, b = { [build] = drops }; finds may carry b and sx, src may be "item:<id>"
+  -- (Toolkit 0.26.8) finds also carry cx = the loot context in one number: group (1 solo, 2 party, 3 raid) + 4 * faction (1 Alliance, 2 Horde)
+  -- + 16 * (player level / 5) + 2048 * difficulty id, and inside a dungeon ii = the instance map id. The Outpost (3.10.3) passes ii, sx and cx
+  -- to the Lodge as they are (Lodge 2.40 stores them; an older Lodge ignores them)
   -- (Outpost 2.77) a find's b (the game build) is kept as AtlasObs.Find.Build, shared as "gb" (Lodge 2.26+ stores and returns it; an older Lodge ignores it), shown as
   -- "game 1.60.1" (the build you run), "build N (older game version)" or "unknown version" (FindVersions)
 }
@@ -4505,7 +4508,9 @@ Self-test sections `objects` (synthetic files) and `objectsreal` (the real files
 - The Lodge aggregate is the sum over members (each member's totals capped and checked).
 - The aggregate keeps:
   - the newest vendor list per npc;
-  - the newest 2000 finds (with the member's Lodge display name — never character names);
+  - the newest 10000 finds, 5000 per member (with the member's Lodge display name — never character names); since 2.40 the ones the caps
+    remove go to a find archive on the server (`data/atlas-archive`, never sent to the Outposts) instead of being lost;
+  - since 2.40, per member and source, what each day added (looted kills and drops, the newest 64 days), for telling holiday drops later;
   - up to 50 spawn points per npc;
   - revealed items by id.
 

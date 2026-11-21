@@ -32,6 +32,8 @@ public sealed partial class AtlasStore
         public int NotePoints;
         public readonly Dictionary<int, List<Atlas.EntranceSpot>> Entrances = new();   // instance map id -> entrance spots (2.24)
         public readonly Dictionary<int, List<Atlas.NpcSpot>> NpcSpots = new();   // npc -> where it was met, killed, seen as a vignette (2.26)
+        public readonly Dictionary<int, SortedDictionary<int, DayTally>>[] Days = Enumerable.Range(0, KindCount).Select(_ => new Dictionary<int, SortedDictionary<int, DayTally>>()).ToArray();   // 2.40 (AtlasStore.Days.cs)
+        public int DayEntries;
         public string Who = "";   // the name the member was last seen under (a Lodge login, case kept): shown through the display name on field notes
     }
 
@@ -141,6 +143,7 @@ public sealed partial class AtlasStore
                 if (d["fieldnotes"] is JsonObject fno) LoadNotes(md, fno, now);
                 if (d["entrances"] is JsonObject eno) LoadEntrances(md, eno);
                 if (d["npcspots"] is JsonObject npo) LoadNpcSpots(md, npo);
+                if (d["days"] is JsonObject dyo) LoadDays(md, dyo, now);
                 members[who] = md;
             }
         // the aggregates are derived: rebuild them, remembering the revision of the member data
@@ -217,7 +220,7 @@ public sealed partial class AtlasStore
             }
         finds.Sort((a, b) => a.Rev.CompareTo(b.Rev));
         bool trimmed = finds.Count > Atlas.MaxFinds;
-        while (finds.Count > Atlas.MaxFinds) { findKeys.Remove(finds[0].Key); finds.RemoveAt(0); }
+        while (finds.Count > Atlas.MaxFinds) { Archive(finds[0]); findKeys.Remove(finds[0].Key); finds.RemoveAt(0); }
         if (root["findsGone"] is JsonArray ga)
             foreach (var node in ga)
                 if (gone.Count < Atlas.MaxFindsGone && node is JsonArray p && p.Count == 2 && p[0] is JsonValue a0 && a0.TryGetValue<long>(out var gr) && gr > 0
@@ -381,6 +384,7 @@ public sealed partial class AtlasStore
             long total = md.Total - (old?.N ?? 0) + merged.N;
             if (total > Atlas.MaxMemberTotal) { r.Rejected++; continue; }
             md.Total = total; md.Src[k][id] = merged;
+            NoteDay(md, k, id, old, merged);
             var a = Sum(k, id); a.Rev = ++rev; aggs[k][id] = a;
             r.Accepted++; r.Changed = true;
         }
@@ -586,6 +590,7 @@ public sealed partial class AtlasStore
     // 2.39: a find the caps removed is remembered for the Outposts (a revision of its own, so an Outpost past it hears of it once). Caller holds Gate.
     void Gone(Atlas.Find f)
     {
+        Archive(f);                                            // 2.40: kept in data/atlas-archive, not lost
         gone.Add((++rev, f.Rev));
         if (gone.Count > Atlas.MaxFindsGone)
         {
@@ -835,6 +840,7 @@ public sealed partial class AtlasStore
                 }
                 if (md.Entrances.Count > 0) d["entrances"] = EntrancesStoreJson(md);
                 if (md.NpcSpots.Count > 0) d["npcspots"] = NpcSpotsStoreJson(md);
+                if (md.DayEntries > 0) d["days"] = DaysStoreJson(md);
                 mo[who] = d;
             }
             var fishRev = new JsonObject();
@@ -869,7 +875,8 @@ public sealed partial class AtlasStore
             var sqo = new JsonObject();
             foreach (var (id, x) in seenQuests) { var j = SeenQuestJson(x); j["b"] = x.By; j["r"] = x.Rev; sqo[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var fa = new JsonArray();
-            foreach (var f in finds) { var j = FindJson(f, ""); j.Remove("by"); j.Remove("s"); j["b"] = f.Identity; j["w"] = f.Who; j["r"] = f.Rev; fa.Add(j); }
+            foreach (var f in finds) fa.Add(StoredFindJson(f));
+            FlushArchive();                                    // 2.40: the finds the caps removed go to the archive before the file that no longer has them
             var root = new JsonObject
             {
                 ["v"] = 1, ["epoch"] = Epoch, ["eventBuilds"] = eventSig, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(), ["npcSpotRev"] = NpcSpotRevJson(),

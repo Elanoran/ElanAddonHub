@@ -11,6 +11,7 @@ public sealed partial class AtlasStore
     {
         public int Counters, Nodes, FishSpots, FieldNotes, Entrances, NpcSpots, Vendors, Quests, Revealed, Seen, Spawns, Finds;
         public int Total => Counters + Nodes + FishSpots + FieldNotes + Entrances + NpcSpots + Vendors + Quests + Revealed + Seen + Spawns + Finds;
+        public int Archived;   // 2.40: their lines removed from the find archive (not in Total: the Outposts never had them)
     }
 
     // Caller holds Gate and saves afterwards (Dirty is set). The epoch changes, so every client fetches the whole pool again (a delta cannot express a removal).
@@ -66,6 +67,7 @@ public sealed partial class AtlasStore
         }
         foreach (var f in finds.Where(f => f.Identity == identity).ToList()) findKeys.Remove(f.Key);
         r.Finds = finds.RemoveAll(f => f.Identity == identity);
+        r.Archived = PurgeArchive(identity);
         if (r.Total > 0 || wasMember)
         {
             Epoch = Guid.NewGuid().ToString("N")[..12];
