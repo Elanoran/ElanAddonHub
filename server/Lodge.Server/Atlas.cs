@@ -28,7 +28,9 @@ public static partial class Atlas
     public const int MaxKillSources = 6000, MaxObjectSources = 3000, MaxFishingZones = 400, MaxGatherSources = 3000, MaxContainedSources = 1000, MaxGatherPerShare = 100;   // per member (gather: pickpocket, skinning, mining, herbalism, salvage each)
     public const int MaxVendors = 6000, MaxQuests = 20000, MaxSpawnNpcs = 8000, MaxRevealed = 40000;
     public const int MaxVendorItems = 300, MaxQuestItems = 10;
-    public const int MaxFinds = 2000, MaxFindsPerMember = 700;
+    // 2.39: 10000 finds, 5000 per member (was 2000 / 700: one evening of play pushed out the day before); about 150 bytes each in atlas.json.
+    // MaxFindsGone = the removed finds the store remembers for the members' Outposts (atlas.data `findsGone`); an Outpost further behind gets `full`.
+    public const int MaxFinds = 10000, MaxFindsPerMember = 5000, MaxFindsGone = 20000;
     public const int MaxSpawnPointsPerNpc = 50, MaxSpawnPointsPerNpcPerMember = 10;
     public const int MaxStats = 10;
     public const int MaxNameLength = 80;

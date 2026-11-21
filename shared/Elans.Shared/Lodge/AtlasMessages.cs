@@ -99,6 +99,7 @@ namespace Elans.Shared
         // the object sections (raw JsonObjects), keyed by section name; written in AtlasSections order, a missing one is not written
         public Dictionary<string, object> Sections = new Dictionary<string, object>();
         public object Finds;           // the finds (a raw array); null = not sent
+        public object FindsGone;       // Lodge 2.39: the revisions (`s`) of finds the Lodge removed since `since` (a raw array of numbers); null = not sent
         public int? SeenMembers;       // how many members' game caches the seen tables come from; null = not sent (reading: clamped to an int)
         public bool Full, More;        // written only when true
 
@@ -112,6 +113,7 @@ namespace Elans.Shared
                 if (name == AtlasSections.Finds) { if (Finds != null) w.SetRawList(name, Finds); }
                 else if (Sections.TryGetValue(name, out var o) && o != null) w.SetRawChild(name, o);
             }
+            if (FindsGone != null) w.SetRawList("findsGone", FindsGone);
             if (SeenMembers is int n) w.Set("seenMembers", n);
             if (Full) w.Set("full", true);
             if (More) w.Set("more", true);
@@ -121,7 +123,7 @@ namespace Elans.Shared
         {
             var m = new AtlasDataMsg
             {
-                Epoch = f.Str("epoch"), Rev = f.Long("rev"), At = f.Long("at"), Finds = f.RawList(AtlasSections.Finds),
+                Epoch = f.Str("epoch"), Rev = f.Long("rev"), At = f.Long("at"), Finds = f.RawList(AtlasSections.Finds), FindsGone = f.RawList("findsGone"),
                 SeenMembers = f.Has("seenMembers") ? (int)System.Math.Clamp(f.Long("seenMembers"), int.MinValue, int.MaxValue) : (int?)null, Full = f.Bool("full"), More = f.Bool("more"),
             };
             foreach (var name in AtlasSections.All)

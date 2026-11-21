@@ -424,24 +424,25 @@ public partial class AtlasTests
     }
 
     [Fact]
-    public async Task Only_the_newest_2000_finds_are_kept_and_one_member_cannot_fill_the_list()
+    public async Task Only_the_newest_10000_finds_are_kept_and_one_member_cannot_fill_the_list()
     {
+        // 2.39: 10000 finds, 5000 per member (was 2000 / 700)
+        Assert.Equal(10000, Atlas.MaxFinds);
+        Assert.Equal(5000, Atlas.MaxFindsPerMember);
         using var r = new FunRig();
-        var t = Unix(r);
-        var members = Enumerable.Range(0, 4).Select(i => r.Join("M" + i, "member")).ToList();
-        // each member sends 700 (the per-member cap) in two batches of 350
-        foreach (var m in members)
-            for (int part = 0; part < 2; part++)
-                await Share(r, m, new { finds = Enumerable.Range(0, 350).Select(i => Find(1000 + part * 350 + i, t - 100000 + i)).ToArray() });
-        Assert.Equal(2000, (await AllFinds(r, members[0])).Count);   // 4 x 700 = 2800 -> the newest 2000
-        // one member alone: never more than 700 in the list
+        var t = Unix(r) - 300000;
+        var members = Enumerable.Range(0, 3).Select(i => r.Join("M" + i, "member")).ToList();
+        // each member sends 4000 (under its cap): 12000 -> the newest 10000
+        for (int k = 0; k < members.Count; k++) await ShareMany(r, members[k], 1000 + k * 10000, 4000, t + k * 5000);
+        Assert.Equal(Atlas.MaxFinds, (await AllFinds(r, members[0])).Count);
+        // one member alone: never more than 5000 in the list
         using var r2 = new FunRig();
         var solo = r2.Join("Solo", "member");
-        for (int part = 0; part < 4; part++)
-            await Share(r2, solo, new { finds = Enumerable.Range(0, 300).Select(i => Find(1 + part * 300 + i, t - 100000 + part * 300 + i)).ToArray() });
+        await ShareMany(r2, solo, 1, 6000, t);
         var fa = await AllFinds(r2, solo);
         Assert.Equal(Atlas.MaxFindsPerMember, fa.Count);
-        Assert.Equal(1 + 3 * 300 + 299, fa.Select(x => (int)x!["i"]!).Max());   // the newest stay, the oldest went
+        Assert.Equal(6000, fa.Select(x => (int)x!["i"]!).Max());   // the newest stay, the oldest went
+        Assert.Equal(1001, fa.Select(x => (int)x!["i"]!).Min());
     }
 
     // ---------------------------------------------------------------- spawns, revealed items

@@ -76,6 +76,7 @@ namespace ElansAddonHub.Lodge
         public int FishingZones => fishing.Count;
         public int VendorCount => vendors.Count;
         public int FindCount => finds.Count;
+        public int FindsRemoved { get; private set; }                      // finds dropped because the Lodge said it removed them (findsGone)
         public int SpawnNpcCount => spawns.Count;
         public int NpcSpotNpcCount => npcSpots.Count;
         public int RevealedCount => revealed.Count;
@@ -231,6 +232,15 @@ namespace ElansAddonHub.Lodge
                 }
                 finds.Sort((a, b) => a.Seq.CompareTo(b.Seq));
                 if (finds.Count > AtlasObs.MaxFinds) finds.RemoveRange(0, finds.Count - AtlasObs.MaxFinds);
+            }
+            // 3.10.3 (Lodge 2.39, atlas10): the finds the Lodge's caps removed since our last answer go here too; before, the Outpost kept
+            // showing them (about 600 of 2000 on a real Lodge). A full answer never carries this: it replaces everything anyway.
+            var gl = LodgeJson.ToPlain(m.FindsGone as JsonArray) as List<object>;
+            if (gl != null && gl.Count > 0)
+            {
+                var gone = new HashSet<long>();
+                foreach (var e in gl.Take(AtlasObs.MaxFindsGone)) if (AtlasObs.Whole(e, 1, long.MaxValue / 4, out var s)) gone.Add(s);
+                if (gone.Count > 0) FindsRemoved += finds.RemoveAll(f => gone.Contains(f.Seq));
             }
             if (m.SeenMembers is int smc && smc >= 0 && smc <= 100000) SeenMembers = smc;
             var rev = m.Rev;

@@ -63,6 +63,10 @@ public sealed partial class AtlasStore
     readonly HashSet<string> seenMembers = new(StringComparer.Ordinal);   // 2.25: the members whose client caches filled the seen tables (only the count leaves the server)
     readonly List<Atlas.Find> finds = new();
     readonly HashSet<string> findKeys = new(StringComparer.Ordinal);
+    // 2.39: finds the caps removed, as (revision of the removal, the find's own revision), oldest first; goneFloor = the removal revision of
+    // the newest one forgotten. An Outpost that asks from before goneFloor cannot be told what left, so it gets `full`.
+    readonly List<(long Rev, long Find)> gone = new();
+    long goneFloor;
     long rev;
     DateTime lastSave = DateTime.MinValue;
     public bool Dirty { get; private set; }
@@ -212,7 +216,17 @@ public sealed partial class AtlasStore
                 finds.Add(f);
             }
         finds.Sort((a, b) => a.Rev.CompareTo(b.Rev));
+        bool trimmed = finds.Count > Atlas.MaxFinds;
         while (finds.Count > Atlas.MaxFinds) { findKeys.Remove(finds[0].Key); finds.RemoveAt(0); }
+        if (root["findsGone"] is JsonArray ga)
+            foreach (var node in ga)
+                if (gone.Count < Atlas.MaxFindsGone && node is JsonArray p && p.Count == 2 && p[0] is JsonValue a0 && a0.TryGetValue<long>(out var gr) && gr > 0
+                    && p[1] is JsonValue a1 && a1.TryGetValue<long>(out var gf) && gf > 0) { gone.Add((gr, gf)); maxRev = Math.Max(maxRev, gr); }
+        gone.Sort((a, b) => a.Rev.CompareTo(b.Rev));
+        goneFloor = root["goneFloor"] is JsonValue gfv && gfv.TryGetValue<long>(out var gfl) && gfl >= 0 ? gfl : 0;
+        // a file from before 2.39 never told the Outposts which finds left (they still show them): one new epoch makes every Outpost
+        // fetch the pool again, once; so does a trim at load (a lower cap), which has no removals on record
+        if (root["findsGone"] == null || trimmed) { Epoch = Guid.NewGuid().ToString("N")[..12]; Dirty = true; }
         foreach (var f in finds) { if (members.TryGetValue(f.Identity, out var m)) m.FindCount++; }
         rev = maxRev;
     }
@@ -558,16 +572,29 @@ public sealed partial class AtlasStore
             if (md.FindCount > Atlas.MaxFindsPerMember)
             {
                 int i = finds.FindIndex(x => x.Identity == identity);
-                findKeys.Remove(finds[i].Key); finds.RemoveAt(i); md.FindCount--;
+                Gone(finds[i]); findKeys.Remove(finds[i].Key); finds.RemoveAt(i); md.FindCount--;
             }
             while (finds.Count > Atlas.MaxFinds)
             {
-                var old = finds[0]; findKeys.Remove(old.Key); finds.RemoveAt(0);
+                var old = finds[0]; Gone(old); findKeys.Remove(old.Key); finds.RemoveAt(0);
                 if (members.TryGetValue(old.Identity, out var om)) om.FindCount--;
             }
             r.Accepted++; r.Changed = true;
         }
     }
+
+    // 2.39: a find the caps removed is remembered for the Outposts (a revision of its own, so an Outpost past it hears of it once). Caller holds Gate.
+    void Gone(Atlas.Find f)
+    {
+        gone.Add((++rev, f.Rev));
+        if (gone.Count > Atlas.MaxFindsGone)
+        {
+            int cut = gone.Count - Atlas.MaxFindsGone + Atlas.MaxFindsGone / 10;   // a tenth at a time, not one per find
+            goneFloor = gone[cut - 1].Rev;
+            gone.RemoveRange(0, cut);
+        }
+    }
+    public int FindsGoneCount { get { lock (Gate) return gone.Count; } }
 
     // ---------------------------------------------------------------- reading
 
@@ -689,7 +716,7 @@ public sealed partial class AtlasStore
     // raw = the counters as stored, event builds included (the Cairn feed: the Cairn splits by build and leaves them out itself)
     public JsonObject Get(long since, string epoch, Func<string, string> nameOf, bool guest = false, bool raw = false)
     {
-        bool full = since <= 0 || since > rev || epoch != Epoch;
+        bool full = since <= 0 || since > rev || epoch != Epoch || since < goneFloor;
         if (full) since = 0;
         var cand = new List<(long rev, int sec, int key)>();
         for (int k = 0; k < KindCount; k++) foreach (var kv in aggs[k]) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, KindSec[k], kv.Key));
@@ -739,12 +766,19 @@ public sealed partial class AtlasStore
             bytes += size; taken++; last = c.rev;
         }
         bool more = taken < cand.Count;
+        // 2.39: the finds removed after `since` up to what this page covers (a full answer needs none: the Outpost replaces everything)
+        JsonArray ga = null;
+        if (!full)
+        {
+            long upto = more ? last : rev;
+            foreach (var g in gone) if (g.Rev > since && g.Rev <= upto) (ga ??= new JsonArray()).Add(g.Find);
+        }
         // the envelope is typed (Elans.Shared AtlasDataMsg); the sections are the free-form objects built above
         var res = new AtlasDataMsg
         {
             Epoch = Epoch, Rev = more ? last : rev, At = NowSec, Finds = fa,
             SeenMembers = seenMembers.Count,   // 2.25: how many members' game caches the seen tables come from (a count, never who)
-            Full = full, More = more,
+            Full = full, More = more, FindsGone = ga,
         };
         for (int i = 0; i < 22; i++) if (i != 7) res.Sections[AtlasSections.All[i]] = secs[i];     // secs[i] is section AtlasSections.All[i] (7 = finds, the array)
         return LodgeJson.Build(res.Write);
@@ -840,6 +874,7 @@ public sealed partial class AtlasStore
             {
                 ["v"] = 1, ["epoch"] = Epoch, ["eventBuilds"] = eventSig, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(), ["npcSpotRev"] = NpcSpotRevJson(),
                 ["vendors"] = vo, ["quests"] = qo, ["spawns"] = sp, ["items"] = io, ["finds"] = fa,
+                ["findsGone"] = new JsonArray(gone.Select(g => (JsonNode)new JsonArray(g.Rev, g.Find)).ToArray()), ["goneFloor"] = goneFloor,
                 ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
                 ["seenMembers"] = new JsonArray(seenMembers.OrderBy(x => x, StringComparer.Ordinal).Select(x => (JsonNode)x).ToArray()),
             };

@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.10.3
+- **The Lodge's finds go back further, and only real ones show.** With a Lodge on 2.39 or newer, the Lodge keeps up to 10,000 finds (5,000 per member), up from 2,000 (700), so the finds page goes back days instead of one evening. When the Lodge has to let old finds go, it now tells the Outpost, which drops them too. Before, the Outpost kept showing finds the Lodge no longer had. The first time you connect to such a Lodge, the Outpost fetches its whole Atlas once.
+
 ## 3.10.2
 - **Dungeon finds reach your Lodge.** The game gives no map position inside a dungeon, so finds made there came with a zone but no spot, and the Outpost threw them away whole. They are now kept and shared without a spot.
 

@@ -78,6 +78,29 @@ namespace ElansAddonHub
                 && dzList.Count == 3 && dzList.Cast<Dictionary<string, object>>().All(o => o.ContainsKey("z") == o.ContainsKey("x") && o.ContainsKey("x") == o.ContainsKey("y")),
                 "finds " + dzf.Count + " dropped " + dz.Dropped + " zones " + string.Join(",", dzf.Select(f => f.Zone)) + " wire " + dzList.Count);
 
+            // ---- 3.10.3 (Lodge 2.39): the finds the Lodge's caps removed (findsGone) leave the Outpost too
+            {
+                object F(long s) => new Dictionary<string, object> { ["s"] = (double)s, ["i"] = 100.0 + s, ["c"] = 1.0, ["src"] = "npc:7", ["at"] = 1_790_000_000.0 + s, ["by"] = "Amy" };
+                var la = new Lodge.LodgeAtlas();
+                bool a1 = la.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
+                {
+                    ["t"] = "atlas.data", ["epoch"] = "g1", ["rev"] = 5.0, ["full"] = true, ["finds"] = new List<object> { F(1), F(2), F(3), F(4), F(5) },
+                }) as System.Text.Json.Nodes.JsonObject);
+                bool a2 = la.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
+                {
+                    ["t"] = "atlas.data", ["epoch"] = "g1", ["rev"] = 9.0, ["finds"] = new List<object> { F(8) }, ["findsGone"] = new List<object> { 2.0, 4.0, 77.0, "x", -1.0 },
+                }) as System.Text.Json.Nodes.JsonObject);
+                var left = la.AllFinds.Select(f => f.Seq).ToList();
+                Check("lodge finds: a continuing answer's findsGone removes exactly those finds (unknown or bad entries are ignored), new finds still arrive",
+                    a1 && a2 && left.SequenceEqual(new long[] { 1, 3, 5, 8 }) && la.FindsRemoved == 2, string.Join(",", left) + " removed " + la.FindsRemoved);
+                bool a3 = la.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
+                {
+                    ["t"] = "atlas.data", ["epoch"] = "g2", ["rev"] = 3.0, ["full"] = true, ["finds"] = new List<object> { F(1) },
+                }) as System.Text.Json.Nodes.JsonObject);
+                Check("lodge finds: a full answer (a new epoch) replaces every find the Outpost held", a3 && la.AllFinds.Count == 1, la.AllFinds.Count.ToString());
+                Check("lodge finds: the Outpost keeps as many finds as the Lodge (10000)", AtlasObs.MaxFinds == 10000);
+            }
+
             // ---- the wording of a rate
             Check("rate text: \"4 of 37 kills (10.8 %)\", and under 30 kills no rate is claimed",
                 AtlasObs.RateText(4, 37, "kill", "kills") == "4 of 37 kills (10.8 %)" && AtlasObs.RateText(2, 12, "kill", "kills") == "2 of 12 kills (too few to tell a rate)" && AtlasObs.RateText(1, 1, "kill", "kills").Contains("1 kill "));

@@ -33,7 +33,8 @@ namespace ElansAddonHub.Services
         // fishing spots (atlas4): per map, maps in total, items per spot, per share
         public const int MaxFishSpotsPerMap = 150, MaxFishMaps = 60, MaxFishItemsPerSpot = 50, MaxFishMapsPerShare = 20, MaxFishSpotsPerShare = 600;
         public const double FishMerge = 0.01;
-        public const int MaxFinds = 2000, MaxHubFinds = 500, MaxSpawnPoints = 50, MaxPointsPerNpcPerShare = 20;
+        // 3.10.3: the Lodge keeps 10000 finds since 2.39 (was 2000); MaxFindsGone = removed finds read from one atlas.data answer
+        public const int MaxFinds = 10000, MaxHubFinds = 500, MaxSpawnPoints = 50, MaxPointsPerNpcPerShare = 20, MaxFindsGone = 50000;
         public const int MaxNameLength = 80;
         // per share message (the server's frame limit is 64 KB)
         public const int MaxKillsPerShare = 200, MaxObjectsPerShare = 100, MaxFishingPerShare = 50, MaxVendorsPerShare = 60,
