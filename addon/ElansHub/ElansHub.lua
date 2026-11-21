@@ -36,7 +36,9 @@ local sessionLevel
 local function snapshot(atLogout)
   local db = ElansHubDB
   db.chars = db.chars or {}
-  local name, realm = clean(UnitName("player")), clean(GetRealmName())
+  local name, realm = clean(UnitName("player")), ElansLib:Get("Realm").Name()
+  local live = ElansLib:Get("Realm").Live()
+  if live then db.realm = live end -- remembered for when the client gives no realm (Forever 1.60.1.71037)
   if not name or name == "" or name == UNKNOWNOBJECT then return end
   local key = (realm or "?") .. "-" .. name
   local c = db.chars[key] or {}

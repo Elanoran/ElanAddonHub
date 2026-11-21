@@ -70,3 +70,5 @@
 1.20.2 Shared library update for sharing Elan addon settings (Share my settings... / Import settings... in the other Elan addons); nothing changes in the Hub itself - quit WoW fully once, a /reload is not enough
 
 1.20.3 Shared library update: Bug Trap keeps what happened just before an error (mailbox, bank, combat, a reported player, slash commands) with it; nothing changes in the Hub itself
+
+1.20.4 Your characters no longer show up twice: the 21 November game patch stopped telling addons your realm name, so each character was saved a second time without it. The Hub remembers your realm now and folds the doubles back into your characters (the newest data wins). New file in the shared library: quit WoW fully once, a /reload is not enough

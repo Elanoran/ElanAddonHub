@@ -290,7 +290,7 @@ local function build()
   local region
   if GetCurrentRegion then region = num(pc(GetCurrentRegion)) end
   return {
-    v = 2, at = real, realm = str(pc(GetRealmName), 60), region = region, serverOffset = off, localOffset = localOffset(),
+    v = 2, at = real, realm = str(ElansLib:Get("Realm").Name(), 60), region = region, serverOffset = off, localOffset = localOffset(),
     tz = TZ_NOTE, events = list,
   }
 end

@@ -16,7 +16,7 @@ end
 local function say(msg) print("|cffabd473Elan's Hub|r: " .. msg) end
 
 local function charKey()
-  local n, r = clean(UnitName("player")), clean(GetRealmName())
+  local n, r = clean(UnitName("player")), ElansLib:Get("Realm").Name()
   if not n or n == "" or n == UNKNOWNOBJECT then return nil end
   return (r or "?") .. "-" .. n
 end

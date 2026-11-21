@@ -654,7 +654,7 @@ local gbEmptyOnce = {} -- tab -> an empty answer was seen once (maybe a stale an
 local function guildKey()
   local name = str(rd(GetGuildInfo, "player"))
   if not name or name == "" then return nil end
-  local realm = str(rd(GetRealmName)) or "?"
+  local realm = ElansLib:Get("Realm").Name() or "?" -- the client gives "" since 1.60.1.71037
   return realm .. "-" .. name, name, realm
 end
 

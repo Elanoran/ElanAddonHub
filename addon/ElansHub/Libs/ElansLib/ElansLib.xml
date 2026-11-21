@@ -3,6 +3,7 @@
   <Script file="ElansLib.lua"/>
   <Script file="Secret.lua"/>
   <Script file="Names.lua"/>
+  <Script file="Realm.lua"/>
   <Script file="Defaults.lua"/>
   <Script file="BugTrap.lua"/>
   <Script file="Diag.lua"/>

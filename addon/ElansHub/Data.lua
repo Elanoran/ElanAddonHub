@@ -62,7 +62,7 @@ end
 local function charKey()
   local clean = EHUB.Clean or function(v) return v end
   local name = UnitName and clean(UnitName("player"))
-  local realm = GetRealmName and clean(GetRealmName())
+  local realm = ElansLib:Get("Realm").Name() -- the client gives "" since 1.60.1.71037: Realm remembers it
   if not name or name == "" or name == UNKNOWNOBJECT then return nil end
   return (realm or "?") .. "-" .. name
 end
@@ -234,6 +234,65 @@ function EHUB.PublishCore(c, atLogout)
   H.Publish("core", 1, data, { by = EHUB.name or "ElansHub", ver = EHUB.Version and EHUB.Version() or nil })
 end
 
+-- Forever client 1.60.1.71037 hands out an empty realm name, so every character got a second key "-Name" (or "?-Name")
+-- next to "Realm-Name" and showed up twice. Fold those back into the realm key once the realm is known (ElansLib.Realm
+-- remembers it): per module the newer copy wins; the companion's own notes (ElansHubDB.chars) likewise by `updated`.
+local function strayName(key) return type(key) == "string" and key:match("^%??%-(.+)$") or nil end
+
+function EHUB.MergeStrays()
+  local R = ElansLib and ElansLib:Get("Realm")
+  if not R then return 0 end
+  local function realmFor(name) return R.ForName(name) end
+  local moved = 0
+  local function strays(t) -- collected first: adding keys while pairs() walks a table is undefined
+    local out = {}
+    for key, c in pairs(t) do if strayName(key) then out[#out + 1] = { key, c } end end
+    return out
+  end
+  local d = ensure()
+  for _, kc in ipairs(strays(d.chars)) do
+    local key, c = kc[1], kc[2]
+    local name = strayName(key)
+    local realm = name and realmFor(name)
+    if realm then
+      local target = realm .. "-" .. name
+      local t = d.chars[target]
+      if type(t) ~= "table" then
+        d.chars[target] = c
+      elseif type(c) == "table" and type(c.mods) == "table" then
+        if type(t.mods) ~= "table" then t.mods = {} end
+        for m, e in pairs(c.mods) do
+          local old = t.mods[m]
+          if type(e) == "table" and (type(old) ~= "table" or (tonumber(e.at) or 0) >= (tonumber(old.at) or 0)) then t.mods[m] = e end
+        end
+        t.at = math.max(tonumber(t.at) or 0, tonumber(c.at) or 0)
+      end
+      d.chars[key] = nil
+      moved = moved + 1
+    end
+  end
+  local db = rawget(_G, "ElansHubDB")
+  if type(db) == "table" and type(db.chars) == "table" then
+    for _, kc in ipairs(strays(db.chars)) do
+      local key, c = kc[1], kc[2]
+      local name = strayName(key)
+      local realm = name and realmFor(name)
+      if realm then
+        local target = realm .. "-" .. name
+        local t = db.chars[target]
+        if type(c) == "table" and (type(t) ~= "table" or (tonumber(c.updated) or 0) >= (tonumber(t.updated) or 0)) then
+          c.realm = realm
+          db.chars[target] = c
+        end
+        db.chars[key] = nil
+        if db.current == key then db.current = target end
+        moved = moved + 1
+      end
+    end
+  end
+  return moved
+end
+
 local f = CreateFrame("Frame")
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_REGEN_ENABLED" }) do pcall(f.RegisterEvent, f, e) end
 f:SetScript("OnEvent", function(_, event, arg1)
@@ -241,6 +300,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
     if arg1 ~= (EHUB.name or ADDON) then return end
     loaded = true
     ensure()
+    pcall(EHUB.MergeStrays)
     H.Version = EHUB.Version and EHUB.Version() or H.Version
   elseif event == "PLAYER_LOGIN" then
     if not loaded then loaded = true ensure() end
