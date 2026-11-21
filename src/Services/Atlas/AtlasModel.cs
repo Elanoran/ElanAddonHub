@@ -212,7 +212,8 @@ namespace ElansAddonHub.Services.Atlas
     {
         public string Id = "", Kind = "";
         public string Title = "", Subtitle = "";
-        public string TitleNote = "";                                // one quiet line under the subtitle ("The name appears after you close the game ...")
+        public string WorldDrop = "";                                // an item that is a world drop: the line over "Best ways to get it" (3.10.3)
+        public string TitleNote = "";                              // one quiet line under the subtitle ("The name appears after you close the game ...")
         public int Quality = -1, IconId;
         public bool NotFound;
         public string Message = "";                                  // NotFound: what to say

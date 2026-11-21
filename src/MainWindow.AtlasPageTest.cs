@@ -168,6 +168,18 @@ namespace ElansAddonHub
                 Check("sources: the Lodge-opened chest (10 % of 50 opens, 2 members) is a Forever row 'Object'; the baseline's 15 % rides along", RowOf(ring, "sources", "obj:50")?.Detail == "5 of 50 opens (10.0 %) · 2 members" && RowOf(ring, "sources", "obj:50").Extra == AtlasLabel.Classic + ": 15%" && ringSrc.Rows[0].Key == "obj:50");
                 var cloak = AtlasQuery.Build("item:103").Section("sources");
                 Check("sources: an item with nothing but tiny sources still shows its 6 best and folds the rest ('+ 2 more world-drop sources under 0.1%')", cloak.Rows.Count == 6 && cloak.Hidden.Count == 2 && cloak.HiddenText == "+ 2 more world-drop sources under 0.1%" && cloak.Rows[0].Sort >= cloak.Rows[5].Sort);
+                // 3.10.3: a world drop lists the creatures of its level (closest first), not the level-40 one with the best chance, and draws them
+                var robe = AtlasQuery.Build("item:109");
+                var robeSrc = robe.Section("sources");
+                var robeKeys = robeSrc.Rows.Where(r => r.Type == "Drop").Select(r => r.Key).ToList();
+                Check("world drop: the 10 creatures nearest its level (20) are shown, closest first, each with its level; the level-40 one with 1.5 % is folded",
+                    robeKeys.Count == AtlasQuery.WorldDropShown && robeKeys[0] == "npc:18" && !robeKeys.Contains("npc:5") && robeSrc.Hidden.Any(r => r.Key == "npc:5")
+                    && robeSrc.Rows[0].Detail.StartsWith("Level 19-21 · ") && robeSrc.HiddenText.StartsWith("+ 22 more creatures that can drop it"),
+                    string.Join(",", robeKeys) + " | " + robeSrc.Rows.FirstOrDefault()?.Detail + " | " + robeSrc.HiddenText);
+                Check("world drop: the page says so with the level range (15-25), and the map draws the shown creature in a mapped instance",
+                    robe.WorldDrop.StartsWith("A world drop: creatures of about level 15-25") && robeSrc.Note.Contains("A world drop")
+                    && robe.Map.Zones.Any(z => z.Markers.Any(mk => mk.LinkId == "npc:4")), robe.WorldDrop + " | zones " + robe.Map.Zones.Count);
+                Check("world drop: an item with a real drop (10 %) or few sources is not one", AtlasQuery.Build("item:100").WorldDrop.Length == 0 && AtlasQuery.Build("item:103").WorldDrop.Length == 0);
                 var cloth = AtlasQuery.Build("item:102");
                 var clothVendor = RowOf(cloth, "sources", "vendor:2");
                 Check("sources: a vendor both the Lodge and the baseline know is one row (Lodge price, baseline stock on its second line); the Lodge's 5.9 % drop is listed", clothVendor != null && clothVendor.Detail.StartsWith("25c") && clothVendor.Detail.Contains("stack of 20") && clothVendor.Extra == AtlasLabel.Classic + ": unlimited stock" && RowOf(cloth, "sources", "npc:1")?.Detail.StartsWith("20 of 340 kills (5.9 %)") == true, clothVendor?.ToString());

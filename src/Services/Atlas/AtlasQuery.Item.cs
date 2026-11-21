@@ -232,8 +232,17 @@ namespace ElansAddonHub.Services.Atlas
             // which of my characters know the recipe, and who in the Lodge can craft it
             { var made = SpellData.RecipesProducing(id); if (made.Count > 0) AddRecipeKnowledge(m, made); }
 
+            // a world drop (3.10.3): many creatures, each with a small chance - the ones of the item's level go first, the rest are folded
+            var wd = WorldDropOf(id, rows, tiny, ci?.ItemLevel ?? rev?.ItemLevel ?? cl?.ItemLevel ?? 0, ci?.RequiredLevel ?? rev?.RequiredLevel ?? cl?.RequiredLevel ?? 0);
+
             // the table: Lodge-observed rows, then the client's, then the Classic baseline; tiny chances folded
             FoldTiny(src, rows, tiny);
+            if (wd != null)
+            {
+                m.WorldDrop = "A world drop: creatures of about level " + wd.Lo + "-" + wd.Hi + " anywhere can drop it, each only rarely. These fit its level best.";
+                src.Note = (src.Note.Length > 0 ? src.Note + " " : "") + "A world drop: creatures of about level " + wd.Lo + "-" + wd.Hi + " can drop it. The " + wd.Shown + " that fit its level best come first.";
+                if (src.Hidden.Count > 0) src.HiddenText = "+ " + src.Hidden.Count.ToString("N0", CalendarRules.English) + " more creature" + (src.Hidden.Count == 1 ? "" : "s") + " that can drop it (other levels, or fewer)";
+            }
             ItemCoverage(src);
 
             // ---- the map: where the sources are
@@ -295,6 +304,56 @@ namespace ElansAddonHub.Services.Atlas
                 m.Message = ItemData.Ready ? "No layer knows item " + id + ". The game has not shown it to you yet." : "Item data is not ready, and no other layer knows item " + id + ".";
             }
             return m;
+        }
+
+        // ---- world drops (3.10.3). In the Classic baseline a world drop is listed under hundreds of creatures, each with a tiny chance, and sorting
+        // by chance put level-60 raid trash first for a level-20 robe (its 1% beats a level-20 mob's 0.03%), with an empty map. Players get such
+        // an item from any creature around its level, so: when an item has many Classic creature drops and none is better than WorldDropMaxChance,
+        // the creatures whose level is within WorldDropBand of the item level are the sources shown (closest level first, then chance, at most
+        // WorldDropShown), and the others are folded. The map then draws those (AddItemMarkers draws the shown rows).
+        public const int WorldDropMinSources = 25, WorldDropBand = 5, WorldDropShown = 10;
+        public const double WorldDropMaxChance = 2.0;
+
+        sealed class WorldDrop { public int Lo, Hi, Shown; }
+
+        static WorldDrop WorldDropOf(int id, List<AtlasRow> rows, List<AtlasRow> tiny, int itemLevel, int reqLevel)
+        {
+            // judged on the baseline's own list (a source the Lodge also saw is merged into the Lodge's row, but its chance still counts)
+            var all = ClassicAtlas.SourcesOf(id).Where(s => s.Kind == ClassicSourceKind.NpcDrop || s.Kind == ClassicSourceKind.ObjectLoot).ToList();
+            if (all.Count(s => s.Kind == ClassicSourceKind.NpcDrop) < WorldDropMinSources || all.Any(s => s.Chance > WorldDropMaxChance)) return null;
+            var drops = rows.Concat(tiny).Where(r => r.Tier == 2 && r.Type == "Drop" && r.Key.StartsWith("npc:", StringComparison.Ordinal)).ToList();
+            int center = itemLevel > 0 ? itemLevel : reqLevel > 0 ? reqLevel + WorldDropBand : 0;
+            if (center <= 0) return null;
+            int lo = Math.Max(1, center - WorldDropBand), hi = center + WorldDropBand;
+            var fit = new List<(AtlasRow Row, int Dist, ClassicNpc Npc)>();
+            foreach (var r in drops)
+            {
+                var n = int.TryParse(r.Key.Substring(4), out var nid) ? ClassicAtlas.NpcInfo(nid) : null;
+                if (n == null || n.MaxLevel < lo || n.MinLevel > hi || n.MinLevel <= 0) continue;
+                fit.Add((r, Math.Abs((n.MinLevel + n.MaxLevel) / 2 - center), n));
+            }
+            if (fit.Count == 0) return null;                  // no creature of its level is known: the plain list stays
+            var shown = fit.OrderBy(f => f.Dist).ThenByDescending(f => f.Row.Sort).ThenBy(f => f.Row.Title, StringComparer.OrdinalIgnoreCase).Take(WorldDropShown).ToList();
+            var shownSet = new HashSet<AtlasRow>(shown.Select(f => f.Row));
+            rows.RemoveAll(r => drops.Contains(r)); tiny.RemoveAll(r => drops.Contains(r));
+            foreach (var f in shown)
+            {
+                var lv = f.Npc.MinLevel == f.Npc.MaxLevel ? f.Npc.MinLevel.ToString(CultureInfo.InvariantCulture) : f.Npc.MinLevel + "-" + f.Npc.MaxLevel;
+                f.Row.Detail = "Level " + lv + " · " + f.Row.Detail;
+                f.Row.Sort = 100 - f.Dist + Math.Min(f.Row.Sort, WorldDropMaxChance) / 100;   // closest level first (and >= 1: the map draws it)
+                rows.Add(f.Row);
+            }
+            // the rest stay one fold away: other creatures of its level first, then the others by chance
+            var fitRest = new HashSet<AtlasRow>(fit.Select(f => f.Row));
+            foreach (var r in drops.Where(r => !shownSet.Contains(r)))
+            {
+                if (!fitRest.Contains(r)) r.Sort -= 100;
+                tiny.Add(r);
+            }
+            return new WorldDrop
+            {
+                Lo = Math.Max(lo, fit.Min(f => f.Npc.MinLevel)), Hi = Math.Min(hi, fit.Max(f => f.Npc.MaxLevel)), Shown = shown.Count,
+            };
         }
 
         static string CountText(ClassicItemSource s)

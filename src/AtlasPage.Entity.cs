@@ -429,6 +429,11 @@ namespace ElansAddonHub
             DockPanel.SetDock(c, Dock.Right); head.Children.Add(c);
             head.Children.Add(Tb("Best ways to get it", "Text.Section"));
             sp.Children.Add(head);
+            if (m.WorldDrop.Length > 0)
+            {
+                var wd = Tb(m.WorldDrop, "Text.Caption", Res("Brush.Text.Secondary")); wd.TextWrapping = TextWrapping.Wrap; wd.Margin = new Thickness(0, 4, 0, 0); wd.Tag = "world-drop";
+                sp.Children.Add(wd);
+            }
             var host = new ContentControl { Margin = new Thickness(-8, 8, -8, 0), Focusable = false };
             host.Content = new ItemsControl { ItemsSource = rows, ItemTemplate = (DataTemplate)FindResource("AtlasRowTemplate"), Focusable = false };
             sp.Children.Add(host);
