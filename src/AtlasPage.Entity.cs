@@ -425,17 +425,20 @@ namespace ElansAddonHub
         void OverviewWithAnswers(AtlasPageModel m, StackPanel col)
         {
             col.Children.Add(AnswerStrip(m));
+            if (m.Lore != null) col.Children.Add(LoreCard(m));         // 3.10.4: a zone's story is its main text: right under the answers
             var best = BestWaysCard(m);
             if (best != null) col.Children.Add(best);
             foreach (var s in SectionsOn(m, AtlasTabs.Overview)) col.Children.Add(SectionCard(s));
-            mainMapSlot = new Border { Tag = "main-map" };          // the map, wide, under the list: the page's "where" next to its "how" (UpdateRailMap fills it)
-            col.Children.Add(mainMapSlot);
+            if (MapInMain)
+            {
+                mainMapSlot = new Border { Tag = "main-map" };      // the map, wide, under the list: the page's "where" next to its "how" (UpdateRailMap fills it)
+                col.Children.Add(mainMapSlot);
+            }
             UpdateRailMap();
             overviewTip = overviewLead = col.Children.Count;
             if (!railOn)
                 foreach (var c in new[] { tipCard, modelCard, factsCard })
                     if (c != null) { (c.Parent as Panel)?.Children.Remove(c); col.Children.Add(c); }
-            if (m.Lore != null) col.Children.Add(LoreCard(m));
             if (m.Custom is QuestChainInfo chain) col.Children.Add(QuestChainCard(chain));
             if (m.Entrance != null) col.Children.Add(EntranceCard(m));
             var owned = m.Section("owned");
@@ -624,7 +627,7 @@ namespace ElansAddonHub
                 foreach (var x in AtlasWalkUi(c)) yield return x;
         }
 
-        bool MapInMain => model != null && model.Answers.Count > 0;
+        bool MapInMain => model != null && model.Answers.Count > 0 && model.Kind != "zone";   // 3.10.4: a zone opens on its Map tab: its Overview keeps the small map in the rail
 
         // the thumbnail of the map in the rail: made the first time the rail is shown, hidden on the Map tab (it is the map there); a click opens the tab
         void UpdateRailMap()

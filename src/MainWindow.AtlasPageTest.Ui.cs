@@ -383,6 +383,15 @@ namespace ElansAddonHub
                         tiles == 4 && answersFirst && tn.Contains("Level and rank") && tn.Contains("Top drop") && tn.Contains("Drops"), "tiles " + tiles + " first " + answersFirst);
                     await ShotWait(400); Snapshot(Path.Combine(dir, "atlas-page-npc-overview.png"));
                     await AtlasView.Open("obj:50"); UpdateLayout(); await ShotWait(400); Snapshot(Path.Combine(dir, "atlas-page-obj-overview.png"));
+                    await AtlasView.Open("quest:7"); UpdateLayout();
+                    var qStrip = AtlasWalk(AtlasView).OfType<FrameworkElement>().FirstOrDefault(e => e.Tag as string == "answers");
+                    var qt = AtlasTexts(AtlasView);
+                    Check("quest page: the quick answers first (Given by, Level, Rewards), then its rewards on the Overview", qStrip != null && AtlasWalk(qStrip).OfType<FrameworkElement>().Count(e => e.Tag as string == "answer") == 3 && qt.Contains("Given by") && qt.Contains("Choose one of"));
+                    await ShotWait(400); Snapshot(Path.Combine(dir, "atlas-page-quest-overview.png"));
+                    await AtlasView.Open("zone:11"); UpdateLayout(); await SwitchTab("overview"); UpdateLayout();
+                    var zStrip = AtlasWalk(AtlasView).OfType<FrameworkElement>().FirstOrDefault(e => e.Tag as string == "answers");
+                    Check("zone page: the Overview starts with the quick answers (Levels, Dungeons, Your Lodge)", zStrip != null && AtlasWalk(zStrip).OfType<FrameworkElement>().Count(e => e.Tag as string == "answer") == 3);
+                    await ShotWait(400); Snapshot(Path.Combine(dir, "atlas-page-zone-answers.png"));
                 }
                 // the Map tab: browsing the breadcrumb away from the zone and back
                 await AtlasView.Open("zone:11"); UpdateLayout();

@@ -159,6 +159,7 @@ namespace ElansAddonHub.Services.Atlas
             built.ShowZone = id;
             m.Map = built;
             m.Subtitle = z.TypeName + (m.Crumbs.Count > 0 ? " in " + m.Crumbs[m.Crumbs.Count - 1].Title : "") + (zc != null && zc.MinLevel > 0 ? " · creatures level " + AtlasFormat.Levels(zc.MinLevel, zc.MaxLevel) : "");
+            if (isZone) ZoneAnswers(m, L, id, zc);                 // 3.10.4: the quick answers (AtlasQuery.Answers.cs); a continent keeps its list of zones
             if (!idx.HasArt(id)) m.Notes.Add(z.Name + " has no picture in the game files.");
             if (ClassicAtlas.IsReady == false && isZone) m.Notes.Add("Creatures, objects and quests of a zone come from the Classic baseline (and your game's cache). Get it from the Atlas start page.");
             return m;

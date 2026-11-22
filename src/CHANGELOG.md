@@ -5,6 +5,7 @@ Keep one `## x.y.z` section per hub version. This file is also shown in the Outp
 
 ## 3.10.4
 - **Creature and object pages answer first, like item pages.** A creature page now opens with four quick answers: where it is, its level and rank, its top drop, and what your Lodge has seen (its looted kills). Below them come its first drops, with a way to all of them. An object page (a chest, a node) answers where it is, what's inside and how often your Lodge opened it. Each answer says where it comes from, or plainly that it isn't known yet.
+- **Quest and zone pages answer first too.** A quest page opens with who gives it, its level and its rewards (the item, or "Choose one of 3"), then the rewards themselves. A zone's Overview opens with its creature levels, the dungeons whose entrance is there and what your Lodge found there, then the zone's story. Without the Classic baseline, a zone's levels come from the Outpost's own zone notes, and the answer says so. Every Atlas page now has the same shape: the answers, the main list, then the rest.
 - **The Lodge update notice points to 2.40.** Lodge owners on an older server are told that 2.40 is available (it was 2.38). 2.40 keeps more of the Lodge's finds and remembers where and when items drop.
 
 ## 3.10.3

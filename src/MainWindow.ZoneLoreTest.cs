@@ -138,7 +138,9 @@ namespace ElansAddonHub
                 Check("Durotar: the Overview has 'About Durotar' with the source label, the facts line and the summary", card != null && card.IsVisible && texts.Contains("About Durotar") && texts.Contains(ZoneLore.Label) && texts.Contains("Levels 1-10 · Horde") && texts.Contains(dur.Summary),
                     string.Join(" | ", texts.Take(6)));
                 var ov = (AtlasView.TabHostForTest as ContentControl)?.Content as Panel;
-                Check("Durotar: the card is the first thing on the Overview (2.70: a zone page has no game-tooltip card of its own any more, its header says it)", ov != null && ov.Children.IndexOf(card) == 0, ov == null ? "no panel" : ov.Children.IndexOf(card).ToString());
+                var dla = AtlasView.Model.Answers.FirstOrDefault(a => a.Label == "Levels");
+                Check("Durotar (3.10.4): without the Classic baseline the Levels answer comes from the Outpost's notes ('Levels 1-10', Horde), marked as such", dla != null && dla.Value == "Levels 1-10" && dla.Detail == "Horde" && dla.Source == AtlasAnswer.Notes, dla?.ToString() ?? "none");
+                Check("Durotar: the card is the first thing on the Overview after the quick answers (2.70: a zone page has no game-tooltip card of its own any more, its header says it; 3.10.4: the answers come first)", ov != null && ov.Children.IndexOf(card) == (ov.Children.Count > 0 && (ov.Children[0] as FrameworkElement)?.Tag as string == "answers" ? 1 : 0), ov == null ? "no panel" : ov.Children.IndexOf(card).ToString());
                 Check("Durotar: 'Starts here' lists the Valley of Trials and the Echo Isles; the Orc is a link to its race page, the Troll (not playable here) plain",
                     texts.Contains("Starts here") && texts.Contains("Valley of Trials") && texts.Contains("Echo Isles") && Links(card, "race:").Select(t => t.Tag as string).SequenceEqual(new[] { "race:2" }) && texts.Contains("Troll")
                     && AtlasWalk(card).OfType<Border>().Any(b => b.Tag as string == "race-plain"), string.Join(",", Links(card, "race:").Select(t => t.Tag)));

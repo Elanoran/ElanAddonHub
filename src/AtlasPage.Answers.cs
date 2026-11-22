@@ -57,7 +57,7 @@ namespace ElansAddonHub
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, top, 0, 0), Tag = "evidence" };
             var dot = new Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) };
             bool known = !string.IsNullOrEmpty(source);
-            if (known) dot.SetResourceReference(Shape.FillProperty, DataSources.BrushKey(source));
+            if (known) dot.SetResourceReference(Shape.FillProperty, source == AtlasAnswer.Notes ? "Brush.Text.Secondary" : DataSources.BrushKey(source));
             else { dot.StrokeThickness = 1; dot.SetResourceReference(Shape.StrokeProperty, "Brush.Text.Tertiary"); }
             row.Children.Add(dot);
             var t = Tb(EvidenceWords(source), "Text.Caption", Res("Brush.Text.Tertiary"));
@@ -65,6 +65,6 @@ namespace ElansAddonHub
             return row;
         }
 
-        static string EvidenceWords(string source) => string.IsNullOrEmpty(source) ? "Not known yet" : source == DataSources.Classic ? "Classic baseline only" : DataSources.Title(source);
+        static string EvidenceWords(string source) => string.IsNullOrEmpty(source) ? "Not known yet" : source == DataSources.Classic ? "Classic baseline only" : source == AtlasAnswer.Notes ? ZoneLore.Label : DataSources.Title(source);
     }
 }

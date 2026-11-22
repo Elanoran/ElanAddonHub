@@ -221,6 +221,9 @@ namespace ElansAddonHub.Services.Atlas
                 }
             }
             m.Map = plan.Build();
+            // 3.10.4: the quick answers (AtlasQuery.Answers.cs): Given by · Level · Rewards
+            QuestAnswers(m, level, min, seen != null && seen.Level > 0 ? (seenFromLodge ? DataSources.Lodge : DataSources.Game) : DataSources.Classic,
+                seenFull ? seen.StartItem : 0, seenFull ? seen.Money : 0);
             LayerNotes(m, !ClassicAtlas.IsReady, false);
             return m;
         }

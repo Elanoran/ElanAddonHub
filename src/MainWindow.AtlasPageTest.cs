@@ -285,6 +285,24 @@ namespace ElansAddonHub
                     && q.Section("choices").Rows.Count == 2 && q.Section("choices").Rows[0].Key == "item:101" && q.Section("choices").Rows[1].Detail == "×5" && q.Section("objectives").Rows[0].Detail == "×4");
                 Check("quest page: given by Innkeeper Hale (zone Highkeep) and the giver's position on the map as a Quest marker", q.Section("givers").Rows[0].Link == "npc:2" && q.Section("givers").Rows[0].Zone == "Highkeep" && q.Map.Zones.Any(z => z.UiMapId == 13 && z.Markers.Any(m => m.Kind == MarkerKind.Quest)));
                 Check("quest page: a quest only the Classic baseline knows, and one the client has seen without the baseline, both have pages", !AtlasQuery.Build("quest:9").NotFound && !AtlasQuery.Build("quest:8").NotFound && AtlasQuery.Build("quest:8").Title == "A Forever Only Errand" && AtlasQuery.Build("quest:4040").NotFound);
+                // 3.10.4 (docs: one layout for every page, milestone 3): the quick answers of a quest and a zone page
+                {
+                    var qa = q.Answers;
+                    Check("quest page answers: Given by (Innkeeper Hale, a link, in Highkeep) · Level (6 from your game, from level 4) · Rewards ('Choose one of 2', plus the item)",
+                        qa.Select(a => a.Label).SequenceEqual(new[] { "Given by", "Level", "Rewards" }) && qa[0].Link == "npc:2" && qa[0].Detail.StartsWith("Highkeep") && qa[0].Known
+                        && qa[1].Value == "Level 6" && qa[1].Detail.StartsWith("from level 4") && qa[1].Source == DataSources.Game
+                        && qa[2].Value == "Choose one of 2" && qa[2].Detail.Contains("+ 1 item") && qa[2].Known, string.Join(" | ", qa.Select(a => a.Label + "=" + a.Value + " (" + a.Detail + ", " + a.Source + ")")));
+                    var q8 = AtlasQuery.Build("quest:8").Answers;
+                    Check("quest page answers: a quest only the client has seen (no baseline) says plainly that its giver is not known yet",
+                        q8.Count == 3 && (q8[0].Value == "Not known yet" || q8[0].Source == DataSources.Game) && q8.All(a => a.Value.Length > 0), string.Join(" | ", q8.Select(a => a.Label + "=" + a.Value + " (" + a.Source + ")")));
+                    var za = zone.Answers;
+                    var zi = zone.Section("instances")?.Rows.Count ?? 0;
+                    Check("zone page answers: Levels (the creatures', Classic baseline) · Dungeons (" + zi + " entrance(s) here) · Your Lodge (its finds here)",
+                        za.Select(a => a.Label).SequenceEqual(new[] { "Levels", "Dungeons", "Your Lodge" }) && za[0].Value.StartsWith("Level ") && za[0].Source == DataSources.Classic
+                        && (zi == 0 ? za[1].Value == "None here" : zi == 1 ? za[1].Link != null && za[1].Link.StartsWith("instance:") : za[1].Value.EndsWith("entrances"))
+                        && (za[2].Value.EndsWith(" finds") || za[2].Value.EndsWith(" find")) && za[2].Source == DataSources.Lodge, string.Join(" | ", za.Select(a => a.Label + "=" + a.Value + " (" + a.Detail + ", " + a.Source + ")")));
+                    Check("zone page answers: a continent keeps its list of zones (no answers)", cont.Answers.Count == 0);
+                }
                 var sp = AtlasQuery.Build("spell:4000");
                 Check("spell page: a recipe - name, rank, cast time, description; the recipe with its skill, what it makes and what it needs", sp.Title == "Heavy Linen Bandage" && sp.Facts.Any(f => f.Label == "Rank" && f.Value == "Rank 2") && sp.Facts.Any(f => f.Label == "Cast time" && f.Value == "Instant") && sp.Texts[0].Body == "Heals the target."
                     && sp.Section("recipe").Rows.Any(r => r.Link == "skill:129") && sp.Section("recipe").Rows.Any(r => r.Type == "Creates" && r.Link == "item:108") && sp.Section("recipe").Rows.Any(r => r.Type == "Reagent" && r.Link == "item:102" && r.Detail == "Needs ×2"));

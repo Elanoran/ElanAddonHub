@@ -168,6 +168,7 @@ namespace ElansAddonHub.Services.Atlas
     public sealed class AtlasAnswer
     {
         public string Label = "", Value = "", Detail = "", Source = "", Link;
+        public const string Notes = "notes";                    // 3.10.4: the Outpost's own zone notes (ZoneLore), not one of the five data sources
         public bool Known => Source.Length > 0;
         public override string ToString() => Label + ": " + Value + (Detail.Length > 0 ? " · " + Detail : "") + " [" + (Source.Length > 0 ? Source : "none") + "]";
     }
