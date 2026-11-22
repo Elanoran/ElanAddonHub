@@ -194,7 +194,9 @@ namespace ElansAddonHub
                 var heroEl = AtlasView.HeroForTest; var scroller = AtlasView.ScrollerWidthForTest;
                 Check("narrow (760): the hero, the tab strip and the tab stack in one column inside the page - nothing wider than the page (no sideways scroll) and the nav is the 56 px strip", !AtlasView.WideForTest && heroEl.ActualWidth <= scroller + 1 && AtlasView.TabHostForTest.ActualWidth <= scroller + 1 && AtlasView.NavCollapsedForTest, heroEl.ActualWidth + " vs " + scroller);
                 await AtlasView.Open("npc:1"); UpdateLayout();
-                Check("narrow (760): the quick facts (the creature's links) are inside the Overview, under the tooltip card, and the rail is empty", AtlasView.FactsCardForTest != null && AtlasView.FactsCardForTest.Parent is StackPanel fp && fp.Children.IndexOf(AtlasView.FactsCardForTest) == 1 && !AtlasView.RailShownForTest);
+                // 3.10.4: a creature page has quick answers: the tooltip card (and the model) come after the answers and the main list, the facts right after them
+                Check("narrow (760): the quick facts (the creature's links) are inside the Overview, under the tooltip card (and the model card), and the rail is empty", AtlasView.FactsCardForTest != null && AtlasView.FactsCardForTest.Parent is StackPanel fp && fp.Children.IndexOf(AtlasView.FactsCardForTest) is int fi && fi > 0
+                    && (ReferenceEquals(fp.Children[fi - 1], AtlasView.ModelCardForTest) || GtAll<GameTooltip>(fp.Children[fi - 1]).Count > 0) && !AtlasView.RailShownForTest);
                 Width = 1800;
                 Check("wide (1800): the same facts moved to the rail on the right (a narrower second column) - placed again, the page not drawn again", await Until(() => AtlasView.RailShownForTest && AtlasView.FactsCardForTest.Parent == AtlasView.RailForTest && AtlasView.RailForTest.ActualWidth >= 240 && AtlasView.RailForTest.ActualWidth <= 0.4 * AtlasView.ScrollerWidthForTest), AtlasView.RailForTest?.ActualWidth + " of " + AtlasView.ScrollerWidthForTest);
                 Width = 1300; Height = 900; await Settle();

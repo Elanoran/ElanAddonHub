@@ -4,6 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
 ## 3.10.4
+- **Creature and object pages answer first, like item pages.** A creature page now opens with four quick answers: where it is, its level and rank, its top drop, and what your Lodge has seen (its looted kills). Below them come its first drops, with a way to all of them. An object page (a chest, a node) answers where it is, what's inside and how often your Lodge opened it. Each answer says where it comes from, or plainly that it isn't known yet.
 - **The Lodge update notice points to 2.40.** Lodge owners on an older server are told that 2.40 is available (it was 2.38). 2.40 keeps more of the Lodge's finds and remembers where and when items drop.
 
 ## 3.10.3

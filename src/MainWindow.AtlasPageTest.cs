@@ -240,6 +240,25 @@ namespace ElansAddonHub
                 Check("object page: name and kind (Forever), its loot (Lodge 10 %, baseline 15 % on the same row), its position on the map (Node marker)", obj.Title == "Ancient Chest" && obj.Facts.Any(f => f.Label == "Kind" && f.Value == "chest or node") && obj.Section("loot").Rows.Count == 1 && obj.Section("loot").Rows[0].Detail.StartsWith("5 of 50 opens (10.0 %)")
                     && obj.Map.Zones.Any(z => z.UiMapId == 11 && z.Markers.Any(m => m.Kind == MarkerKind.Node && m.LinkId == "obj:50")));
 
+                // 3.10.4 (docs: one layout for every page, milestone 2): the quick answers of a creature and an object page
+                {
+                    var na = npc.Answers;
+                    var top = AtlasQuery.TopDropOf(npc.Section("loot"));
+                    Check("NPC page answers: Where (Greenvale, a link, the Lodge's spawn points) · Level and rank · Top drop (the first uncommon-or-better drop, a link) · Your Lodge (its looted kills), each with where it comes from",
+                        na.Select(a => a.Label).SequenceEqual(new[] { "Where", "Level and rank", "Top drop", "Your Lodge" })
+                        && na[0].Value == "Greenvale" && na[0].Link == "zone:11" && na[0].Source == DataSources.Lodge && na[0].Detail.Contains("spawn point")
+                        && na[1].Value.StartsWith("Level ") && na[1].Detail.StartsWith("Boss") && na[1].Known
+                        && top != null && na[2].Value == top.Title && na[2].Link == top.Link && na[2].Source == top.SourceKey && na[2].Detail.Contains("3 items known")
+                        && na[3].Value.EndsWith(" kills") && na[3].Source == DataSources.Lodge && na[3].Detail.StartsWith("by "), string.Join(" | ", na.Select(a => a.Label + "=" + a.Value + " (" + a.Detail + ", " + a.Source + ")")));
+                    var sa = seenOnly.Answers;
+                    Check("NPC page answers: a creature only the client has seen says plainly what is not known yet (no place, no loot) instead of empty cards",
+                        sa.Count == 4 && sa[0].Value == "Not known yet" && !sa[0].Known && sa[2].Value == "Not known yet" && !sa[2].Known && sa[1].Known && sa[1].Source == DataSources.Game, string.Join(" | ", sa.Select(a => a.Label + "=" + a.Value + " (" + a.Source + ")")));
+                    var oa = obj.Answers;
+                    Check("object page answers: Where (Greenvale) · What's inside (its loot, a link) · Your Lodge (50 opens)",
+                        oa.Select(a => a.Label).SequenceEqual(new[] { "Where", "What's inside", "Your Lodge" }) && oa[0].Value == "Greenvale" && oa[1].Link != null && oa[1].Link.StartsWith("item:") && oa[2].Value == "50 opens" && oa[2].Source == DataSources.Lodge,
+                        string.Join(" | ", oa.Select(a => a.Label + "=" + a.Value + " (" + a.Detail + ", " + a.Source + ")")));
+                }
+
                 var zone = AtlasQuery.Build("zone:11");
                 var cr = zone.Section("creatures");
                 Check("zone page: name, type, 'In Northland' (link), creature levels (Classic baseline), the map of the zone", zone.Title == "Greenvale" && zone.MapFirst && zone.Map.ShowZone == 11 && zone.Facts.Any(f => f.Label == "In" && f.Link == "zone:10") && zone.Facts.Any(f => f.Label == "Creature levels" && f.Source == AtlasLabel.Classic) && zone.Crumbs.Count == 2, string.Join("; ", zone.Facts));

@@ -372,6 +372,18 @@ namespace ElansAddonHub
                     zoneTips == 0 && noFactsAnyTab && AtlasView.HeroChipsForTest.Any(c => c == "In Northland") && ElansAddonHub.AtlasPage.HeaderCarriesFacts(AtlasView.Model), zoneTips + " " + noFactsAnyTab + " " + string.Join(",", AtlasView.HeroChipsForTest));
                 await AtlasView.Open("npc:1"); UpdateLayout();
                 Check("zone page (2.70): ... a creature page keeps its game-tooltip card and its facts", GtAll<GameTooltip>(AtlasView.BodyForTest).Count > 0 && !ElansAddonHub.AtlasPage.HeaderCarriesFacts(AtlasView.Model));
+                {
+                    // 3.10.4: a creature page has the same shape as an item's: the answers, then its main list ("Drops", the first rows and "All N items")
+                    var tn = AtlasTexts(AtlasView);
+                    var strip = AtlasWalk(AtlasView).OfType<FrameworkElement>().FirstOrDefault(e => e.Tag as string == "answers");
+                    var list = AtlasWalk(AtlasView).OfType<FrameworkElement>().FirstOrDefault(e => e.Tag as string == "main-list");
+                    int tiles = strip == null ? 0 : AtlasWalk(strip).OfType<FrameworkElement>().Count(e => e.Tag as string == "answer");
+                    bool answersFirst = strip != null && list != null && strip.TranslatePoint(new Point(0, 0), AtlasView).Y < list.TranslatePoint(new Point(0, 0), AtlasView).Y;
+                    Check("creature page: the quick answers first (4 tiles: Where, Level and rank, Top drop, Your Lodge), then the main list 'Drops' with its first rows",
+                        tiles == 4 && answersFirst && tn.Contains("Level and rank") && tn.Contains("Top drop") && tn.Contains("Drops"), "tiles " + tiles + " first " + answersFirst);
+                    await ShotWait(400); Snapshot(Path.Combine(dir, "atlas-page-npc-overview.png"));
+                    await AtlasView.Open("obj:50"); UpdateLayout(); await ShotWait(400); Snapshot(Path.Combine(dir, "atlas-page-obj-overview.png"));
+                }
                 // the Map tab: browsing the breadcrumb away from the zone and back
                 await AtlasView.Open("zone:11"); UpdateLayout();
                 await SwitchTab("map"); await MapReady();

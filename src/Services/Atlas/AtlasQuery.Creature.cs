@@ -252,6 +252,7 @@ namespace ElansAddonHub.Services.Atlas
                 }
             }
             SeenGoalQuests(m, 0, id, sf != null ? new[] { sf.Kc1, sf.Kc2 } : null);
+            NpcAnswers(m, L, id, cn, rank, seen != null, loot, seenAt.Count + (spots?.Count ?? 0));   // 3.10.4: the quick answers (AtlasQuery.Answers.cs)
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L));
             if (!SeenData.Ready) m.Notes.Add("What your game has seen (names, ranks) is not read yet.");
             AddCairnShareNote(m);                              // 2.87: also when no loot table was drawn (the line, once)
@@ -363,6 +364,7 @@ namespace ElansAddonHub.Services.Atlas
             AddFoundIn(m, co?.Spawns, null);
             LootSection(m, "loot", "Loot", "obj", id, ClassicSourceKind.ObjectLoot, "No loot is known for this object.");
             SeenGoalQuests(m, 2, id, null);
+            ObjectAnswers(m, L, loot);                                  // 3.10.4: the quick answers (AtlasQuery.Answers.cs)
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L));
             return m;
         }

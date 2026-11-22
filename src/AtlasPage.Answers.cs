@@ -25,7 +25,8 @@ namespace ElansAddonHub
             return g;
         }
 
-        int AnswerColumns(int n) => wide || Scroller.ActualWidth >= 760 ? n : System.Math.Min(n, 2);
+        // 3.10.4: three answers (an object page) stay in one row down to 560 px instead of wrapping 2 + 1 with a gap
+        int AnswerColumns(int n) => wide || Scroller.ActualWidth >= 760 || (n == 3 && Scroller.ActualWidth >= 560) ? n : System.Math.Min(n, 2);
 
         void LayoutAnswers() { if (answerGrid != null && model != null) answerGrid.Columns = AnswerColumns(model.Answers.Count); }
 

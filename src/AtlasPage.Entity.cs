@@ -445,20 +445,29 @@ namespace ElansAddonHub
             foreach (var n in m.Notes) if (!n.StartsWith("No Lodge observations yet", StringComparison.Ordinal)) col.Children.Add(Note(n));
         }
 
-        // "Best ways to get it": the first three rows of an item's sources, and a way to all of them
+        // "Best ways to get it": the first three rows of an item's sources, and a way to all of them. 3.10.4: a creature's or object's page with
+        // quick answers has the same main list: the first rows of its loot ("Drops", "What's inside"), or of what a vendor sells
         FrameworkElement BestWaysCard(AtlasPageModel m)
         {
-            if (m.Kind != "item") return null;
-            var s = m.Section("sources");
+            string title = "Best ways to get it", noun = "sources";
+            AtlasSection s;
+            if (m.Kind == "item") s = m.Section("sources");
+            else if (m.Answers.Count > 0 && (m.Kind == "npc" || m.Kind == "obj"))
+            {
+                s = m.Section("loot");
+                if (s != null && s.Open) { title = m.Kind == "obj" ? "What's inside" : "Drops"; noun = "items"; }
+                else if (m.Section("vendor") is AtlasSection v && v.Open) { s = v; title = "Sells"; noun = "items"; }
+            }
+            else return null;
             if (s == null || !s.Open) return null;
             int show = m.Answers.Count > 0 ? 5 : 3;                  // 3.10.3: with answers the list is the main column's body: a few more rows
             var rows = s.Rows.Count > 0 ? s.Rows.Take(show).ToList() : s.Hidden.Take(show).ToList();
             int total = s.Rows.Count + s.Hidden.Count;
-            var sp = new StackPanel();
+            var sp = new StackPanel { Tag = "main-list" };
             var head = new DockPanel();
             var c = Tb(total.ToString("N0", Lodge.CalendarRules.English), "Text.Caption", Res("Brush.Text.Tertiary")); c.VerticalAlignment = VerticalAlignment.Center;
             DockPanel.SetDock(c, Dock.Right); head.Children.Add(c);
-            head.Children.Add(Tb("Best ways to get it", "Text.Section"));
+            head.Children.Add(Tb(title, "Text.Section"));
             sp.Children.Add(head);
             if (m.WorldDrop.Length > 0)
             {
@@ -468,9 +477,10 @@ namespace ElansAddonHub
             var host = new ContentControl { Margin = new Thickness(-8, 8, -8, 0), Focusable = false };
             host.Content = new ItemsControl { ItemsSource = rows, ItemTemplate = (DataTemplate)FindResource("AtlasRowTemplate"), Focusable = false };
             sp.Children.Add(host);
-            if (total > rows.Count && tabsShown.Contains(AtlasTabs.Sources))
+            var tab = AtlasTabs.OfSection(s.Key);
+            if (total > rows.Count && tabsShown.Contains(tab))
             {
-                var all = GhostButton("All " + total.ToString("N0", Lodge.CalendarRules.English) + " sources", () => SelectTab(AtlasTabs.Sources), "Open the Sources tab");
+                var all = GhostButton("All " + total.ToString("N0", Lodge.CalendarRules.English) + " " + noun, () => SelectTab(tab), "Open the " + AtlasTabs.Title(tab) + " tab");
                 all.Margin = new Thickness(0, 4, 0, 0); all.Tag = "all-sources";
                 sp.Children.Add(all);
             }
