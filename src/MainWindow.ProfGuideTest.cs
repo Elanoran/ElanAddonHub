@@ -687,7 +687,7 @@ namespace ElansAddonHub
             Check("delete: removes the route and any guide choice that pointed at it (and tells the guide)", settings.SavedRoutes.Count == 1 && !settings.RouteForGuide.ContainsKey(key) && ui.SavedButtons.Count == 1 && changedCalls == 4);
             // "Show route" from the gathering guide: the zone page opens with the panel, the objects ticked, the loop built
             GatherNodes.Pending = new GatherNodes.RouteRequest { Zone = 11, Objects = new List<int> { 51 } };
-            await AtlasView.Open("zone:11"); UpdateLayout();
+            await AtlasView.Open("zone:11?tab=map"); UpdateLayout();        // the guide's link names the Map tab (3.10.4: a zone opens on its Overview)
             await MapReady();
             var ui2 = AtlasView.LastRoutesForTest;
             await WaitFor(() => ui2.IsOpen && ui2.Last != null, 8000);
@@ -711,7 +711,7 @@ namespace ElansAddonHub
             ProfessionLinks.OpenRequested -= OnProfessionLink; ProfessionLinks.OpenRequested += hook;
             if (routeLinks.Count > 0) routeLinks[0].RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
             ProfessionLinks.OpenRequested -= hook; ProfessionLinks.OpenRequested += OnProfessionLink;
-            Check("gathering guide: every zone of a bracket has a 'Show route' link that asks for the zone page and passes the zone's objects", routeLinks.Count >= 2 && opened == "zone:1429" && GatherNodes.Pending != null && GatherNodes.Pending.Zone == 1429 && GatherNodes.Pending.Objects.OrderBy(i => i).SequenceEqual(new[] { 1617, 1618 }), opened + " links " + routeLinks.Count);
+            Check("gathering guide: every zone of a bracket has a 'Show route' link that asks for the zone's Map tab (3.10.4) and passes the zone's objects", routeLinks.Count >= 2 && opened == "zone:1429?tab=map" && GatherNodes.Pending != null && GatherNodes.Pending.Zone == 1429 && GatherNodes.Pending.Objects.OrderBy(i => i).SequenceEqual(new[] { 1617, 1618 }), opened + " links " + routeLinks.Count);
             GatherNodes.Pending = null;
             Height = 800;
         }

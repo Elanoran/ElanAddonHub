@@ -199,8 +199,9 @@ namespace ElansAddonHub
                 Width = 1100;
                 await Until(() => !AtlasView.WideForTest && AtlasView.ColumnsForTest == 1);
                 await Until(() => AtlasView.ModelCardOverviewIndexForTest >= 0);
-                Check("model card: narrow (1100) - in the Overview right after the tooltip card (index 1), the rail gone, the same viewer",
-                    !AtlasView.WideForTest && AtlasView.ModelCardOverviewIndexForTest == 1 && !AtlasView.RailShownForTest && ReferenceEquals(AtlasView.ModelViewForTest, mv),
+                // 3.10.4: a creature page has quick answers: the tooltip card comes after the answers, the main list and the map (index 3)
+                Check("model card: narrow (1100) - in the Overview right after the tooltip card (index 3: after the quick answers, the main list or map, and the tooltip), the rail gone, the same viewer",
+                    !AtlasView.WideForTest && AtlasView.ModelCardOverviewIndexForTest == 3 && !AtlasView.RailShownForTest && ReferenceEquals(AtlasView.ModelViewForTest, mv),
                     "index " + AtlasView.ModelCardOverviewIndexForTest + " wide " + AtlasView.WideForTest);
                 await Until(() => false, 400);
                 var st2 = await MvState(mv); double fr2 = D(st2, "frames"); await Until(() => false, 400); var st3 = await MvState(mv);

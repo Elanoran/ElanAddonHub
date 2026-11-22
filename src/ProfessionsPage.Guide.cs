@@ -277,7 +277,7 @@ namespace ElansAddonHub
                     var zid = z.Zone.Id;
                     var rl = LinkText("   Show route", null, "Text.Caption", Res("Brush.Accent"));
                     rl.Cursor = Cursors.Hand; rl.ToolTip = "Open the zone map with a gathering loop through these nodes";
-                    rl.MouseLeftButtonUp += (s, e) => { GatherNodes.Pending = new GatherNodes.RouteRequest { Zone = zid, Objects = routeObjs }; ProfessionLinks.Open("zone:" + zid); e.Handled = true; };
+                    rl.MouseLeftButtonUp += (s, e) => { GatherNodes.Pending = new GatherNodes.RouteRequest { Zone = zid, Objects = routeObjs }; ProfessionLinks.Open("zone:" + zid + "?tab=map"); e.Handled = true; };   // 3.10.4: a zone opens on its Overview; the Routes panel is on the map
                     rl.Tag = "route";
                     head.Children.Add(rl);
                 }
