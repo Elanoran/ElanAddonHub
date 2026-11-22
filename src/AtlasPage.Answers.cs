@@ -36,7 +36,7 @@ namespace ElansAddonHub
             var v = Tb(a.Value, "Text.Body", a.Known ? null : Res("Brush.Text.Secondary"), 2); v.FontWeight = FontWeights.SemiBold; v.TextTrimming = TextTrimming.CharacterEllipsis; v.ToolTip = a.Value;
             sp.Children.Add(v);
             if (a.Detail.Length > 0) { var d = Tb(a.Detail, "Text.Caption", Res("Brush.Text.Secondary"), 2); d.TextWrapping = TextWrapping.Wrap; d.MaxHeight = 36; d.TextTrimming = TextTrimming.CharacterEllipsis; sp.Children.Add(d); }
-            sp.Children.Add(EvidenceMark(a.Source, 6));
+            if (a.Known) sp.Children.Add(EvidenceMark(a.Source, 6));     // "Not known yet" is already the value: no second line saying it
             var b = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(4), Child = sp, Tag = "answer" };
             b.SetResourceReference(Border.BackgroundProperty, "Brush.Surface1");
             System.Windows.Automation.AutomationProperties.SetName(b, a.Label + ": " + a.Value + (a.Detail.Length > 0 ? ", " + a.Detail : "") + ". " + EvidenceWords(a.Source));
