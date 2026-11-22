@@ -902,7 +902,7 @@ SlashCmdList.ELANSHUB = function(msg)
     return
   end
   if a == "copy" then
-    if EHUB.ShowChatPicker then EHUB.ShowChatPicker(EHUB.ChatLines(200)) end
+    if EHUB.CopyChat then EHUB.CopyChat() end
     return
   end
   if a == "talentprobe" then

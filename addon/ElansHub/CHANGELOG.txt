@@ -72,3 +72,5 @@
 1.20.3 Shared library update: Bug Trap keeps what happened just before an error (mailbox, bank, combat, a reported player, slash commands) with it; nothing changes in the Hub itself
 
 1.20.4 Your characters no longer show up twice: the 21 November game patch stopped telling addons your realm name, so each character was saved a second time without it. The Hub remembers your realm now and folds the doubles back into your characters (the newest data wins). New file in the shared library: quit WoW fully once, a /reload is not enough
+
+1.20.5 Copy from any chat window, not only General: every chat window has a small note icon in its top-right corner (faint until you point at it) that opens the line picker on that window, and /ehub copy now uses the tab you have selected. Turn the icon off in /ehub > General

@@ -105,8 +105,28 @@ local function plain(t)
 end
 EHUB.PlainText = plain
 
-function EHUB.ChatLines(max)
-  local out, f = {}, DEFAULT_CHAT_FRAME
+-- the chat window you are looking at: the selected tab (or a window of its own), not always General
+function EHUB.CurrentChatFrame()
+  local f = SELECTED_CHAT_FRAME
+  if type(f) ~= "table" and FCF_GetCurrentChatFrame then
+    local ok, cur = pcall(FCF_GetCurrentChatFrame)
+    if ok then f = cur end
+  end
+  if type(f) ~= "table" then f = DEFAULT_CHAT_FRAME end
+  return f
+end
+
+-- the tab's name ("General", "Combat Log", "Trade"...), or nil
+function EHUB.ChatFrameName(f)
+  if not (f and f.GetID and GetChatWindowInfo) then return nil end
+  local ok, id = pcall(f.GetID, f)
+  if not ok or type(id) ~= "number" or (issecretvalue and issecretvalue(id)) then return nil end
+  local ok2, name = pcall(GetChatWindowInfo, id)
+  if ok2 and type(name) == "string" and not (issecretvalue and issecretvalue(name)) and name ~= "" then return name end
+end
+
+function EHUB.ChatLines(max, frame)
+  local out, f = {}, frame or EHUB.CurrentChatFrame()
   if not (f and f.GetNumMessages and f.GetMessageInfo) then return out end
   local ok, n = pcall(f.GetNumMessages, f)
   if not ok or type(n) ~= "number" or (issecretvalue and issecretvalue(n)) then return out end
@@ -365,14 +385,78 @@ local function buildPicker()
   picker = f
 end
 
-function EHUB.ShowChatPicker(lines)
+function EHUB.ShowChatPicker(lines, name)
   if not picker then buildPicker() end
   P.Set(lines)
+  picker.title:SetText((name and ("Recent " .. name) or "Recent chat") .. " - pick the lines you want")
   picker.search:SetText("")
   picker:Show()
   refresh()
   return picker
 end
+
+-- open the picker on one chat window (the selected one when f is nil)
+function EHUB.CopyChat(f)
+  f = f or EHUB.CurrentChatFrame()
+  return EHUB.ShowChatPicker(EHUB.ChatLines(200, f), EHUB.ChatFrameName(f))
+end
+
+-- ============================================================ the copy icon in each chat window
+-- A small note icon in the top-right corner of every chat window (faint until you point at it): a click opens the picker on
+-- THAT window. Docked tabs share one spot, and the hidden ones hide their icon with them. Off: ElansHubDB.chatCopy == false.
+local copyButtons = {}
+local ICON = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
+
+function EHUB.ChatCopyOn() return not (ElansHubDB and ElansHubDB.chatCopy == false) end
+
+local function addCopyButton(f)
+  if type(f) ~= "table" or copyButtons[f] or not f.GetMessageInfo then return end
+  local ok, b = pcall(CreateFrame, "Button", nil, f)
+  if not ok or not b then return end
+  b:SetSize(16, 16)
+  b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+  if b.SetFrameLevel and f.GetFrameLevel then pcall(b.SetFrameLevel, b, (f:GetFrameLevel() or 1) + 5) end
+  b:SetNormalTexture(ICON)
+  b:SetHighlightTexture(ICON)
+  b:SetAlpha(0.35)
+  b:SetScript("OnEnter", function(self)
+    self:SetAlpha(1)
+    if GameTooltip then
+      GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      GameTooltip:SetText("Copy chat")
+      GameTooltip:AddLine("Pick lines from this chat window to copy.", 1, 1, 1, true)
+      GameTooltip:Show()
+    end
+  end)
+  b:SetScript("OnLeave", function(self)
+    self:SetAlpha(0.35)
+    if GameTooltip then GameTooltip:Hide() end
+  end)
+  b:SetScript("OnClick", function() EHUB.CopyChat(f) end)
+  b:SetShown(EHUB.ChatCopyOn())
+  copyButtons[f] = b
+  return b
+end
+EHUB.ChatCopyButtons = copyButtons
+
+function EHUB.SetupChatCopy()
+  for i = 1, tonumber(NUM_CHAT_WINDOWS) or 10 do addCopyButton(_G["ChatFrame" .. i]) end
+  if type(CHAT_FRAMES) == "table" then -- also the whisper windows the game opens later
+    for _, name in ipairs(CHAT_FRAMES) do addCopyButton(_G[name]) end
+  end
+end
+
+function EHUB.UpdateChatCopy()
+  local on = EHUB.ChatCopyOn()
+  for _, b in pairs(copyButtons) do b:SetShown(on) end
+end
+
+table.insert(EHUB.inits, function()
+  pcall(EHUB.SetupChatCopy)
+  if hooksecurefunc and FCF_OpenTemporaryWindow then
+    hooksecurefunc("FCF_OpenTemporaryWindow", function() pcall(EHUB.SetupChatCopy) end)
+  end
+end)
 
 -- Which talent functions does this client have? (the classic GetTalentInfo family may be gone)
 function EHUB.TalentApi()

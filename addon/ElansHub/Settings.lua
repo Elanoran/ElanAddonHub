@@ -55,6 +55,11 @@ Settings:Page{
         tip = "Type /rl to reload the interface. Only when no other addon (or the game) already has /rl. A change here counts after the next /reload.",
         get = function() return EHUB.DB().rl ~= false end,
         set = function(v) EHUB.DB().rl = v and true or false end },
+      { "check", "Copy icon in chat windows", "chatCopy",
+        tip = "A small note icon in the top-right corner of each chat window. Click it to pick lines from that window and copy them (the same as /ehub copy, which uses the tab you have selected).",
+        get = function() return EHUB.ChatCopyOn() end,
+        set = function(v) EHUB.DB().chatCopy = (not v) and false or nil end,
+        after = function() EHUB.UpdateChatCopy() end },
       Lib:Get("Dock").SettingItem(),
       Settings:ArtItem(),
     } },
@@ -181,7 +186,7 @@ local function buildAbout(page)
   y = y - 72
   text(12, C.gold, "Commands", y)
   y = y - 20
-  page.commands = text(11, C.text, "/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on / off / lock / unlock / reset / open\n/ehub pixel on / off\n/ehub position on / off  -  share your map position with the Outpost (off by default)\n/ehub copy  -  recent chat lines to copy\n/ehub data  -  what the Hub has saved for the Outpost\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI", y, true)
+  page.commands = text(11, C.text, "/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on / off / lock / unlock / reset / open\n/ehub pixel on / off\n/ehub position on / off  -  share your map position with the Outpost (off by default)\n/ehub copy  -  recent lines of the selected chat tab to copy (or the note icon in a chat window)\n/ehub data  -  what the Hub has saved for the Outpost\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI", y, true)
   y = y - 136
   text(12, C.gold, "Get the Hub", y)
   y = y - 18
