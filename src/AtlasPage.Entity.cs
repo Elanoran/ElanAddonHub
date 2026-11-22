@@ -575,7 +575,7 @@ namespace ElansAddonHub
             if (railOn)
             {
                 if (modelCard != null) railStack.Children.Add(modelCard);
-                if (tipCard != null) railStack.Children.Add(tipCard);
+                if (tipCard != null) { tipCard.HorizontalAlignment = HorizontalAlignment.Stretch; FitTooltip(tipCard, RailWidth); railStack.Children.Add(tipCard); }   // as wide as the model card above it
                 UpdateRailMap();
                 if (railMapHost != null && !MapInMain) railStack.Children.Add(railMapHost);
                 if (factsCard != null) railStack.Children.Add(factsCard);
@@ -585,7 +585,7 @@ namespace ElansAddonHub
                 UpdateRailMap();
                 if (factsCard != null) sp.Children.Insert(Math.Min(overviewLead, sp.Children.Count), factsCard);
                 if (modelCard != null) sp.Children.Insert(Math.Min(overviewTip, sp.Children.Count), modelCard);
-                if (tipCard != null) sp.Children.Insert(Math.Min(overviewTip, sp.Children.Count), tipCard);
+                if (tipCard != null) { tipCard.HorizontalAlignment = HorizontalAlignment.Left; FitTooltip(tipCard, Scroller.ActualWidth); sp.Children.Insert(Math.Min(overviewTip, sp.Children.Count), tipCard); }
             }
             ApplyRailWidth();
         }
@@ -598,6 +598,20 @@ namespace ElansAddonHub
             entityGrid.ColumnDefinitions[1].Width = new GridLength(any ? 12 : 0);
             entityGrid.ColumnDefinitions[2].Width = new GridLength(any ? RailWidth : 0);
             railStack.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // the game tooltip inside a card of the given width wraps instead of being cut (card padding 32, the icon 64); at most its own 320
+        static void FitTooltip(FrameworkElement card, double width)
+        {
+            if (width <= 0) return;
+            foreach (var gt in AtlasWalkUi(card).OfType<GameTooltip>()) gt.MaxWidth = Math.Max(180, Math.Min(320, width - 32 - 64));
+        }
+
+        static IEnumerable<DependencyObject> AtlasWalkUi(DependencyObject d)
+        {
+            yield return d;
+            foreach (var c in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
+                foreach (var x in AtlasWalkUi(c)) yield return x;
         }
 
         bool MapInMain => model != null && model.Answers.Count > 0;
