@@ -363,7 +363,7 @@ namespace ElansAddonHub
 
                 Width = 1100;
                 await Until(() => !AtlasView.WideForTest && AtlasView.ModelCardOverviewIndexForTest >= 0);
-                Check("item card: narrow (1100) - in the Overview right after the tooltip card (index 2: after the quick answers and the tooltip, 3.10.3), the same viewer", AtlasView.ModelCardOverviewIndexForTest == 2 && ReferenceEquals(AtlasView.ModelViewForTest, v),
+                Check("item card: narrow (1100) - in the Overview right after the tooltip card (index 3: after the quick answers, the map and the tooltip, 3.10.3), the same viewer", AtlasView.ModelCardOverviewIndexForTest == 3 && ReferenceEquals(AtlasView.ModelViewForTest, v),
                     "index " + AtlasView.ModelCardOverviewIndexForTest);
                 Width = 1800; await Until(() => AtlasView.ModelCardInRailForTest);
 

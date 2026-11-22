@@ -437,7 +437,7 @@ namespace ElansAddonHub
                 Check("layout: a wide window (1800) puts the rail beside the tab (a narrower second column: a thumbnail of the map and the quick facts) and the Overview keeps the rest", railOk(), AtlasView.ColumnsForTest + " rail " + AtlasView.RailForTest?.ActualWidth + " scroller " + AtlasView.ScrollerWidthForTest);
                 await ShotWait(700); Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
                 Check("layout: the thumbnail is a second, quiet map (not one of the page's maps), and a click on it opens the Map tab with the real one",
-                    AtlasView.MapsForTest.Count == 0 && AtlasWalk(AtlasView.RailForTest).OfType<Border>().Any(b => b.Tag as string == "rail-map-open") && ClickRailMap() && AtlasView.TabNowForTest == "map" && AtlasView.MapsForTest.Count == 1 && !AtlasView.RailMapHostVisibleForTest);
+                    AtlasView.MapsForTest.Count == 0 && AtlasWalk(AtlasView).OfType<Border>().Any(b => b.Tag as string == "rail-map-open") && ClickRailMap() && AtlasView.TabNowForTest == "map" && AtlasView.MapsForTest.Count == 1 && !AtlasView.RailMapHostVisibleForTest);
                 Snapshot(Path.Combine(dir, "atlas-page-item-wide-map.png"));
                 await SwitchTab("overview"); await Settle();
                 if (SelfTestClock.ShotsOn) { await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady(); await Task.Delay(600); Snapshot(Path.Combine(dir, "atlas-page-zone-wide.png")); }

@@ -32,7 +32,7 @@ namespace ElansAddonHub
 
         bool ClickRailMap()
         {
-            var veil = AtlasView.RailForTest == null ? null : AtlasWalk(AtlasView.RailForTest).OfType<Border>().FirstOrDefault(b => b.Tag as string == "rail-map-open");
+            var veil = AtlasWalk(AtlasView).OfType<Border>().FirstOrDefault(b => b.Tag as string == "rail-map-open");   // in the rail, or (3.10.3, a page with quick answers) under the main list
             if (veil == null) return false;
             veil.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent, Source = veil });
             return true;

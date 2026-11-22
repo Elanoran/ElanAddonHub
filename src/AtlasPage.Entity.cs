@@ -30,6 +30,7 @@ namespace ElansAddonHub
         ContentControl tabHost;
         Grid entityGrid;
         StackPanel railStack;
+        Border mainMapSlot;                                  // 3.10.3: on a page with quick answers the map card sits here, under the main list (not in the rail)
         FrameworkElement factsCard, railMapHost, tipCard;   // tipCard: the game tooltip of a page with quick answers, kept in the rail (3.10.3)
         AtlasMap railMap;
         FrameworkElement heroEl, tabStrip, bannerEl;
@@ -142,7 +143,7 @@ namespace ElansAddonHub
 
         void ResetEntity()
         {
-            entityGrid = null; tabHost = null; railStack = null; factsCard = null; tipCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null; loreCard = null; classLoreCard = null; overviewLead = 0;
+            entityGrid = null; tabHost = null; railStack = null; factsCard = null; tipCard = null; railMapHost = null; mainMapSlot = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null; loreCard = null; classLoreCard = null; overviewLead = 0;
             LeaveFixedHead();
             ReleaseModel();            // 3.6: the model viewer's browser goes with its page
             railMap?.ClearMarkers(); railMap = null;
@@ -427,6 +428,9 @@ namespace ElansAddonHub
             var best = BestWaysCard(m);
             if (best != null) col.Children.Add(best);
             foreach (var s in SectionsOn(m, AtlasTabs.Overview)) col.Children.Add(SectionCard(s));
+            mainMapSlot = new Border { Tag = "main-map" };          // the map, wide, under the list: the page's "where" next to its "how" (UpdateRailMap fills it)
+            col.Children.Add(mainMapSlot);
+            UpdateRailMap();
             overviewTip = overviewLead = col.Children.Count;
             if (!railOn)
                 foreach (var c in new[] { tipCard, modelCard, factsCard })
@@ -447,7 +451,8 @@ namespace ElansAddonHub
             if (m.Kind != "item") return null;
             var s = m.Section("sources");
             if (s == null || !s.Open) return null;
-            var rows = s.Rows.Count > 0 ? s.Rows.Take(3).ToList() : s.Hidden.Take(3).ToList();
+            int show = m.Answers.Count > 0 ? 5 : 3;                  // 3.10.3: with answers the list is the main column's body: a few more rows
+            var rows = s.Rows.Count > 0 ? s.Rows.Take(show).ToList() : s.Hidden.Take(show).ToList();
             int total = s.Rows.Count + s.Hidden.Count;
             var sp = new StackPanel();
             var head = new DockPanel();
@@ -572,11 +577,12 @@ namespace ElansAddonHub
                 if (modelCard != null) railStack.Children.Add(modelCard);
                 if (tipCard != null) railStack.Children.Add(tipCard);
                 UpdateRailMap();
-                if (railMapHost != null) railStack.Children.Add(railMapHost);
+                if (railMapHost != null && !MapInMain) railStack.Children.Add(railMapHost);
                 if (factsCard != null) railStack.Children.Add(factsCard);
             }
             else if (tabContent.TryGetValue(AtlasTabs.Overview, out var ov) && ov is StackPanel sp)
             {
+                UpdateRailMap();
                 if (factsCard != null) sp.Children.Insert(Math.Min(overviewLead, sp.Children.Count), factsCard);
                 if (modelCard != null) sp.Children.Insert(Math.Min(overviewTip, sp.Children.Count), modelCard);
                 if (tipCard != null) sp.Children.Insert(Math.Min(overviewTip, sp.Children.Count), tipCard);
@@ -588,22 +594,24 @@ namespace ElansAddonHub
         void ApplyRailWidth()
         {
             if (!railOn || entityGrid == null || entityGrid.ColumnDefinitions.Count < 3) return;
-            bool any = factsCard != null || modelCard != null || tipCard != null || (railMapHost != null && railMapHost.Visibility == Visibility.Visible);
+            bool any = factsCard != null || modelCard != null || tipCard != null || (railMapHost != null && railMapHost.Visibility == Visibility.Visible && !MapInMain);
             entityGrid.ColumnDefinitions[1].Width = new GridLength(any ? 12 : 0);
             entityGrid.ColumnDefinitions[2].Width = new GridLength(any ? RailWidth : 0);
             railStack.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        bool MapInMain => model != null && model.Answers.Count > 0;
+
         // the thumbnail of the map in the rail: made the first time the rail is shown, hidden on the Map tab (it is the map there); a click opens the tab
         void UpdateRailMap()
         {
-            if (model == null || !railOn || !HasRailMap(model) || !tabsShown.Contains(AtlasTabs.Map)) { if (railMapHost != null) railMapHost.Visibility = Visibility.Collapsed; return; }
+            if (model == null || (!railOn && !MapInMain) || !HasRailMap(model) || !tabsShown.Contains(AtlasTabs.Map)) { if (railMapHost != null) railMapHost.Visibility = Visibility.Collapsed; return; }
             if (railMapHost == null)
             {
                 var plan = model.Map;
                 var sp = new StackPanel();
                 sp.Children.Add(Tb("Where", "Text.Section"));
-                railMap = new AtlasMap { Height = 180, Margin = new Thickness(0, 12, 0, 0), Compact = true };
+                railMap = new AtlasMap { Height = MapInMain ? 300 : 180, Margin = new Thickness(0, 12, 0, 0), Compact = true };
                 var z = plan.ShowZone > 0 ? plan.Zones.FirstOrDefault(x => x.UiMapId == plan.ShowZone) ?? new AtlasMapZone { UiMapId = plan.ShowZone, Name = AtlasQuery.ZoneName(plan.ShowZone) } : plan.Best ?? plan.Zones.FirstOrDefault();
                 var mp = railMap;
                 if (z != null) Defer(() => { mp.SetHome(z.UiMapId, z.Name); mp.ShowMap(z.UiMapId); mp.AddMarkers(z.Markers); });
@@ -619,6 +627,12 @@ namespace ElansAddonHub
                 railMapHost = Card(sp);
             }
             railMapHost.Visibility = tabNow == AtlasTabs.Map ? Visibility.Collapsed : Visibility.Visible;
+            if (MapInMain && mainMapSlot != null && mainMapSlot.Child != railMapHost)
+            {
+                (railMapHost.Parent as Panel)?.Children.Remove(railMapHost);
+                if (railMapHost.Parent is Decorator d) d.Child = null;
+                mainMapSlot.Child = railMapHost;
+            }
         }
     }
 }
