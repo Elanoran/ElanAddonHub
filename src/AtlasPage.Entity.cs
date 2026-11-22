@@ -372,6 +372,8 @@ namespace ElansAddonHub
             {
                 case AtlasTabs.Overview:
                     {
+                        var answers = AnswerStrip(m);                            // 3.10.3: the quick answers first (they also say what is not known yet)
+                        if (answers != null) col.Children.Add(answers);
                         if (!HeaderCarriesFacts(m) && !HeroIsTheCard(m)) col.Children.Add(ItemCard(m));       // most kinds: the game tooltip is the page's main card (a zone's header already says it all; a class's or race's hero too)
                         overviewTip = col.Children.Count;                        // 3.6: the model card goes right after the tooltip when the rail is off
                         bool modelHere = !railOn && modelCard != null;
@@ -389,8 +391,8 @@ namespace ElansAddonHub
                         if (best != null) col.Children.Add(best);
                         // what has nothing to list yet still says so (the sources of an unknown item, the map of a thing with no places): here, with the rest of the page's story
                         foreach (var s in m.Sections)
-                            if (!s.Open && s.Empty.Length > 0 && !(m.Kind == "item" && s.Key == "owned")) col.Children.Add(SectionCard(s));
-                        if (!HasMapTab(m) && MapWanted(m)) col.Children.Add(MapCard(m));       // no map tab: the page says what it knows about its places (or that it knows none) right here
+                            if (!s.Open && s.Empty.Length > 0 && !(m.Kind == "item" && s.Key == "owned") && !(answers != null && s.Key == "sources")) col.Children.Add(SectionCard(s));
+                        if (!HasMapTab(m) && MapWanted(m) && answers == null) col.Children.Add(MapCard(m));       // with answers, "Best place: not known yet" says it       // no map tab: the page says what it knows about its places (or that it knows none) right here
                         var bookNotes = (m.Custom as ClassSpellBook)?.Notes;
                         foreach (var n in m.Notes) if (bookNotes == null || !bookNotes.Contains(n)) col.Children.Add(Note(n));     // what the spellbook is missing is said on the Spells tab
                         if (col.Children.Count == 0) col.Children.Add(Note("Everything about " + m.Title + " is on its tabs" + (tabsShown.Count > 1 ? ": " + string.Join(", ", tabsShown.Where(x => x != AtlasTabs.Overview).Select(AtlasTabs.Title)) : "") + "."));
@@ -529,6 +531,7 @@ namespace ElansAddonHub
                 Grid.SetColumn(tabHost, 0); Grid.SetRow(tabHost, 0); Grid.SetColumn(railStack, 0); Grid.SetRow(railStack, 1);
             }
             PlaceRailItems();
+            LayoutAnswers();
         }
 
         // wide: the rail holds the model (3.6), the map thumbnail and the facts; narrow: the facts are in the Overview (after the tooltip) and the rail is

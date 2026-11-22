@@ -169,6 +169,20 @@ namespace ElansAddonHub
                 var cloak = AtlasQuery.Build("item:103").Section("sources");
                 Check("sources: an item with nothing but tiny sources still shows its 6 best and folds the rest ('+ 2 more world-drop sources under 0.1%')", cloak.Rows.Count == 6 && cloak.Hidden.Count == 2 && cloak.HiddenText == "+ 2 more world-drop sources under 0.1%" && cloak.Rows[0].Sort >= cloak.Rows[5].Sort);
                 // 3.10.3: a world drop lists the creatures of its level (closest first), not the level-40 one with the best chance, and draws them
+                // 3.10.3: the quick answers of an item page (How to get it · Best place · When · Your Lodge), each with where it comes from
+                {
+                    var claw = AtlasQuery.Build("item:100").Answers;
+                    string A(List<AtlasAnswer> l, int i) => i < l.Count ? l[i].ToString() : "-";
+                    Check("answers: a Lodge-seen item: drops from Gnarlfang (Lodge), its best place Greenvale from the Lodge's spawn points, found on 2 days, 2 finds by 2 members",
+                        claw.Count == 4 && claw[0].Label == "How to get it" && claw[0].Value == "Drops from" && claw[0].Detail.StartsWith("Gnarlfang") && claw[0].Source == DataSources.Lodge && claw[0].Link == "npc:1"
+                        && claw[1].Label == "Best place" && claw[1].Value == "Greenvale" && claw[1].Source == DataSources.Lodge && claw[1].Link == "zone:11"
+                        && claw[2].Label == "When" && claw[2].Value == "Found on 2 days" && claw[2].Source == DataSources.Lodge
+                        && claw[3].Label == "Your Lodge" && claw[3].Value == "2 finds" && claw[3].Detail.StartsWith("by 2 members") && claw[3].Source == DataSources.Lodge,
+                        string.Join(" | ", claw));
+                    var coin = AtlasQuery.Build("item:107").Answers;
+                    Check("answers: an item nothing is known about says so in every answer (no source), instead of empty cards",
+                        coin.Count == 4 && coin.All(a => !a.Known) && coin[0].Value == "Not known yet" && coin[1].Value == "Not known yet" && coin[3].Value == "Not found yet", string.Join(" | ", coin));
+                }
                 ClassicAtlas.Use(AtlasTestClassic(worldDrop: true));
                 var robe = AtlasQuery.Build("item:109");
                 var robeSrc = robe.Section("sources");
@@ -183,6 +197,12 @@ namespace ElansAddonHub
                     robe.WorldDrop.StartsWith("A world drop: creatures of about level 15-25") && robeSrc.Note.Contains("A world drop")
                     && robe.Map.Zones.Any(z => z.Markers.Any(mk => mk.LinkId == "npc:7")), robe.WorldDrop + " | zones " + robe.Map.Zones.Count);
                 Check("world drop: an item with a real drop (10 %) or few sources is not one", AtlasQuery.Build("item:100").WorldDrop.Length == 0 && AtlasQuery.Build("item:103").WorldDrop.Length == 0);
+                {
+                    var wa = AtlasQuery.Build("item:109").Answers;
+                    Check("answers: a world drop: 'World drop · creatures of level 15-25' from the Classic baseline, and its best place on the map",
+                        wa.Count == 4 && wa[0].Value == "World drop" && wa[0].Detail == "creatures of level 15-25" && wa[0].Source == DataSources.Classic && wa[1].Known && wa[1].Source == DataSources.Classic,
+                        string.Join(" | ", wa));
+                }
                 ClassicAtlas.Use(classic);
                 var cloth = AtlasQuery.Build("item:102");
                 var clothVendor = RowOf(cloth, "sources", "vendor:2");

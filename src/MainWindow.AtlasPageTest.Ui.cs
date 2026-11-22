@@ -261,6 +261,12 @@ namespace ElansAddonHub
             Check("item page: the hero names the page - the name in the quality colour, the subtitle, chips (Rare, Item Level 14, the slot, Requires Level 10, binding, the sell price) - and there is no title row under the breadcrumb",
                 AtlasView.CurrentId == "item:100" && AtlasView.HeroNameForTest == "Gnarlfang's Claw" && chips.Contains("Rare") && chips.Contains("Item Level 14") && chips.Contains("Requires Level 10") && chips.Contains("Binds when picked up")
                 && chips.Any(c => c.StartsWith("One-Hand")) && chips.Any(c => c.StartsWith("Sells for 1g 20s 50c")) && tx.Contains("Item 100 · from your game data") && AtlasView.TitleRowGoneForTest, string.Join(" | ", chips));
+            {
+                var strip = AtlasWalk(AtlasView).OfType<FrameworkElement>().FirstOrDefault(e => e.Tag as string == "answers");
+                var tiles = strip == null ? 0 : AtlasWalk(strip).OfType<FrameworkElement>().Count(e => e.Tag as string == "answer");
+                Check("item page: the quick answers come first on the Overview: 4 tiles (How to get it, Best place, When, Your Lodge), each with an evidence mark",
+                    strip != null && tiles == 4 && tx.Contains("How to get it") && tx.Contains("Best place") && tx.Contains("Your Lodge") && AtlasWalk(strip).OfType<FrameworkElement>().Count(e => e.Tag as string == "evidence") == 4, "tiles " + tiles);
+            }
             var tabsNow = AtlasView.TabsForTest;
             Check("item page: tabs Overview | Sources | Map | Related? | Lodge, in that order, each only when it has something (Sources 'Where it comes from', Map with places, Lodge 'Found by the Lodge'); it opens on Overview",
                 AtlasView.TabStripShownForTest && new[] { "overview", "sources", "map", "lodge" }.All(tabsNow.Contains) && tabsNow.SequenceEqual(tabsNow.OrderBy(t => Array.IndexOf(AtlasTabs.Order, t))) && AtlasView.TabNowForTest == "overview" && AtlasView.TabDefaultForTest == "overview", string.Join(",", tabsNow));

@@ -163,6 +163,15 @@ namespace ElansAddonHub.Services.Atlas
         public override string ToString() => Title + " (" + Rows.Count + (Hidden.Count > 0 ? " + " + Hidden.Count + " folded" : "") + ")";
     }
 
+    // 3.10.3: one quick answer at the top of a page ("How to get it: World drop · mobs level 15-25"), with where it comes from:
+    // Source = a DataSources key (game / you / lodge / cairn / classic), "" = not known yet (the empty mark). See docs: one layout for every page.
+    public sealed class AtlasAnswer
+    {
+        public string Label = "", Value = "", Detail = "", Source = "", Link;
+        public bool Known => Source.Length > 0;
+        public override string ToString() => Label + ": " + Value + (Detail.Length > 0 ? " · " + Detail : "") + " [" + (Source.Length > 0 ? Source : "none") + "]";
+    }
+
     public sealed class AtlasFact
     {
         public string Label, Value, Link, Source = "";
@@ -212,7 +221,8 @@ namespace ElansAddonHub.Services.Atlas
     {
         public string Id = "", Kind = "";
         public string Title = "", Subtitle = "";
-        public string WorldDrop = "";                                // an item that is a world drop: the line over "Best ways to get it" (3.10.3)
+        public List<AtlasAnswer> Answers = new List<AtlasAnswer>();   // the quick answers over the Overview (3.10.3), in order; empty = none (older kinds)
+        public string WorldDrop = "";                              // an item that is a world drop: the line over "Best ways to get it" (3.10.3)
         public string TitleNote = "";                              // one quiet line under the subtitle ("The name appears after you close the game ...")
         public int Quality = -1, IconId;
         public bool NotFound;

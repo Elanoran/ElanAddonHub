@@ -296,6 +296,7 @@ namespace ElansAddonHub.Services.Atlas
 
             m.Map = plan.Build();
             MapCoverage(m.Map);
+            ItemAnswers(m, src, wd, L, id);
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L), true);
             bool known = ci != null || cl != null || rev != null;
             if (!known && m.Sections.All(s => s.Key == "owned" || (s.Rows.Count == 0 && s.Hidden.Count == 0)))
@@ -367,6 +368,83 @@ namespace ElansAddonHub.Services.Atlas
             double rank = n.Rank == 2 || n.Rank == 4 ? 0.1 : n.Rank == 3 ? 0.2 : n.Rank == 1 ? 0.5 : 1.0;
             return Math.Min(chance, WorldDropMaxChance) * Math.Min(spawns, 200) * rank * (1 - 0.05 * dist);
         }
+
+        // ---- the quick answers of an item page (3.10.3, docs: one layout for every page): How to get it · Best place · When · Your Lodge.
+        // Each says where it comes from (a DataSources key); "not known yet" is an answer too (no source), so the page needs no empty cards.
+        static void ItemAnswers(AtlasPageModel m, AtlasSection src, WorldDrop wd, LodgeAtlas L, int id)
+        {
+            var best = src.Rows.FirstOrDefault(r => r.Type != "Find" && r.Type != "Character" && r.Type != "Guild");
+            var how = new AtlasAnswer { Label = "How to get it" };
+            if (wd != null && (best == null || best.Tier == 2 || best.Type == "Drop"))
+            {
+                how.Value = "World drop"; how.Detail = "creatures of level " + wd.Lo + "-" + wd.Hi; how.Source = best?.SourceKey ?? DataSources.Classic;
+            }
+            else if (best != null)
+            {
+                how.Value = HowWord(best.Type);
+                var first = best.Detail.Split(new[] { " · " }, StringSplitOptions.None)[0];
+                how.Detail = best.Title + (first.Length > 0 && first != best.Title ? " · " + first : "");
+                how.Source = best.SourceKey; how.Link = best.Link;
+            }
+            else { how.Value = "Not known yet"; how.Detail = "no drop, vendor, quest or recipe known"; }
+            m.Answers.Add(how);
+
+            var place = new AtlasAnswer { Label = "Best place" };
+            var z = m.Map.Best;
+            if (z != null)
+            {
+                place.Value = z.Name; place.Link = "zone:" + z.UiMapId;
+                place.Detail = AtlasFormat.Count(z.Markers.Count, "place", "places") + " on the map" + (m.Map.Zones.Count > 1 ? " · " + (m.Map.Zones.Count - 1) + " more zone" + (m.Map.Zones.Count == 2 ? "" : "s") : "");
+                place.Source = z.Forever > 0 ? DataSources.Lodge : DataSources.Classic;
+            }
+            else if (best != null && best.Zone.Length > 0) { place.Value = best.Zone; place.Detail = best.Title; place.Source = best.SourceKey; }
+            else { place.Value = "Not known yet"; place.Detail = "no spawn point or find with a place"; }
+            m.Answers.Add(place);
+
+            var finds = L?.Finds(id) ?? new List<AtlasObs.Find>();
+            var when = new AtlasAnswer { Label = "When" };
+            if (finds.Count > 0)
+            {
+                var days = finds.Select(f => f.At / 86400).Distinct().Count();
+                when.Value = "Found on " + AtlasFormat.Count(days, "day", "days");
+                when.Detail = "first " + Day(finds.Min(f => f.At)) + " · last " + AtlasFormat.Ago(finds.Max(f => f.At), Context.NowUtc());
+                when.Source = DataSources.Lodge;
+            }
+            else { when.Value = "Not known yet"; when.Detail = "a holiday or patch shows once your Lodge finds it over time"; }
+            m.Answers.Add(when);
+
+            var lodge = new AtlasAnswer { Label = "Your Lodge" };
+            var seen = src.Rows.FirstOrDefault(r => r.SourceKey == DataSources.Lodge && r.Type != "Find");
+            if (finds.Count > 0)
+            {
+                var who = finds.Select(f => f.By ?? "").Distinct().Count();
+                lodge.Value = AtlasFormat.Count(finds.Count, "find", "finds"); lodge.Detail = "by " + AtlasFormat.Count(who, "member", "members") + " · last " + AtlasFormat.Ago(finds.Max(f => f.At), Context.NowUtc());
+                lodge.Source = DataSources.Lodge;
+            }
+            else if (seen != null) { lodge.Value = "Seen as a source"; lodge.Detail = seen.Title + " · " + seen.Detail.Split(new[] { " · " }, StringSplitOptions.None)[0]; lodge.Source = DataSources.Lodge; lodge.Link = seen.Link; }
+            else if (L == null) { lodge.Value = "No Lodge data"; lodge.Detail = "a Lodge shares what its members find"; }
+            else { lodge.Value = "Not found yet"; lodge.Detail = "no member has looted it"; }
+            m.Answers.Add(lodge);
+        }
+
+        static string HowWord(string type)
+        {
+            switch (type)
+            {
+                case "Drop": return "Drops from";
+                case "Object": return "Found in";
+                case "Vendor": return "Sold by";
+                case "Quest": return "Quest reward";
+                case "Recipe": return "Crafted";
+                case "Fishing": return "Caught fishing";
+                case "Skinning": return "Skinned from";
+                case "Pickpocketing": return "Pickpocketed";
+                case "Contained in": return "Inside";
+                default: return string.IsNullOrEmpty(type) ? "Known source" : type;
+            }
+        }
+
+        static string Day(long unix) => DateTimeOffset.FromUnixTimeSeconds(unix).ToLocalTime().ToString("d MMM", CalendarRules.English);
 
         static string CountText(ClassicItemSource s)
             => s.MaxCount > 1 ? " · " + (s.MinCount == s.MaxCount ? s.MaxCount.ToString() : s.MinCount + "-" + s.MaxCount) + " per drop" : "";
