@@ -129,7 +129,8 @@ namespace ElansAddonHub
                     // the same data again (a reader that finished with nothing new): nothing is offered and nothing is redrawn
                     ItemData.RaiseChangedForTest();
                     await WaitFor(() => AtlasView.SilentUpdatesForTest > silent0 || AtlasView.OfferedUpdatesForTest > offered0, 5000);
-                    Check("new data: the same data again leaves the page alone (no notice, not redrawn)", AtlasView.SilentUpdatesForTest > silent0 && !AtlasView.UpdateOfferedForTest && ReferenceEquals(before, AtlasView.Model));
+                    Check("new data: the same data again leaves the page alone (no notice, not redrawn)", AtlasView.SilentUpdatesForTest > silent0 && !AtlasView.UpdateOfferedForTest && ReferenceEquals(before, AtlasView.Model),
+                        "item " + item.Id + ": silent " + silent0 + "->" + AtlasView.SilentUpdatesForTest + ", offered " + offered0 + "->" + AtlasView.OfferedUpdatesForTest + ", same model " + ReferenceEquals(before, AtlasView.Model));
                     // data that changes the page: the notice, the page itself still the old one
                     var changed = new ItemSnapshot(snap.Items.Values.Where(i => i.Id != item.Id).Select(i => i).ToList(), new List<ClientItem>());
                     ItemData.SetForTest(changed); ItemData.RaiseChangedForTest();

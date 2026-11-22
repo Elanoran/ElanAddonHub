@@ -104,7 +104,7 @@ namespace ElansAddonHub
                     seen.Add(kid + "=" + string.Join("/", tabs));
                     bool tabsOk = tabs.Count > 0 && tabs[0] == "overview" && tabs.SequenceEqual(tabs.OrderBy(x => Array.IndexOf(AtlasTabs.Order, x))) && AtlasView.TabStripShownForTest == tabs.Count > 1;
                     bool heroOk = AtlasView.HeroForTest != null && AtlasView.HeroNameForTest == m.Title && tile != null && tile.Width >= 72 && tile.Height == tile.Width && AtlasView.PageTitleForTest == m.Title && AtlasView.TitleRowGoneForTest;
-                    string defaultWant = m.Kind == "zone" && tabs.Contains("map") ? "map" : "overview";
+                    string defaultWant = m.Kind == "zone" && tabs.Contains("map") && m.Answers.Count == 0 && ZoneLore.For(m.Map.ShowZone) == null ? "map" : "overview";   // 3.10.4: a zone with answers opens on them
                     bool defaultOk = AtlasView.TabDefaultForTest == defaultWant && AtlasView.TabNowForTest == defaultWant && AtlasView.CurrentId == kid;
                     bool chipsOk = !new[] { "item", "npc", "quest", "zone", "instance", "spell" }.Contains(m.Kind) || AtlasView.HeroChipsForTest.Count > 0;
                     // every table of the page is on exactly one tab, and the tab says how many rows it holds
@@ -177,8 +177,8 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ lazy tabs: what the template costs
                 await AtlasView.Open("zone:10"); await AtlasView.Open("zone:11"); await AtlasView.WaitForTest(); UpdateLayout();
-                Check("cost: a page build makes the hero, the tab strip and the tab it opens on - the other tabs are built when first shown (zone:11 opens on Map: Related, Sources and Overview are not built until asked for)",
-                    AtlasView.TabBuiltForTest("map") && !AtlasView.TabBuiltForTest("related") && !AtlasView.TabBuiltForTest("sources") && !AtlasView.TabBuiltForTest("overview"), string.Join(",", AtlasView.TabsForTest.Where(AtlasView.TabBuiltForTest)));
+                Check("cost: a page build makes the hero, the tab strip and the tab it opens on - the other tabs are built when first shown (zone:11 opens on its Overview since 3.10.4: Related, Sources and Map are not built until asked for)",
+                    AtlasView.TabBuiltForTest("overview") && !AtlasView.TabBuiltForTest("related") && !AtlasView.TabBuiltForTest("sources") && !AtlasView.TabBuiltForTest("map"), string.Join(",", AtlasView.TabsForTest.Where(AtlasView.TabBuiltForTest)));
                 await SwitchTab("related");
                 var relatedContent = ((ContentControl)AtlasView.TabHostForTest).Content;
                 await SwitchTab("map"); await SwitchTab("related");

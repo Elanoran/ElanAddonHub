@@ -353,7 +353,9 @@ namespace ElansAddonHub
             // ---- other kinds in the window
             await AtlasView.Open("zone:11"); UpdateLayout();
             tx = AtlasTexts(AtlasView);
-            Check("zone page in the window: the hero names it, the map comes first (a zone opens on its Map tab), the tabs are Overview | Sources | Map | Related", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && AtlasView.TabNowForTest == "map" && AtlasView.TabDefaultForTest == "map" && AtlasView.MapsForTest.Count == 1 && new[] { "overview", "sources", "map", "related" }.All(AtlasView.TabsForTest.Contains), string.Join(",", AtlasView.TabsForTest));
+            bool zoneOverview = AtlasView.TabNowForTest == "overview" && AtlasView.TabDefaultForTest == "overview";   // 3.10.4: a zone opens on its quick answers (it opened on Map)
+            await SwitchTab("map"); UpdateLayout();
+            Check("zone page in the window: the hero names it, it opens on the Overview (the quick answers; 3.10.4) and its Map tab has the map, the tabs are Overview | Sources | Map | Related", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && zoneOverview && AtlasView.MapsForTest.Count == 1 && new[] { "overview", "sources", "map", "related" }.All(AtlasView.TabsForTest.Contains), string.Join(",", AtlasView.TabsForTest));
             await MapReady();
             await ShotWait(500);
             Snapshot(Path.Combine(dir, "atlas-page-zone.png"));

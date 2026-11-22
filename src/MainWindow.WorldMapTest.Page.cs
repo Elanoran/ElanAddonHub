@@ -444,7 +444,7 @@ namespace ElansAddonHub
                     Check("Atlas: the World map category is registered with a tile, and a search for the continent's name or \"world map\" offers the page",
                         AtlasCategories.Find("worldmap") != null && AtlasCategories.Visible.Any(c => c.Id == "worldmap") && hits.Any(h => h.Id == "worldmap:northland") && hits2.Any(h => h.Id == "worldmap:" && h.Kind == "page"), string.Join(",", hits.Select(h => h.Id)));
                     // Show on world map from a zone page
-                    await AtlasView.Open("zone:11");
+                    await AtlasView.Open("zone:11?tab=map");                 // 3.10.4: a zone opens on its Overview; the button is in the Map tab's map card
                     await WaitFor(() => AtlasView.worldMapButtons.Count > 0, 10000);
                     Check("zone page: a \"Show on world map\" button sits in the map card (not on an instance's page)", AtlasView.worldMapButtons.Count == 1 && (string)AtlasView.worldMapButtons[0].Content == "Show on world map", AtlasView.worldMapButtons.Count + "");
                     if (AtlasView.worldMapButtons.Count > 0) AtlasView.worldMapButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
