@@ -15,11 +15,14 @@ namespace ElansAddonHub.Services
         // true when this start found no settings file at all = a fresh install (the first-run guide). Not for the self-test.
         public static bool Fresh;
         public static bool SuppressFresh;
+        // a dry run of a first start (Tools/devoutpost.ps1 -NewPlayer): ELANSHUB_FRESH=1, honoured only with a test data folder (ELANSHUB_DATA) and only once
+        static bool forcedFresh;
+        static bool ForceFresh() => !forcedFresh && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")) && Environment.GetEnvironmentVariable("ELANSHUB_FRESH") == "1" && (forcedFresh = true);
 
         public static Settings Load()
         {
             Settings s = null;
-            if (!SuppressFresh && !File.Exists(FilePath)) Fresh = true;
+            if (!SuppressFresh && (!File.Exists(FilePath) || ForceFresh())) Fresh = true;
             try { if (File.Exists(FilePath)) s = Util.FromJson<Settings>(File.ReadAllText(FilePath)); }
             catch (Exception e) { Util.Log("settings load failed: " + e.Message); }
             s = s ?? new Settings { RunInBackground = true, CheckMinutes = 30 };
