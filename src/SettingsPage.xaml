@@ -270,6 +270,9 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Check CurseForge for updates automatically" Tag="For addons the CurseForge app manages: about once a day and when WoW starts, the Outpost lets CurseForge refresh (it is started minimized and closed again; skipped if it is already running).">
                 <CheckBox x:Name="CfAutoBox" Style="{StaticResource Switch}" Click="General_Click" />
               </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Update other addons by themselves" Tag="While WoW is closed, updates for the other addons install with no click: from GitHub and WoWInterface, from CurseForge's download server, or by CurseForge itself (started minimized) when its auto-update is on for the addon. It never opens CurseForge's 'Select game instance' window: those addons keep their Update button. CurseForge's update info is refreshed as above while this is on.">
+                <CheckBox x:Name="OthersAutoBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Update other addons by themselves" />
+              </HeaderedContentControl>
             </StackPanel></ContentControl>
             <TextBlock Text="Appearance" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>

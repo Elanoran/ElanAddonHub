@@ -236,6 +236,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "filesGroup")] public bool? FilesGroup { get; set; }            // Lodge > Library: grouped by type (3.5.4; null = on)
         [DataMember(Name = "filesView")] public string FilesView { get; set; }             // Lodge > Files: "details" (the list, default) or "tiles" (the cards)
         [DataMember(Name = "cfDirectOff")] public bool CfDirectOff { get; set; }        // false = the Outpost installs CurseForge addon updates itself (forgecdn, hash checked); true = CurseForge's install link
+        [DataMember(Name = "othersAutoUpdate")] public bool OthersAutoUpdate { get; set; } // off by default: while WoW is closed, install other addons' updates that need no window (never CurseForge's install link)
         [DataMember(Name = "cfLetInstallOff")] public bool CfLetInstallOff { get; set; } // false = an addon with CurseForge's auto-update on is installed by CurseForge itself (no install link / window, 2.72.4)
         [DataMember(Name = "paintedArt")] public bool PaintedArt { get; set; }          // false = vector card icons
         [DataMember(Name = "noLinkHandler")] public bool NoLinkHandler { get; set; }    // false = this PC opens elanshub:// invite links with the Outpost

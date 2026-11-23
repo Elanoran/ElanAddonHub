@@ -124,6 +124,7 @@ namespace ElansAddonHub
             ChannelTest.IsChecked = UpdateChannel.IsTest(s);
             ChannelStable.IsChecked = !UpdateChannel.IsTest(s);
             CfAutoBox.IsChecked = s.CfAutoCheck;
+            OthersAutoBox.IsChecked = s.OthersAutoUpdate;
             CfDirectBox.IsChecked = !s.CfDirectOff;
             CfLetBox.IsChecked = !s.CfLetInstallOff;
             PaintedBox.IsChecked = s.PaintedArt;
@@ -364,6 +365,7 @@ namespace ElansAddonHub
             settings.RunInBackground = BackgroundBox.IsChecked == true;
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
+            settings.OthersAutoUpdate = OthersAutoBox.IsChecked == true;
             bool cfDirectChanged = settings.CfDirectOff != (CfDirectBox.IsChecked != true);
             settings.CfDirectOff = CfDirectBox.IsChecked != true;
             cfDirectChanged |= settings.CfLetInstallOff != (CfLetBox.IsChecked != true);
@@ -812,6 +814,7 @@ namespace ElansAddonHub
         public void WelcomeClickForTest() => Welcome_Click(null, null);
         public bool PrivacyShowsForTest => SecPrivacy.Visibility == Visibility.Visible;
         public void ToggleForTest(string name) { var cb = (CheckBox)FindName(name); cb.IsChecked = cb.IsChecked != true; Privacy_Click(cb, null); }
+        public void GeneralSetForTest(string name, bool on) { var cb = (CheckBox)FindName(name); cb.IsChecked = on; General_Click(cb, null); }
 
         void Welcome_Click(object sender, RoutedEventArgs e) => host.ShowWelcomeGuide();
 

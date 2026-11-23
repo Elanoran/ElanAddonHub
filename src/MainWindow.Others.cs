@@ -346,14 +346,15 @@ namespace ElansAddonHub
         // Update click on a CurseForge card. Three ways (CurseForgeDirect.RouteFor): the Outpost installs it (Direct); CurseForge installs it
         // by itself because its auto-update is on for the addon (CurseForgeAuto: no install link = no "Select game instance" window); or
         // CurseForge's install link (DeepLink: its window). forceLink = the "Open in CurseForge" fallback button.
-        async Task InstallCf(ThirdPartyCard c, bool forceLink = false)
+        async Task InstallCf(ThirdPartyCard c, bool forceLink = false, bool noLink = false)
         {
             var cf = c.Entry.Cf;
             if (cf == null || addOnsDir == null || c.IsBusy) return;
             var key = c.Entry.Key; var dir = addOnsDir;
-            c.Message = null;
             var plan = CurseForgeDirect.Decide(cf, cfInst, CurseForgeDirect.IsOn());
             var route = forceLink ? CurseForgeDirect.Route.DeepLink : CurseForgeDirect.RouteFor(cf, cfInst, CurseForgeDirect.IsOn(), CurseForgeDirect.LetCfOn());
+            if (noLink && route == CurseForgeDirect.Route.DeepLink) return;     // by itself: never CurseForge's install window
+            c.Message = null;
             if (route == CurseForgeDirect.Route.Direct) { await InstallCfDirect(c, cf, key, dir); return; }
             if (route == CurseForgeDirect.Route.CurseForgeAuto) { await InstallCfAuto(c, cf, key, dir); return; }
             c.SetBusy(true, "CurseForge...");
@@ -531,7 +532,7 @@ namespace ElansAddonHub
         // optional (off by default): once a day, or when WoW starts, let CurseForge refresh - only when it isn't running
         void MaybeCfAuto()
         {
-            if (!settings.CfAutoCheck || cfInst == null) { wowWas = null; return; }
+            if (!(settings.CfAutoCheck || settings.OthersAutoUpdate) || cfInst == null) { wowWas = null; return; }   // updating by themselves needs fresh update info too
             var wow = WowWatch.Shared.Running;           // the shared 2 s watcher: no process list scan here
             var started = wowWas == false && wow;
             wowWas = wow;
@@ -540,9 +541,65 @@ namespace ElansAddonHub
             if ((age.TotalHours > 24 || (started && age.TotalHours > 1)) && !CurseForgeLocal.IsRunning()) { cfLastAuto = DateTime.UtcNow; _ = RunCfCheck(); }
         }
 
-        async Task InstallOther(ThirdPartyCard c)
+        // ---- "Update other addons by themselves" (settings.OthersAutoUpdate, off by default). While WoW is closed - every 10 minutes from the
+        // status tick and right after WoW exits - the updates that need no window are installed one after another: GitHub / WoWInterface,
+        // CurseForge's download server (CurseForgeDirect), or CurseForge itself started minimized when its auto-update is on for the addon
+        // (CurseForgeLocal.LetInstall). Never CurseForge's install link: that is the "Select game instance" window, so those addons keep their
+        // Update button. One try per addon and version per session, so a failing update isn't retried in a loop.
+        bool autoUpdatingOthers;
+        DateTime othersAutoLast = DateTime.MinValue;
+        readonly HashSet<string> othersAutoTried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public const int OthersAutoEveryMin = 10;
+
+        // null = install it by itself now; otherwise why not (the self-test checks these)
+        public static string AutoSkipReason(ThirdPartyCard c, CfInstance inst, bool directOn, bool letOn, bool cfRunning)
         {
-            if (c.Entry.Cf != null) { await InstallCf(c); return; }
+            if (c == null) return "no card";
+            if (c.IsBusy) return "busy";
+            if (c.Entry.IsDev) return "development copy";
+            if (c.State != TpState.UpdateAvailable) return "no update";
+            var cf = c.Entry.Cf;
+            if (cf == null) return c.Remote == null ? "no release to install" : null;
+            switch (CurseForgeDirect.RouteFor(cf, inst, directOn, letOn))
+            {
+                case CurseForgeDirect.Route.Direct: return null;
+                case CurseForgeDirect.Route.CurseForgeAuto: return cfRunning ? "CurseForge is running: it installs this on its own check" : null;
+                default: return "needs CurseForge's install window";
+            }
+        }
+
+        static string AutoKey(ThirdPartyCard c) => c.Entry.Key + "|" + (c.Entry.Cf != null ? c.Entry.Cf.LatestId.ToString() : c.Remote?.Version);
+
+        async Task MaybeAutoUpdateOthers(bool force = false)
+        {
+            if (!settings.OthersAutoUpdate || autoUpdatingOthers || scanning || checkingOthers || addOnsDir == null) return;
+            if (WowWatch.Shared.Running || CurseForgeLocal.Busy) return;
+            if (!force && (DateTime.UtcNow - othersAutoLast).TotalMinutes < OthersAutoEveryMin) return;
+            othersAutoLast = DateTime.UtcNow;
+            bool Pick(ThirdPartyCard c) => !othersAutoTried.Contains(AutoKey(c))
+                && AutoSkipReason(c, cfInst, CurseForgeDirect.IsOn(), CurseForgeDirect.LetCfOn(), CurseForgeLocal.IsRunning()) == null;
+            var todo = others.Where(Pick).Select(c => c.Entry.Key).ToList();
+            if (todo.Count == 0) return;
+            autoUpdatingOthers = true;
+            try
+            {
+                Util.Log("updating other addons by themselves: " + string.Join(", ", todo));
+                foreach (var key in todo)
+                {
+                    if (WowWatch.Shared.Running) break;                   // WoW started: the rest waits until it closes again
+                    var c = others.FirstOrDefault(x => x.Entry.Key == key);
+                    if (c == null || !Pick(c)) continue;                  // the list changed under us: ask again
+                    othersAutoTried.Add(AutoKey(c));
+                    await InstallOther(c, background: true);
+                }
+            }
+            catch (Exception e) { Util.Log("auto update of other addons failed: " + e.Message); }
+            finally { autoUpdatingOthers = false; UpdateOthersHeader(); }
+        }
+
+        async Task InstallOther(ThirdPartyCard c, bool background = false)
+        {
+            if (c.Entry.Cf != null) { await InstallCf(c, noLink: background); return; }
             if (addOnsDir == null || c.Remote == null || c.IsBusy) return;
             var key = c.Entry.Key;
             var running = GamePresence.WowRunningNow();
@@ -695,6 +752,43 @@ namespace ElansAddonHub
                     settings.CfDirectOff = off0; settings.CfLetInstallOff = let0; ThirdPartyCard.NoteClearSec = sec0; ThirdPartyCard.ResetHintsForTest();
                     try { if (svFile != null) Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(svFile)), true); } catch { }
                 }
+            }
+            {
+                // 3.10.5: "Update other addons by themselves" - which cards it installs, and that it never takes CurseForge's install link
+                void Ck(string w, bool ok, string info = null) => sb.AppendLine($"others auto {w}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+                var auto0 = settings.OthersAutoUpdate;
+                try
+                {
+                    CfAddon Cf(int id, bool allow, bool? auto)
+                    {
+                        var a = new CfAddon { Id = id, Name = "CfA" + id, InstalledId = 1, LatestId = 2, LatestFileName = "CfA" + id + "-2.zip", AllowDistribution = allow, AutoInstallPref = auto,
+                            Folders = new List<string> { "CfA" + id }, LatestUrl = "https://edge.forgecdn.net/files/1/2/CfA" + id + "-2.zip", LatestLength = 10, LatestModules = new List<string> { "CfA" + id } };
+                        a.LatestHashes.Add(new KeyValuePair<string, string>("sha1", "00"));
+                        return a;
+                    }
+                    ThirdPartyCard Card(CfAddon a, bool dev = false) { var c = new ThirdPartyCard(new AddonEntry { Key = a.Name, Title = a.Name, Folders = new List<string> { a.Name }, Cf = a, IsDev = dev }); c.Refresh(); return c; }
+                    var direct = Card(Cf(7001, true, null));
+                    var link = Card(Cf(7002, false, null));
+                    var byCf = Card(Cf(7003, false, true));
+                    var dev = Card(Cf(7004, true, null), dev: true);
+                    var current = Cf(7005, true, null); current.LatestId = 1; var upToDate = Card(current);
+                    Ck("direct CurseForge update: installed by itself", AutoSkipReason(direct, null, true, true, false) == null, AutoSkipReason(direct, null, true, true, false));
+                    Ck("author-only, auto-update off: never (it needs the install window)", AutoSkipReason(link, null, true, true, false) == "needs CurseForge's install window");
+                    Ck("author-only, auto-update on: CurseForge installs it, not while CurseForge runs",
+                        AutoSkipReason(byCf, null, true, true, false) == null && AutoSkipReason(byCf, null, true, true, true) != null);
+                    Ck("'Let CurseForge install' off: author-only is skipped", AutoSkipReason(byCf, null, true, false, false) == "needs CurseForge's install window");
+                    Ck("direct setting off: skipped (it would be the install link)", AutoSkipReason(direct, null, false, false, false) == "needs CurseForge's install window");
+                    Ck("development copy and up-to-date cards: skipped", AutoSkipReason(dev, null, true, true, false) != null && AutoSkipReason(upToDate, null, true, true, false) == "no update");
+                    // the switch writes the setting; off = nothing happens
+                    SettingsPage.GeneralSetForTest("OthersAutoBox", true);
+                    var onNow = settings.OthersAutoUpdate;
+                    SettingsPage.GeneralSetForTest("OthersAutoBox", false);
+                    Ck("Settings switch writes othersAutoUpdate", onNow && !settings.OthersAutoUpdate);
+                    var last0 = othersAutoLast;
+                    await MaybeAutoUpdateOthers(force: true);
+                    Ck("setting off: nothing runs", othersAutoLast == last0 && !autoUpdatingOthers);
+                }
+                finally { settings.OthersAutoUpdate = auto0; }
             }
             sb.AppendLine(await CurseForgeDirect.SelfTest());
             sb.AppendLine($"addons dir={addOnsDir} interface={clientInterface} cards={others.Count}");

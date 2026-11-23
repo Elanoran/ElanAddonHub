@@ -129,6 +129,7 @@ namespace ElansAddonHub
         {
             UpdateStatusText(); RefreshRailBadges();
             MaybeCfAuto();                                  // cheap: compares the cached WoW state and CurseForge's last check time
+            _ = MaybeAutoUpdateOthers();                    // off by default; only while WoW is closed, at most every 10 minutes
             if (health != null && (WowWatch.Shared.Running || health.RootChanged)) health.EnsureWatchers();   // idle + same folder: nothing to look at
         }
 
@@ -136,7 +137,11 @@ namespace ElansAddonHub
         void OnWowChanged(bool running)
         {
             if (running) { health?.EnsureWatchers(); MaybeCfAuto(); }
-            else if (wowWas != null) wowWas = false;
+            else
+            {
+                if (wowWas != null) wowWas = false;
+                _ = MaybeAutoUpdateOthers(force: true);     // WoW just closed: install what waited
+            }
             RefreshRailBadges();
         }
 
