@@ -33,6 +33,10 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Professions** moved to [Elan's Profession Helper](ElansProfessionHelper.md) in 0.23.0: the skills and trainers tab, the
   trainer pins and the gathering guide, with your settings. The Toolkit still records your nodes and fishing spots, and its
   arrow can walk a gathering route from the Profession Helper's tracker.
+- **Chat Guard** (`/etk spam`, on by default): hides people selling or asking for portals, summons, lockpicking, enchants
+  and carries in Yell, Say, General and LookingForGroup. Trade and whispers are left alone unless you tick them, and friends,
+  guild, your group and GMs are never hidden. The Chat Guard tab lists what was hidden and why: **Show** puts a line back
+  in chat, **Not spam** always shows that sender.
 - **Bug Trap**: catches the errors of Elan's addons (or of all addons, or none) without the game's pop-up, with a copy
   window for bug reports.
 - **Atlas recording** (for Elan's Outpost, on by default): what drops, what vendors sell, where creatures stand, as ids
@@ -49,6 +53,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 | `/etk way <zone> <x> <y> [title]` | set a waypoint (zone name or map id; x and y from 0 to 100) |
 | `/etk way list`, `way next`, `way prev`, `way clear` | your waypoints |
 | `/etk trip <stop>; <stop>; ...` | a trip of up to 10 stops (`[fly] <zone> <x> <y> [title]` each) |
+| `/etk spam` | the Chat Guard tab · `/etk spam on\|off`, `clear`, `status`, `allow <name>`, `unallow <name>`, `test <text>` (how a line would score) |
 | `/etk flights`, `nav`, `bugs`, `options` | open that tab |
 | `/etk prof` | says where the profession features went (`/eprof`, Elan's Profession Helper) |
 | `/etk button` | show or hide the minimap button |
