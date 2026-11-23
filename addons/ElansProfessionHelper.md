@@ -67,6 +67,10 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **It learns from the game:** the profession window tells it which recipes you know, and a trainer's window the skill each
   recipe is taught at. Recipes from a pattern or plans are only suggested once you know them.
 - **Forever's own numbers** from the client: skill-up ranges, reagents, recipe items and where to craft.
+- **With Zygor Guides:** while Zygor shows a profession guide, the panel's top row is Zygor's current craft step: how many
+  are left, what you can make now or what is missing, in your colour. It warns when that step is grey for you or names
+  something Forever's data doesn't have. The guide tracker steps aside, and Zygor gets your real skill so its steps tick
+  off (only the skill numbers in Zygor's list are changed). `/eprof zygor` switches each part.
 
 ### Skills and trainers
 
@@ -104,6 +108,7 @@ Right-click the minimap button for Fishing. It is also under Options > AddOns.
 | `/eprof skills` | the Skills & trainers tab · `/eprof skills map`, `minimap`, `outgrown`: the trainer pins |
 | `/eprof guide` | the Guide tab · `/eprof guide show\|hide\|next\|prev`: the tracker |
 | `/eprof next` | what to make next in each crafting profession · `/eprof next tailoring`: one profession · `/eprof next shop [profession]`: the plan and shopping list to your cap · `/eprof next panel`, `bank`: the panel, count the bank · `/eprof next gap 40`: the panel further from the window |
+| `/eprof zygor` | what the Zygor bridge sees · `/eprof zygor hint`, `sync`, `yield` `on` / `off`: the panel row, the skill sync, the tracker stepping aside |
 | `/eprof minimap` | show or hide the minimap button |
 | `/eprof changes`, `bugs`, `diag` | what's new, its Bug Trap, a diagnostics run for the Outpost's Health window |
 
