@@ -27,7 +27,10 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   Right-click a name to give it a note ("bank alt: herbs"): a small note icon marks the name, and hovering it shows the note.
   The last five people you mailed are listed under **Recent**. Tick **Bank alt** in that note box for one of your characters
   and it gets a card on top of the list, one click away (one per realm and faction). A search box finds any name,
-  a click on a heading folds that section, and online friends have a green dot.
+  a click on a heading folds that section, and online friends have a green dot. Names show in their class colour
+  (offline friends dimmed). The note box has **Forget** for Recent names and for friends remembered from your other
+  characters or Battle.net: they stay off the list until you mail them again. An empty Subject gets "From <you>"
+  ("For the bank" to your bank alt) once To: has a name; an attached item's name still wins (Settings: Fill an empty mail subject).
 - **Junk seller**: Alt+right-click an item to mark it as junk. At a merchant a **Sell junk** button sells grey and marked
   items; selling automatically is a setting (off by default).
 - **Your other characters** on item tooltips, for example "Elan: 3 (bags) · Measley: 12 (bank)". This needs
