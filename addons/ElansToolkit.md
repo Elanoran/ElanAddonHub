@@ -55,7 +55,7 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 | `/etk way <zone> <x> <y> [title]` | set a waypoint (zone name or map id; x and y from 0 to 100) |
 | `/etk way list`, `way next`, `way prev`, `way clear` | your waypoints |
 | `/etk trip <stop>; <stop>; ...` | a trip of up to 10 stops (`[fly] <zone> <x> <y> [title]` each) |
-| `/etk spam` | the Chat Guard tab · `/etk spam on|off`, `button`, `clear`\|off`, `clear`, `status`, `allow <name>`, `unallow <name>`, `test <text>` (how a line would score) |
+| `/etk spam` | the Chat Guard tab · `/etk spam on\|off`, `button`, `clear`, `status`, `allow <name>`, `unallow <name>`, `test <text>` (how a line would score) |
 | `/etk flights`, `nav`, `bugs`, `options` | open that tab |
 | `/etk prof` | says where the profession features went (`/eprof`, Elan's Profession Helper) |
 | `/etk button` | show or hide the minimap button |
