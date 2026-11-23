@@ -36,7 +36,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
 - **Chat Guard** (`/etk spam`, on by default): hides people selling or asking for portals, summons, lockpicking, enchants
   and carries in Yell, Say, General and LookingForGroup. Trade and whispers are left alone unless you tick them, and friends,
   guild, your group and GMs are never hidden. The Chat Guard tab lists what was hidden and why: **Show** puts a line back
-  in chat, **Not spam** always shows that sender.
+  in chat, **Report** opens the game's report window for that line, filled in (you pick the reason and press Submit),
+  **Ignore** uses the game's ignore list, **Not spam** always shows that sender.
 - **Bug Trap**: catches the errors of Elan's addons (or of all addons, or none) without the game's pop-up, with a copy
   window for bug reports.
 - **Atlas recording** (for Elan's Outpost, on by default): what drops, what vendors sell, where creatures stand, as ids
