@@ -15,10 +15,11 @@ namespace ElansAddonHub
     {
         public string Id, Name, Description;
         public bool Required, Installed, Checked;
+        public string Reason;                                     // 3.11: why it is ticked or who it is for (AddonPicks), null = no line
     }
 
-    // First-run guide: a short overlay in the main window. 1 WoW folder, 2 addons, 3 join a Lodge (optional), 4 sharing (2.87: what, with whom, why;
-    // the switch right there, "Not now" as weighty as "Share"), 5 tips.
+    // First-run guide: a short overlay in the main window. 1 WoW folder, 2 addons, 3 join a Lodge (optional), 4 what to share (3.11: three equal
+    // choices - share with my Lodge / just the basics / keep everything on my PC - or each switch in Settings > Privacy), 5 tips.
     // Skippable at any step, re-openable from Settings > About. Built in code; the host (MainWindow) supplies what it needs as callbacks.
     // Look (DESIGN 4 / 8): the page dims behind Brush.Scrim, the guide is an overlay card (Surface3, hairline, elevation 2, radius 14,
     // padding 24); steps are Surface2 cards (radius 12, 16 padding, 12 apart); one primary button (Next / Get started); the card opens
@@ -36,8 +37,10 @@ namespace ElansAddonHub
             public Action<List<string>> Install;                 // ids of the ticked addons that are not installed yet
             public Action<string> Join;                          // an invite link (already validated)
             public Action<bool> Finished;                        // true = done, false = skipped
-            public Func<bool> SharingOn;                         // the Atlas sharing setting as it is now
-            public Action<bool> SetSharing;                      // the guide's switch / buttons change that same setting at once
+            public Func<string> CurrentPreset;                   // the sharing choice the settings match now (SharingPresets id), null = none / a mix
+            public Action<string> ApplyPreset;                   // a sharing choice changes those switches at once (the same as Settings > Privacy)
+            public Func<string> MainCharacter;                   // the name of the character the "Share with my Lodge" choice would share, null = none found
+            public Action OpenPrivacy;                           // "Choose each switch myself": Settings > Privacy opens when the guide is finished
         }
 
         readonly Host host;
@@ -57,9 +60,12 @@ namespace ElansAddonHub
         public string ErrorText => linkError.Text;
         public IEnumerable<string> TickedIds => addons.Where(a => a.Checked && !a.Installed).Select(a => a.Id);
         public FrameworkElement CardForTest => card;
-        public CheckBox SharingSwitchForTest { get; private set; }
-        public Button ShareYesForTest { get; private set; }
-        public Button ShareNotNowForTest { get; private set; }
+        public Dictionary<string, RadioButton> PresetButtonsForTest { get; private set; }
+        public Button CustomizeForTest { get; private set; }
+        public string PresetChosen => presetChosen;
+        public string NextTextForTest => next.Content as string;
+        string presetChosen;
+        bool customize;
         public string SharingTextForTest { get; private set; } = "";
 
         static Brush Res(string key) => (Brush)Application.Current.Resources[key];
@@ -173,7 +179,7 @@ namespace ElansAddonHub
         void BuildAddons()
         {
             title.Text = "Pick your addons";
-            sub.Text = "Tick what you want installed. You can always add or remove addons later on the Addons page.";
+            sub.Text = "We ticked what most players want: the addons everyone gets something from, and the helper for any class we found on this PC. Untick anything; you can add or remove addons later on the Addons page.";
             var fresh = host.Addons?.Invoke() ?? new List<GuideAddon>();
             foreach (var f in fresh) { var old = addons.FirstOrDefault(a => a.Id == f.Id); if (old != null && !f.Required && !f.Installed) f.Checked = old.Checked; }
             addons = fresh;
@@ -198,6 +204,8 @@ namespace ElansAddonHub
                 texts.Children.Add(line);
                 if (!string.IsNullOrWhiteSpace(a.Description))
                     texts.Children.Add(new TextBlock { Text = a.Description, Style = Sty("Text.Secondary"), TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 32, Margin = new Thickness(0, 2, 0, 0) });
+                if (!string.IsNullOrEmpty(a.Reason) && !a.Installed)
+                    texts.Children.Add(new TextBlock { Text = a.Reason, Style = Sty("Text.Caption"), Foreground = Res(a.Reason.StartsWith("Recommended", StringComparison.Ordinal) ? "Brush.Success" : "Brush.Text.Tertiary"), Margin = new Thickness(0, 2, 0, 0) });
                 g.Children.Add(texts);
                 var cb = new CheckBox { Style = Sty("Switch"), IsChecked = a.Checked || a.Required || a.Installed, IsEnabled = !a.Required && !a.Installed, VerticalAlignment = VerticalAlignment.Center };
                 if (a.Required || a.Installed) a.Checked = true;
@@ -229,46 +237,64 @@ namespace ElansAddonHub
             next.Content = string.IsNullOrWhiteSpace(linkBox.Text) ? "Skip this step" : "Join and continue";
         }
 
-        // ---- 4: sharing (honest and calm: exactly what is sent, to whom, why; no pre-ticked surprise - the switch shows the setting as it is)
+        // ---- 4: sharing (3.11: three equal choices instead of one switch). Honest and calm: what each one sends, to whom, why; none is
+        // picked for you ("Recommended" is a chip, not a selection); a choice changes the same switches as Settings > Privacy at once.
         void BuildSharing()
         {
-            title.Text = "Sharing what you see";
-            sub.Text = "Your choice. The Outpost works the same either way, and you can change it any time in Settings > Lodge.";
-            var list = new StackPanel();
-            body.Children.Add(new Border { Background = Res("Brush.Surface2"), CornerRadius = Rad("Radius.Card"), Padding = Pad("Pad.Card"), Child = list });
+            title.Text = "What to share with your Lodge";
+            sub.Text = "Pick what suits you. The Outpost works either way, and every switch is in Settings > Privacy to change later.";
+            presetChosen = host.CurrentPreset?.Invoke();
+            var mainName = host.MainCharacter?.Invoke();
             var texts = new List<string>();
-            void Part(string head, string text, bool first = false)
+            var cards = new List<(string id, Border card)>();
+            PresetButtonsForTest = new Dictionary<string, RadioButton>();
+            void Restyle() { foreach (var (id, c) in cards) c.BorderBrush = id == presetChosen ? Res("Brush.Accent") : Res("Brush.Divider"); }
+            foreach (var id in SharingPresets.All)
             {
-                list.Children.Add(Txt(head, "Text.RowTitle", null, new Thickness(0, first ? 0 : 12, 0, 0)));
-                list.Children.Add(Txt(text, "Text.Secondary", null, new Thickness(0, 2, 0, 0)));
-                texts.Add(head + ": " + text);
+                var r = new RadioButton { GroupName = "guide-sharing", IsChecked = id == presetChosen, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 12, 0) };
+                System.Windows.Automation.AutomationProperties.SetName(r, SharingPresets.Title(id));
+                var sp = new StackPanel();
+                var head = new StackPanel { Orientation = Orientation.Horizontal };
+                head.Children.Add(new TextBlock { Text = SharingPresets.Title(id), Style = Sty("Text.RowTitle"), VerticalAlignment = VerticalAlignment.Center });
+                if (id == SharingPresets.Lodge)
+                    head.Children.Add(new Border { Height = 24, CornerRadius = Rad("Radius.Chip"), Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(8, 0, 0, 0), Background = Res("Brush.Overlay.Chip"), VerticalAlignment = VerticalAlignment.Center,
+                        Child = new TextBlock { Text = "Recommended", Style = Sty("Text.Caption"), VerticalAlignment = VerticalAlignment.Center } });
+                sp.Children.Add(head);
+                sp.Children.Add(Txt(SharingPresets.Summary(id), "Text.Secondary", null, new Thickness(0, 2, 0, 4)));
+                var lines = SharingPresets.Lines(id, mainName);
+                foreach (var l in lines) sp.Children.Add(Txt("• " + l, "Text.Caption", null, new Thickness(0, 2, 0, 0)));
+                texts.Add(SharingPresets.Title(id) + ": " + SharingPresets.Summary(id) + " " + string.Join("; ", lines));
+                var g = new Grid();
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                Grid.SetColumn(sp, 1);
+                g.Children.Add(r); g.Children.Add(sp);
+                var card = new Border { Background = Res("Brush.Surface2"), CornerRadius = Rad("Radius.Card"), Padding = Pad("Pad.Card"), Margin = new Thickness(0, 0, 0, 12), BorderThickness = new Thickness(1), Cursor = System.Windows.Input.Cursors.Hand, Child = g };
+                card.MouseLeftButtonUp += (s, e) => r.IsChecked = true;
+                var pick = id;
+                r.Checked += (s, e) =>
+                {
+                    if (presetChosen == pick) return;
+                    presetChosen = pick;
+                    host.ApplyPreset?.Invoke(pick);
+                    Restyle();
+                    next.Content = "Next";
+                };
+                cards.Add((id, card));
+                body.Children.Add(card);
+                PresetButtonsForTest[id] = r;
             }
-            Part("What is shared", "What Elan's Toolkit sees in the world while you play: what drops from creatures, chests, fishing and gathering, what vendors sell and for how much, where creatures and gathering nodes are, quests and rare finds. Ids and counts - no character names; your rare finds show your Lodge name to members. Flight times have their own switch, and your characters' gear and reputations are shared only if you choose them.", true);
-            Part("With whom", "The members of your Lodge. If your Lodge contributes to the Cairn, the Lodge's pooled numbers - ids and counts only, no names at all - also go to the Cairn, which merges many Lodges.");
-            Part("Why", "Everyone's Atlas gets better the more people share. And the Cairn's numbers from other Lodges come back to those who share: give to get.");
+            Restyle();
+            if (presetChosen == null) next.Content = "Skip this step";
+
+            var why = "Shared only with the members of your Lodge. If your Lodge joins the Cairn, its pooled numbers (ids and counts, no names at all) also go there, and the Cairn's numbers from other Lodges come back to those who share: give to get.";
+            body.Children.Add(Txt(why, "Text.Caption", null, new Thickness(0, 4, 0, 0)));
+            texts.Add(why);
+            var custom = new Button { Content = customize ? "Settings > Privacy opens when you finish" : "Choose each switch myself", Style = Sty("GhostButton"), Height = 32, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-8, 8, 0, 0) };
+            custom.Click += (s, e) => { customize = true; custom.Content = "Settings > Privacy opens when you finish"; };
+            body.Children.Add(custom);
+            CustomizeForTest = custom;
             SharingTextForTest = string.Join(" | ", texts);
-
-            var row = new Grid { Margin = new Thickness(0, 16, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(new TextBlock { Text = "Share my Atlas observations with this Lodge", Style = Sty("Text.RowTitle"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
-            var sw = new CheckBox { Style = Sty("Switch"), IsChecked = host.SharingOn?.Invoke() == true, VerticalAlignment = VerticalAlignment.Center };
-            System.Windows.Automation.AutomationProperties.SetName(sw, "Share my Atlas observations with this Lodge");
-            sw.Click += (s, e) => host.SetSharing?.Invoke(sw.IsChecked == true);
-            Grid.SetColumn(sw, 1);
-            row.Children.Add(sw);
-            body.Children.Add(row);
-            SharingSwitchForTest = sw;
-
-            // the two answers weigh the same: same style, same width; either one moves on
-            var answers = new UniformGrid { Columns = 2, Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
-            var yes = new Button { Content = "Share", Style = Sty("Button.M"), MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
-            var no = new Button { Content = "Not now", Style = Sty("Button.M"), MinWidth = 120 };
-            yes.Click += (s, e) => { host.SetSharing?.Invoke(true); Show(Step + 1); };
-            no.Click += (s, e) => { host.SetSharing?.Invoke(false); Show(Step + 1); };
-            answers.Children.Add(yes); answers.Children.Add(no);
-            body.Children.Add(answers);
-            ShareYesForTest = yes; ShareNotNowForTest = no;
         }
 
         // ---- 5: done
@@ -324,6 +350,7 @@ namespace ElansAddonHub
             if (ids.Count > 0) host.Install?.Invoke(ids);
             if (!string.IsNullOrWhiteSpace(linkBox.Text)) host.Join?.Invoke(linkBox.Text.Trim());
             host.Finished?.Invoke(true);
+            if (customize) host.OpenPrivacy?.Invoke();
         }
 
         public void Skip()

@@ -22,28 +22,44 @@ namespace ElansAddonHub
             var savedAnswered = settings.SharingInviteAnswered; var savedOff = settings.AtlasShareOff;
             try
             {
-                // ---- the welcome guide's Sharing step
-                bool on = false; int sets = 0;
-                var g = new WelcomeGuide(new WelcomeGuide.Host { SharingOn = () => on, SetSharing = v => { on = v; sets++; }, Addons = () => new List<GuideAddon>(), WowRoot = () => null });
+                // ---- the welcome guide's Sharing step (3.11: three equal choices; each sets the same switches as Settings > Privacy)
+                string cur = null; var applied = new List<string>(); bool privacy = false;
+                var g = new WelcomeGuide(new WelcomeGuide.Host { CurrentPreset = () => cur, ApplyPreset = v => { cur = v; applied.Add(v); }, MainCharacter = () => "Elan",
+                    OpenPrivacy = () => privacy = true, Addons = () => new List<GuideAddon>(), WowRoot = () => null });
                 g.Show(WelcomeGuide.SharingStep);
                 var txt = g.SharingTextForTest;
-                Check("guide: a Sharing step right after the Lodge step says what is shared, with whom and why, exactly",
-                    WelcomeGuide.SharingStep == 3 && WelcomeGuide.Steps == 5 && g.Step == 3 && txt.Contains("What is shared") && txt.Contains("With whom") && txt.Contains("Why")
-                    && txt.Contains("Ids and counts") && txt.Contains("no character names") && txt.Contains("rare finds show your Lodge name") && txt.Contains("only if you choose")
-                    && txt.Contains("Cairn") && txt.Contains("give to get") && txt.Contains("Flight times have their own switch"), txt);
-                Check("guide: the switch is right there and shows the setting as it is (off)", g.SharingSwitchForTest != null && g.SharingSwitchForTest.IsChecked == false, null);
-                var y = g.ShareYesForTest; var n = g.ShareNotNowForTest;
-                Check("guide: \"Share\" and \"Not now\" weigh the same (same style, same width, neither is the primary)",
-                    y != null && n != null && y.Style == n.Style && y.MinWidth == n.MinWidth && y.Style == (Style)FindResource("Button.M"), null);
-                Press(n);
-                Check("guide: \"Not now\" keeps sharing off and moves on", !on && g.Step == 4, "on=" + on + " step=" + g.Step);
+                Check("guide: a Sharing step right after the Lodge step offers three choices and says what each sends, to whom and why",
+                    WelcomeGuide.SharingStep == 3 && WelcomeGuide.Steps == 5 && g.Step == 3 && g.PresetButtonsForTest.Count == 3
+                    && txt.Contains("Share with my Lodge") && txt.Contains("Just the basics") && txt.Contains("Keep everything on my PC")
+                    && txt.Contains("Gear and talents of Elan") && txt.Contains("to officers only") && txt.Contains("no names") && txt.Contains("Cairn") && txt.Contains("give to get"), txt);
+                var rb = g.PresetButtonsForTest.Values.ToList();
+                Check("guide: none is picked for you, nothing is applied, and Next says \"Skip this step\"", rb.All(r => r.IsChecked != true) && applied.Count == 0 && g.NextTextForTest == "Skip this step", g.NextTextForTest);
+                Check("guide: the three weigh the same (same control and style; \"Recommended\" is only a chip)", rb.Select(r => r.Style).Distinct().Count() == 1, null);
+                g.PresetButtonsForTest[SharingPresets.Basics].IsChecked = true;
+                Check("guide: a choice applies at once and Next says Next", applied.SequenceEqual(new[] { SharingPresets.Basics }) && g.PresetChosen == SharingPresets.Basics && g.NextTextForTest == "Next", string.Join(",", applied));
                 g.Show(WelcomeGuide.SharingStep);
-                Press(g.ShareYesForTest);
-                Check("guide: \"Share\" turns it on and moves on", on && g.Step == 4, null);
-                g.Show(WelcomeGuide.SharingStep);
-                Check("guide: when sharing is on already, the switch shows it on", g.SharingSwitchForTest.IsChecked == true, null);
-                g.SharingSwitchForTest.IsChecked = false; Press(g.SharingSwitchForTest);
-                Check("guide: the switch itself changes the setting", !on, null);
+                Check("guide: back on the step, the choice the settings match shows picked", g.PresetButtonsForTest[SharingPresets.Basics].IsChecked == true && applied.Count == 1, null);
+                Press(g.CustomizeForTest);
+                g.Finish();
+                Check("guide: \"Choose each switch myself\" opens Settings > Privacy when the guide is finished", privacy, null);
+
+                // ---- the choices themselves (SharingPresets), on a scratch Settings
+                var ps = new Settings();
+                Check("presets: a fresh install's defaults match no choice (nothing looks picked)", SharingPresets.Current(ps) == null, SharingPresets.Current(ps));
+                SharingPresets.Apply(ps, SharingPresets.Lodge, "Realm-Elan");
+                Check("presets: Share with my Lodge = status, Atlas, flight times, the main character, map position to officers",
+                    !ps.ShareGameOff && !ps.ShareZoneOff && !ps.ShareXpOff && !ps.AtlasShareOff && !ps.FlightShareOff && ps.ArmoryShareOn && ps.ArmoryChars.SequenceEqual(new[] { "Realm-Elan" })
+                    && ps.ShareLivePosWithLodge && ps.LivePosScope == "officers" && SharingPresets.Current(ps) == SharingPresets.Lodge, null);
+                SharingPresets.Apply(ps, SharingPresets.Basics, null);
+                Check("presets: Just the basics = character and zone, nothing else", !ps.ShareGameOff && !ps.ShareZoneOff && ps.ShareXpOff && ps.AtlasShareOff && ps.FlightShareOff && !ps.ArmoryShareOn && !ps.ShareLivePosWithLodge && SharingPresets.Current(ps) == SharingPresets.Basics, null);
+                ps.ArmoryChars = new List<string> { "Realm-Alt" };
+                SharingPresets.Apply(ps, SharingPresets.Lodge, "Realm-Elan");
+                Check("presets: characters already chosen stay chosen", ps.ArmoryChars.SequenceEqual(new[] { "Realm-Alt" }) && ps.ArmoryShareOn, null);
+                SharingPresets.Apply(ps, SharingPresets.Private, null);
+                Check("presets: Keep everything on my PC = every sharing switch off", ps.ShareGameOff && ps.ShareZoneOff && ps.ShareXpOff && ps.AutoStatusOff && ps.AtlasShareOff && ps.FlightShareOff && !ps.ArmoryShareOn && !ps.ShareLivePosWithLodge && SharingPresets.Current(ps) == SharingPresets.Private, null);
+                var ps2 = new Settings();
+                SharingPresets.Apply(ps2, SharingPresets.Lodge, null);
+                Check("presets: with no character on this PC, Share with my Lodge leaves the armory off", !ps2.ArmoryShareOn, null);
 
                 // ---- the card on Atlas Home: a member whose sharing is off, on a Lodge without the Cairn yet
                 settings.AtlasShareOff = true; settings.SharingInviteAnswered = null; settings.LodgeUrl = "http://cairn.test/lodge";

@@ -41,6 +41,20 @@ namespace ElansAddonHub
             AtlasView?.FillSharingInvite();
         }
 
+        // Settings > Privacy > Ask me again: the one-time questions and tips show again; what they set stays as it is
+        public void ResetOneTimeQuestions()
+        {
+            settings.SharingInviteAnswered = null;
+            settings.AtlasSourcesCardDismissed = false;
+            settings.ClassicShareOffered = null;
+            settings.CairnJoinCardDismissed = false;
+            settings.InvisibleHintShown = false;
+            settings.DisplayNameHintShown = false;
+            settings.LodgeUpgradeDeclined = null;
+            SettingsStore.Save(settings);
+            AtlasView?.FillSharingInvite();
+        }
+
         public void AnswerSharingInvite(string answer)
         {
             var offer = SharingOffer();

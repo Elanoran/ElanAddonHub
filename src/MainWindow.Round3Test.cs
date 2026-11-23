@@ -28,6 +28,9 @@ namespace ElansAddonHub
             var s = settings;
             var dismissed0 = s.LodgeUpdateDismissed; bool welcome0 = s.WelcomeDone, cfAuto0 = s.CfAutoCheck, shareZoneOff0 = s.ShareZoneOff, forget0 = s.InvisibleForget, inv0 = s.LodgeInvisible;
             var detector0 = WowWatch.Shared.Detector;
+            var opt0 = (s.OptInsAnswered, s.AutoUpdate, s.ShareLivePosWithLodge, s.LivePosScope);
+            var pv0 = (s.AtlasShareOff, s.FlightShareOff, s.ArmoryShareOn, s.ArmoryShareReps, s.ArmoryChars, s.BlizzardNewsLoad, s.WowEventsOff, s.LodgeManualConnect);
+            var asked0 = (s.SharingInviteAnswered, s.CairnJoinCardDismissed, s.ClassicShareOffered, s.InvisibleHintShown, s.DisplayNameHintShown, s.AtlasSourcesCardDismissed, s.LodgeUpgradeDeclined);
             try
             {
                 Check("version is a valid x.y.z", System.Text.RegularExpressions.Regex.IsMatch(App.Version, @"^\d+\.\d+\.\d+$"), App.Version);
@@ -79,8 +82,8 @@ namespace ElansAddonHub
                 var fake = new List<GuideAddon>
                 {
                     new GuideAddon { Id = "elanshub", Name = "Elan's Hub", Description = "The small companion: your character, class and level for the Lodge and the Outpost. Needed for the other addons.", Required = true, Checked = true },
-                    new GuideAddon { Id = "hunter", Name = "Elan's Hunter Helper", Description = "Pet, ammo, trap and aspect helpers for hunters, with a built-in pet and talent guide." },
-                    new GuideAddon { Id = "paladin", Name = "Elan's Paladin Helper", Description = "Auras, blessings and seals at a glance for paladins." },
+                    new GuideAddon { Id = "hunter", Name = "Elan's Hunter Helper", Description = "Pet, ammo, trap and aspect helpers for hunters, with a built-in pet and talent guide.", Reason = "For hunters" },
+                    new GuideAddon { Id = "paladin", Name = "Elan's Paladin Helper", Description = "Auras, blessings and seals at a glance for paladins.", Reason = "For paladins" },
                     new GuideAddon { Id = "bags", Name = "Elan's Bags", Description = "One bag window for all bags, bank and guild bank - also readable from the Outpost's Characters page.", Installed = true },
                 };
                 s.WelcomeDone = false;
@@ -107,7 +110,7 @@ namespace ElansAddonHub
                 g.LinkText = "https://example.com/lodge#invite=ABCDEF123456";
                 g.Next();
                 await Task.Delay(250);
-                Check("guide: a good link goes on to step 4 (sharing, 2.87)", g.Step == WelcomeGuide.SharingStep && g.ErrorText == "" && g.SharingSwitchForTest != null);
+                Check("guide: a good link goes on to step 4 (sharing choices, 3.11)", g.Step == WelcomeGuide.SharingStep && g.ErrorText == "" && g.PresetButtonsForTest?.Count == 3);
                 Snapshot(P("21-guide-4-sharing.png"));
                 g.Next();
                 await Task.Delay(250);
@@ -139,6 +142,22 @@ namespace ElansAddonHub
                 s.WowRoot = root0;
                 GuideAddonsOverride = null; GuideInstalledForTest = null; GuideJoinedForTest = null;
 
+                // ------------------------------------------------ 2b. 3.11: the addon step's starting ticks and reasons (AddonPicks)
+                {
+                    AddonInfo A(string id, bool req = false, params string[] cls) => new AddonInfo { Id = id, Name = id, Required = req, Classes = cls.Length > 0 ? cls.ToList() : null };
+                    var infos = new[] { A("ElansHub", true), A("ElansToolkit", true), A("ElansHunterHelper"), A("ElansPaladinHelper", false, "PALADIN"), A("ElansPriestHelper", false, "PRIEST"), A("ElansBags"), A("ElansProfessionHelper"), A("SomethingElse") };
+                    var hunter = GuideAddonsFrom(infos.Select(i => (i, i.Id == "ElansBags")), AddonPicks.Played(new[] { "Hunter" }));
+                    GuideAddon G(List<GuideAddon> l, string id) => l.First(x => x.Id == id);
+                    Check("addon picks: a hunter's PC starts with the required ones, the Hunter Helper, Bags and Profession Helper ticked",
+                        string.Join(",", hunter.Where(x => x.Checked).Select(x => x.Id)) == "ElansHub,ElansToolkit,ElansHunterHelper,ElansBags,ElansProfessionHelper", string.Join(",", hunter.Where(x => x.Checked).Select(x => x.Id)));
+                    Check("addon picks: each tick says why, the other class helpers say who they are for",
+                        G(hunter, "ElansHunterHelper").Reason == "Recommended: you play a Hunter" && G(hunter, "ElansPaladinHelper").Reason == "For paladins" && !G(hunter, "ElansPaladinHelper").Checked
+                        && G(hunter, "ElansProfessionHelper").Reason == "Recommended for everyone" && G(hunter, "SomethingElse").Reason == null && !G(hunter, "SomethingElse").Checked && G(hunter, "ElansHub").Reason == null, G(hunter, "ElansHunterHelper").Reason);
+                    var fresh = GuideAddonsFrom(infos.Select(i => (i, false)), AddonPicks.Played(null));
+                    Check("addon picks: with no character known (a fresh install) no class helper is ticked", !G(fresh, "ElansHunterHelper").Checked && G(fresh, "ElansHunterHelper").Reason == "For hunters" && G(fresh, "ElansBags").Checked, null);
+                    Check("addon picks: class names from the Hub or the game become class files", AddonPicks.Played(new[] { "Hunter", "PRIEST", null, "" }).SetEquals(new[] { "HUNTER", "PRIEST" }), null);
+                }
+
                 // ------------------------------------------------ 3. privacy page
                 Session.FeedForTest(Welcome("owner", "2.7.0", true));
                 ShowTab("settings");
@@ -164,6 +183,78 @@ namespace ElansAddonHub
                 SettingsPage.ToggleForTest("PvRememberInvis");
                 Check("privacy: 'Remember Appear offline' writes invisibleForget", s.InvisibleForget != forget0);
                 SettingsPage.ToggleForTest("PvRememberInvis");
+
+                // ------------------------------------------------ 3b. 3.11: every sharing switch on Privacy (same settings as Lodge / General), Ask me again
+                SetAtlasSharing(true); s.FlightShareOff = false; s.ArmoryShareOn = false; s.ArmoryShareReps = false; s.ArmoryChars = null; s.BlizzardNewsLoad = false; s.WowEventsOff = false;
+                SettingsPage.Show("privacy");
+                Check("privacy 3.11: Atlas, flight, armory and news switches show the settings", SettingsPage.BoxCheckedForTest("PvAtlasShare") && SettingsPage.BoxCheckedForTest("PvFlightShare")
+                    && !SettingsPage.BoxCheckedForTest("PvArmory") && !SettingsPage.BoxCheckedForTest("PvBlizzNews"));
+                SettingsPage.ToggleForTest("PvAtlasShare");
+                Check("privacy 3.11: Atlas sharing off on Privacy = off on the Lodge page too", s.AtlasShareOff && !SettingsPage.BoxCheckedForTest("AtlasShareBox"));
+                SetAtlasSharing(true);   // as the welcome guide or the Atlas card does
+                SettingsPage.Show("lodge");
+                Check("privacy 3.11: the Lodge page shows a change made elsewhere", SettingsPage.BoxCheckedForTest("AtlasShareBox"));
+                SettingsPage.LodgeClickForTest("FlightShareBox", false);
+                Check("privacy 3.11: a click on another Lodge switch no longer writes Atlas sharing back", !s.AtlasShareOff && s.FlightShareOff, "atlasOff=" + s.AtlasShareOff + " flightOff=" + s.FlightShareOff);
+                s.WowEventsOff = true;   // as the Calendar's own switch does
+                SettingsPage.LodgeClickForTest("AutoConnectBox", !s.LodgeManualConnect);
+                Check("privacy 3.11: ...nor the Calendar's in-game events switch", s.WowEventsOff);
+                s.WowEventsOff = false;
+                SettingsPage.Show("privacy");
+                Check("privacy 3.11: flight sharing set on the Lodge page shows on Privacy", !SettingsPage.BoxCheckedForTest("PvFlightShare"));
+                SettingsPage.ToggleForTest("PvFlightShare");
+                Check("privacy 3.11: ...and switches back on from Privacy", !s.FlightShareOff && SettingsPage.BoxCheckedForTest("FlightShareBox"));
+                SettingsPage.ToggleForTest("PvArmory");
+                Check("privacy 3.11: Share my characters on = the Lodge page's switch", s.ArmoryShareOn && SettingsPage.ArmoryShareForTest);
+                Check("privacy 3.11: with nobody chosen it says so", SettingsPage.PrivacyRowTagForTest("PvArmoryRow").Contains("no character is chosen"), SettingsPage.PrivacyRowTagForTest("PvArmoryRow"));
+                s.ArmoryChars = new List<string> { "Test Realm-Elan" };
+                SettingsPage.Show("privacy");
+                Check("privacy 3.11: ...and names the chosen ones", SettingsPage.PrivacyRowTagForTest("PvArmoryRow").StartsWith("Shared: Elan.", StringComparison.Ordinal), SettingsPage.PrivacyRowTagForTest("PvArmoryRow"));
+                SettingsPage.ToggleForTest("PvArmory");
+                Check("privacy 3.11: ...and off again", !s.ArmoryShareOn && !SettingsPage.ArmoryShareForTest);
+                SettingsPage.ToggleForTest("PvBlizzNews");
+                Check("privacy 3.11: Blizzard news can be switched on", s.BlizzardNewsLoad);
+                SettingsPage.ToggleForTest("PvBlizzNews");
+                Check("privacy 3.11: ...and off again (it could not be before)", !s.BlizzardNewsLoad);
+                s.SharingInviteAnswered = "atlas"; s.CairnJoinCardDismissed = true; s.ClassicShareOffered = "1.0"; s.InvisibleHintShown = true; s.DisplayNameHintShown = true; s.AtlasSourcesCardDismissed = true;
+                SettingsPage.AskAgainForTest();
+                Check("privacy 3.11: Ask me again brings back the one-time questions and tips, switches untouched",
+                    s.SharingInviteAnswered == null && !s.CairnJoinCardDismissed && s.ClassicShareOffered == null && !s.InvisibleHintShown && !s.DisplayNameHintShown && !s.AtlasSourcesCardDismissed && !s.AtlasShareOff);
+                SettingsPage.ScrollEndForTest();
+                await ShotWait(300);
+                Snapshot(P("22-privacy-3.png"));
+
+                // ------------------------------------------------ 3c. 3.11: "New things you can turn on" (OptIns)
+                {
+                    var o = new Settings();
+                    Check("opt-ins: an older install that never saw them gets all three", OptIns.Due(o, null).Count == 3);
+                    OptIns.MarkGuideAnswered(o);
+                    Check("opt-ins: after the welcome guide only the one it did not ask about is left", string.Join(",", OptIns.Due(o, null).Select(x => x.Id)) == "autoupdate");
+                    o.AutoUpdate = true;
+                    Check("opt-ins: nothing that is on already", OptIns.Due(o, null).Count == 0);
+                    var o2 = new Settings();
+                    Check("opt-ins: the Lodge ones wait while they are not possible", string.Join(",", OptIns.Due(o2, x => !x.NeedsLodge).Select(x => x.Id)) == "autoupdate");
+
+                    s.OptInsAnswered = null; s.AutoUpdate = false; s.ArmoryShareOn = false; s.ArmoryChars = null; s.ShareLivePosWithLodge = false;
+                    ShowTab("addons");
+                    ShowOptInsForTest();
+                    await ShotWait(300);
+                    Snapshot(P("22-optins.png"));
+                    Check("opt-ins: the card shows what is possible here, every switch off (this Lodge has no Armory or map position)",
+                        OptInsShowingForTest && OptInSwitchesForTest.Keys.SequenceEqual(new[] { "autoupdate" }) && OptInSwitchesForTest.Values.All(x => x.IsChecked != true), string.Join(",", OptInSwitchesForTest?.Keys ?? Enumerable.Empty<string>()));
+                    OptInsDoneForTest();
+                    Check("opt-ins: Done closes it, remembers what was shown and changes nothing", !OptInsShowingForTest && GuideHost.Visibility == Visibility.Collapsed
+                        && s.OptInsAnswered.SequenceEqual(new[] { "autoupdate" }) && !s.AutoUpdate, string.Join(",", s.OptInsAnswered ?? new List<string>()));
+                    ShowOptInsForTest();
+                    Check("opt-ins: not again", !OptInsShowingForTest);
+                    GuideMainKeyOverride = "Test Realm-Elan";
+                    SetOptIn("armory", true);
+                    Check("opt-ins: turning on the armory shares the highest character, like the guide", s.ArmoryShareOn && s.ArmoryChars.SequenceEqual(new[] { "Test Realm-Elan" }));
+                    SetOptIn("armory", false); SetOptIn("livepos", true);
+                    Check("opt-ins: ...off again; map position goes to officers only", !s.ArmoryShareOn && s.ShareLivePosWithLodge && s.LivePosScope == "officers");
+                    SetOptIn("livepos", false);
+                    GuideMainKeyOverride = null;
+                }
 
                 // ------------------------------------------------ 5. CurseForge status (before the idle test: that one takes a while)
                 var flavor = ClientFlavor();
@@ -229,6 +320,9 @@ namespace ElansAddonHub
             {
                 WowWatch.Shared.Detector = detector0; WowWatch.Shared.Poll();
                 s.LodgeUpdateDismissed = dismissed0; s.WelcomeDone = welcome0; s.CfAutoCheck = cfAuto0; s.ShareZoneOff = shareZoneOff0; s.InvisibleForget = forget0; s.LodgeInvisible = inv0;
+                (s.AtlasShareOff, s.FlightShareOff, s.ArmoryShareOn, s.ArmoryShareReps, s.ArmoryChars, s.BlizzardNewsLoad, s.WowEventsOff, s.LodgeManualConnect) = pv0;
+                (s.OptInsAnswered, s.AutoUpdate, s.ShareLivePosWithLodge, s.LivePosScope) = opt0;
+                (s.SharingInviteAnswered, s.CairnJoinCardDismissed, s.ClassicShareOffered, s.InvisibleHintShown, s.DisplayNameHintShown, s.AtlasSourcesCardDismissed, s.LodgeUpgradeDeclined) = asked0;
                 SettingsStore.Save(s);
                 if (guide != null) CloseGuide(false);
                 GuideAddonsOverride = null; GuideInstalledForTest = null; GuideJoinedForTest = null;

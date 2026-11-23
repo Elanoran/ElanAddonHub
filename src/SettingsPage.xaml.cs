@@ -314,6 +314,7 @@ namespace ElansAddonHub
             }
             if (NavLodge.IsChecked == true) { session.RequestMyDevices(); UpdateDevicesCard(); FillArmory(); FillClassicSettings(); }
             FillBadgesSettings();
+            SyncSharedBoxes();
             SyncPrivacy();
             if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;
@@ -702,19 +703,52 @@ namespace ElansAddonHub
 
         void Lodge_Click(object sender, RoutedEventArgs e)
         {
-            if (loading) return;
-            settings.LodgeManualConnect = AutoConnectBox.IsChecked != true;
-            bool calendarChanged = settings.EventsStripOff != (EventsStripBox.IsChecked != true) || settings.WowEventsOff != (WowEventsBox.IsChecked != true);
-            settings.EventsStripOff = EventsStripBox.IsChecked != true;
-            settings.WowEventsOff = WowEventsBox.IsChecked != true;
-            bool flightChanged = settings.FlightShareOff != (FlightShareBox.IsChecked != true);
-            settings.FlightShareOff = FlightShareBox.IsChecked != true;
-            bool atlasChanged = settings.AtlasShareOff != (AtlasShareBox.IsChecked != true);
-            settings.AtlasShareOff = AtlasShareBox.IsChecked != true;
+            // only the clicked switch is written: these settings can also change elsewhere (the welcome guide, the Atlas sharing card,
+            // the Calendar's own switch, Settings > Privacy), and writing every box here put a stale value back
+            if (loading || !(sender is CheckBox cb)) return;
+            bool on = cb.IsChecked == true;
+            if (cb == AutoConnectBox) settings.LodgeManualConnect = !on;
+            else if (cb == EventsStripBox || cb == WowEventsBox)
+            {
+                bool changed = cb == EventsStripBox ? settings.EventsStripOff == on : settings.WowEventsOff == on;
+                if (cb == EventsStripBox) settings.EventsStripOff = !on; else settings.WowEventsOff = !on;
+                SettingsStore.Save(settings);
+                if (changed) session.WowCalendarSettingsChanged();
+                return;
+            }
+            else if (cb == FlightShareBox) { SetFlightSharing(on); return; }
+            else if (cb == AtlasShareBox) { host.SetAtlasSharing(on); SyncPrivacy(); return; }
+            else return;
             SettingsStore.Save(settings);
-            if (calendarChanged) session.WowCalendarSettingsChanged();
-            if (flightChanged) session.FlightSettingsChanged();
-            if (atlasChanged) session.AtlasSettingsChanged();
+        }
+
+        void SetFlightSharing(bool on)
+        {
+            bool changed = settings.FlightShareOff == on;
+            settings.FlightShareOff = !on;
+            SettingsStore.Save(settings);
+            if (changed) session.FlightSettingsChanged();
+        }
+
+        // the Lodge and General pages' copies of switches that can change elsewhere: refreshed whenever a section is shown
+        void SyncSharedBoxes()
+        {
+            if (settings == null) return;
+            bool wasLoading = loading;
+            loading = true;
+            try
+            {
+                FlightShareBox.IsChecked = !settings.FlightShareOff;
+                AtlasShareBox.IsChecked = !settings.AtlasShareOff;
+                EventsStripBox.IsChecked = !settings.EventsStripOff;
+                WowEventsBox.IsChecked = !settings.WowEventsOff;
+                AutoConnectBox.IsChecked = !settings.LodgeManualConnect;
+                AutoUpdateBox.IsChecked = settings.AutoUpdate;   // the "New things you can turn on" card can change it
+                ClassicAutoBox.IsChecked = !settings.ClassicFromLodgeOff;
+                LodgePosBox.IsChecked = settings.ShareLivePosWithLodge;
+                LodgePosOfficers.IsChecked = LodgeSession.ScopeOf(settings) == "officers"; LodgePosEveryone.IsChecked = LodgePosOfficers.IsChecked != true;
+            }
+            finally { loading = wasLoading; }
         }
 
         void OpenPrivacy_Click(object sender, RoutedEventArgs e) => Show("privacy");
@@ -753,6 +787,16 @@ namespace ElansAddonHub
             PvBrSearch.SelectedIndex = Array.IndexOf(BrowserUrl.Engines, BrowserUrl.EngineById(settings.BrowserSearch));
             PvInvisible.IsChecked = session.Invisible;
             PvInvisible.IsEnabled = session.Me != null;
+            // the sharing switches that also live on Settings > Lodge and General (same settings)
+            PvAtlasShare.IsChecked = !settings.AtlasShareOff; PvFlightShare.IsChecked = !settings.FlightShareOff;
+            PvArmory.IsChecked = settings.ArmoryShareOn; PvArmoryReps.IsChecked = settings.ArmoryShareReps;
+            PvArmoryRepsRow.IsEnabled = settings.ArmoryShareOn;
+            PvArmoryRow.Tag = ArmoryPrivacyLine();
+            PvLodgePos.IsChecked = settings.ShareLivePosWithLodge;
+            PvPosOfficers.IsChecked = LodgeSession.ScopeOf(settings) == "officers"; PvPosEveryone.IsChecked = PvPosOfficers.IsChecked != true;
+            PvLodgePosRow.IsEnabled = LodgePosRow.IsEnabled; PvLodgePosRow.Tag = LodgePosRow.Tag;
+            PvLadderRow.Visibility = LadderSettings.Visibility; PvHideLadder.IsChecked = session.HideFromLadder;
+            PvBlizzNews.IsChecked = settings.BlizzardNewsLoad; PvPatchNotes.IsChecked = settings.PatchNotesLoad;
             PrivacyLodgeLine.Text = (string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
                 : (session.Online ? "Connected to " : "Your lodge: ") + settings.LodgeUrl)
                 + (session.ContributesToCairn ? " Your lodge's owner sends the lodge's pooled Atlas numbers (ids and counts of what members shared, no names) to the Cairn." : "");
@@ -781,6 +825,7 @@ namespace ElansAddonHub
                 return;
             }
             if (cb == PvCfAuto) { CfAutoBox.IsChecked = cb.IsChecked; General_Click(CfAutoBox, e); return; }
+            if (PrivacySharingClick(cb)) return;
             var share = settings.ShareGameOff; var px = settings.PixelOff; var zone = settings.ShareZoneOff; var xp = settings.ShareXpOff;
             bool on = cb.IsChecked == true;
             if (cb == PvShareGame) settings.ShareGameOff = !on;
@@ -804,7 +849,63 @@ namespace ElansAddonHub
         }
 
         void PrivacyProfile_Click(object sender, RoutedEventArgs e) => Show("profile");
-        void PrivacyAtlasShare_Click(object sender, RoutedEventArgs e) => Show("lodge");
+        // the Privacy copies of switches that belong to other pages: each goes through that page's own code, then both pages show the new value
+        bool PrivacySharingClick(CheckBox cb)
+        {
+            bool on = cb.IsChecked == true;
+            if (cb == PvAtlasShare) host.SetAtlasSharing(on);
+            else if (cb == PvFlightShare) SetFlightSharing(on);
+            else if (cb == PvArmory) { ArmoryShareBox.IsChecked = on; Armory_Click(ArmoryShareBox, null); }
+            else if (cb == PvArmoryReps) { ArmoryRepsBox.IsChecked = on; ArmoryReps_Click(ArmoryRepsBox, null); }
+            else if (cb == PvLodgePos) { LodgePosBox.IsChecked = on; LodgePos_Click(LodgePosBox, null); }
+            else if (cb == PvHideLadder) { HideLadderBox.IsChecked = on; HideLadder_Click(HideLadderBox, null); }
+            else if (cb == PvBlizzNews || cb == PvPatchNotes)
+            {
+                // off = stop asking Blizzard's forum; the About page offers its "Load" button again. On = the same as that button.
+                if (cb == PvBlizzNews) settings.BlizzardNewsLoad = on; else settings.PatchNotesLoad = on;
+                SettingsStore.Save(settings);
+            }
+            else return false;
+            SyncSharedBoxes();
+            SyncPrivacy();
+            return true;
+        }
+
+        void PrivacyPosScope_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            LodgePosOfficers.IsChecked = PvPosOfficers.IsChecked == true; LodgePosEveryone.IsChecked = PvPosOfficers.IsChecked != true;
+            LodgePosScope_Click(LodgePosOfficers, null);
+        }
+
+        // "Share my characters": which ones, in one line; the ticks themselves stay on Settings > Lodge > Armory
+        string ArmoryPrivacyLine()
+        {
+            const string what = "What the characters you choose wear, their stats, talents, professions and hunter pets - never bags, bank, gold or mail.";
+            if (!settings.ArmoryShareOn) return "Off. " + what;
+            var names = (settings.ArmoryChars ?? new List<string>()).Select(k => k.Substring(k.LastIndexOf('-') + 1)).ToList();
+            return (names.Count == 0 ? "On, but no character is chosen yet: press Choose characters." : "Shared: " + string.Join(", ", names) + ".") + " " + what;
+        }
+
+        void PrivacyArmoryPick_Click(object sender, RoutedEventArgs e)
+        {
+            Show("lodge");
+            Dispatcher.BeginInvoke(new Action(() => ArmoryShareBox.BringIntoView()), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        // brings back the questions and tips that show only once; the settings they set stay as they are
+        void PrivacyAskAgain_Click(object sender, RoutedEventArgs e)
+        {
+            host.ResetOneTimeQuestions();
+            PvAskAgainNote.Text = "Done. They show again where they belong (the Atlas, Settings > Guild Master, the Lodge).";
+            PvAskAgainNote.Visibility = Visibility.Visible;
+        }
+
+        // self-test hooks for the Privacy copies
+        public bool BoxCheckedForTest(string name) => ((CheckBox)FindName(name)).IsChecked == true;
+        public void LodgeClickForTest(string name, bool on) { var cb = (CheckBox)FindName(name); cb.IsChecked = on; Lodge_Click(cb, null); }
+        public string PrivacyRowTagForTest(string name) => ((HeaderedContentControl)FindName(name)).Tag as string ?? "";
+        public void AskAgainForTest() => PrivacyAskAgain_Click(null, null);
 
         // the Cairn's data follows the Atlas sharing switch (give to get): one calm line, no switch of its own
         string CairnStatusLine() => Services.Atlas.CairnAtlas.StatusText(!string.IsNullOrEmpty(settings.LodgeUrl), session.Online || session.TestFedForView, session.SupportsCairnData, (session.Online || session.TestFedForView) && session.IsGuestNow, !settings.AtlasShareOff);

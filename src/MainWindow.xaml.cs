@@ -118,6 +118,7 @@ namespace ElansAddonHub
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
             InitHealth();
             InitWelcome();
+            InitOptIns();                  // 3.11: "New things you can turn on", once (MainWindow.OptIns.cs)
             WowWatch.Shared.Changed += OnWowChanged;
             InitActivity();                // the ring above Settings and the close guard (MainWindow.Activity.cs)
         }

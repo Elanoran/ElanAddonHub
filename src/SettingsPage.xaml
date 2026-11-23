@@ -615,9 +615,9 @@
           <!-- ========== Privacy ========== -->
           <StackPanel x:Name="SecPrivacy" Visibility="Collapsed">
             <TextBlock Text="Privacy" Style="{StaticResource PageTitle}" />
-            <TextBlock Text="What the Outpost shares, with whom, and where you can switch it off. Every sharing switch lives here, and only here; the Lodge page links to this one." Style="{StaticResource Note}" Margin="4,0,0,4" />
+            <TextBlock Text="Everything the Outpost shares, with whom, and the switch to stop it. Some of these switches also show on the page they belong to (Lodge, General); it is the same switch in both places." Style="{StaticResource Note}" Margin="4,0,0,4" />
             <TextBlock x:Name="PrivacyLodgeLine" Style="{StaticResource Text.Secondary}" Margin="4,0,0,16" TextWrapping="Wrap" />
-            <TextBlock Text="Shared with your lodge" Style="{StaticResource HeadTight}" />
+            <TextBlock Text="Shared with your lodge: your status" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Only the people on the Lodge server you joined see this, and only while you are connected." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl x:Name="PvShareGameRow" Style="{StaticResource Setting.Row}" Header="What I'm playing" Tag="Your character's name, race, class and level, and that WoW is running.">
@@ -644,19 +644,68 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Typing" Tag="People in the same channel see &quot;... is typing&quot; while you type there. This is always on.">
                 <Border Style="{StaticResource Chip}" VerticalAlignment="Center"><TextBlock Text="Always on" Style="{StaticResource Text.Secondary}" /></Border>
               </HeaderedContentControl>
+            </StackPanel></ContentControl>
+            <TextBlock Text="Shared with your lodge: what you see in the world" Style="{StaticResource HeadTight}" />
+            <TextBlock Text="Ids and counts only, never character names. This is what makes everyone's Atlas and world map better." Style="{StaticResource Note}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share my Atlas observations with this Lodge" Tag="What Elan's Toolkit sees in game: what drops from creatures, chests, fishing and gathering, what vendors sell, where creatures and gathering nodes are, quests and rare finds. Your rare finds show your Lodge name to members. Guests never share. With this off nothing is uploaded, but you still get the lodge's Atlas.">
+                <CheckBox x:Name="PvAtlasShare" Style="{StaticResource Switch}" Click="Privacy_Click" AutomationProperties.Name="Share my Atlas observations with this Lodge" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share flight times with the lodge" Tag="Your learned flight-path times and the flight routes your flights learned. With this off nothing is uploaded, but you still get everyone's.">
+                <CheckBox x:Name="PvFlightShare" Style="{StaticResource Switch}" Click="Privacy_Click" AutomationProperties.Name="Share flight times with the lodge" />
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="PvCairnRow" Style="{StaticResource Setting.Row}" Header="The Cairn's shared data" Tag="The Cairn's shared data is for those who share: with &quot;Share my Atlas observations with this Lodge&quot; on (above), your Lodge also gives you the Cairn's numbers from other Lodges - drop rates, vendor items, spawn points, gathering nodes and flight times, ids and counts only. They show as &quot;Cairn&quot; in the Atlas, below your own Lodge's. It comes only from your Lodge, never from the internet. With sharing off nothing comes and the copy on this PC is deleted; guests and players without a Lodge get none.">
+                <Border Style="{StaticResource Chip}" VerticalAlignment="Center"><TextBlock Text="Follows Atlas sharing" Style="{StaticResource Text.Secondary}" /></Border>
+              </HeaderedContentControl>
+              <TextBlock x:Name="PvCairnStatus" Style="{StaticResource Note}" Margin="16,0,16,12" TextWrapping="Wrap" />
+            </StackPanel></ContentControl>
+            <TextBlock Text="Shared with your lodge: your characters" Style="{StaticResource HeadTight}" />
+            <TextBlock Text="Off until you turn them on." Style="{StaticResource Note}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl x:Name="PvArmoryRow" Style="{StaticResource Setting.Row}" Header="Share my characters with the Lodge" Tag="">
+                <StackPanel Orientation="Horizontal">
+                  <Button x:Name="PvArmoryPick" Style="{StaticResource GhostButton}" Content="Choose characters" Height="28" Padding="8,0" Margin="0,0,8,0" Click="PrivacyArmoryPick_Click" AutomationProperties.Name="Choose which characters are shared" />
+                  <CheckBox x:Name="PvArmory" Style="{StaticResource Switch}" Click="Privacy_Click" VerticalAlignment="Center" AutomationProperties.Name="Share my characters with the Lodge" />
+                </StackPanel>
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="PvArmoryRepsRow" Style="{StaticResource Setting.Row}" Header="Also share their reputations" Tag="The standing of the shared characters with each faction (Hated to Exalted, and how far along). Nothing else.">
+                <CheckBox x:Name="PvArmoryReps" Style="{StaticResource Switch}" Click="Privacy_Click" AutomationProperties.Name="Also share their reputations" />
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="PvLodgePosRow" Style="{StaticResource Setting.Row}" Header="Share my map position with the Lodge" Tag="">
+                <StackPanel Orientation="Horizontal">
+                  <Border Style="{StaticResource SegmentHost}" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="PvPosEveryone" Style="{StaticResource Segment}" Content="Everyone" GroupName="pv-lodge-pos" Click="PrivacyPosScope_Click" AutomationProperties.Name="Share my map position with everyone in the Lodge" />
+                      <RadioButton x:Name="PvPosOfficers" Style="{StaticResource Segment}" Content="Officers" GroupName="pv-lodge-pos" Click="PrivacyPosScope_Click" AutomationProperties.Name="Share my map position with officers only" />
+                    </StackPanel>
+                  </Border>
+                  <CheckBox x:Name="PvLodgePos" Style="{StaticResource Switch}" Click="Privacy_Click" VerticalAlignment="Center" AutomationProperties.Name="Share my map position with the Lodge" />
+                </StackPanel>
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="PvLadderRow" Style="{StaticResource Setting.Row}" Header="Hide me from the ladder" Tag="You still earn badges and they still show on your profile; your name just is not listed on the Lodge's ladder." Visibility="Collapsed">
+                <CheckBox x:Name="PvHideLadder" Style="{StaticResource Switch}" Click="Privacy_Click" AutomationProperties.Name="Hide me from the ladder" />
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Profile" Tag="Display name, avatar, about text, characters - only what you fill in, and you choose who may see it (everyone or officers only).">
                 <Button Style="{StaticResource Button.M}" Content="Edit profile" Click="PrivacyProfile_Click" />
               </HeaderedContentControl>
-              <HeaderedContentControl x:Name="PvCairnRow" Style="{StaticResource Setting.Row}" Header="The Cairn's shared data" Tag="The Cairn's shared data is for those who share: with &quot;Share my Atlas observations with this Lodge&quot; on (Settings &gt; Lodge), your Lodge also gives you the Cairn's numbers from other Lodges - drop rates, vendor items, spawn points, gathering nodes and flight times, ids and counts only. They show as &quot;Cairn&quot; in the Atlas, below your own Lodge's. It comes only from your Lodge, never from the internet. With sharing off nothing comes and the copy on this PC is deleted; guests and players without a Lodge get none.">
-                <Button Style="{StaticResource Button.M}" Content="Sharing settings" Click="PrivacyAtlasShare_Click" AutomationProperties.Name="Open the Atlas sharing switch in Settings, Lodge" />
-              </HeaderedContentControl>
-              <TextBlock x:Name="PvCairnStatus" Style="{StaticResource Note}" Margin="16,0,16,12" TextWrapping="Wrap" />
             </StackPanel></ContentControl>
             <TextBlock Text="Fetched from other sites" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Only what you switch on. Off = the Outpost never contacts these sites by itself." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Load YouTube previews automatically (YouTube sees your address)" Tag="Off (the default) = a YouTube link in the Lodge chat shows a small card with a &quot;Load preview&quot; button, and nothing is fetched until you click it. On = every link shows its thumbnail, title and channel by itself: the Outpost asks youtube.com and i.ytimg.com, so YouTube sees your IP address for every video posted. Either way a video only plays when you click it, in a window here.">
                 <CheckBox x:Name="PvVideo" Style="{StaticResource Switch}" Click="Privacy_Click" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Blizzard news" Tag="On = the Outpost asks Blizzard's forum (eu or us.forums.blizzard.com) for the latest news about every 30 minutes, and shows it in Settings &gt; About. Off = nothing is asked until you click &quot;Load Blizzard's news&quot; there again.">
+                <CheckBox x:Name="PvBlizzNews" Style="{StaticResource Switch}" Click="Privacy_Click" AutomationProperties.Name="Blizzard news" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Game patch notes" Tag="On = the patch notes for a new game build are asked from Blizzard's forum and shown in Settings &gt; About. Off = nothing is asked until you click &quot;Load Blizzard's notes&quot; there again.">
+                <CheckBox x:Name="PvPatchNotes" Style="{StaticResource Switch}" Click="Privacy_Click" AutomationProperties.Name="Game patch notes" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Radio" Tag="Radio Paradise's stream, song info and album covers are fetched only while you press Play in the title bar. The radio can be hidden in Settings &gt; General.">
+                <Border Style="{StaticResource Chip}" VerticalAlignment="Center"><TextBlock Text="Only while playing" Style="{StaticResource Text.Secondary}" /></Border>
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Update checks" Tag="Asking github.com for the Outpost's own releases, and for addons you linked: api.github.com or WoWInterface's public file list (api.mmoui.com). Plain public requests, no account or login; those sites see your IP address and the name &quot;ElansAddonHub/version&quot;, like any download. These always run, so you get fixes; updates are only installed by themselves if you switch that on in Settings &gt; Addons.">
+                <Border Style="{StaticResource Chip}" VerticalAlignment="Center"><TextBlock Text="Public requests" Style="{StaticResource Text.Secondary}" /></Border>
               </HeaderedContentControl>
             </StackPanel></ContentControl>
             <TextBlock Text="Outpost browser" Style="{StaticResource HeadTight}" />
@@ -690,9 +739,13 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="CurseForge" Tag="The Outpost only reads CurseForge's local files to show its addons. Optionally it lets CurseForge refresh its own update info about once a day and when WoW starts.">
                 <CheckBox x:Name="PvCfAuto" Style="{StaticResource Switch}" Click="Privacy_Click" />
               </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Update checks" Tag="Asking github.com for the Outpost's own releases, and for addons you linked: api.github.com or WoWInterface's public file list (api.mmoui.com). Plain public requests, no account or login; those sites see your IP address and the name &quot;ElansAddonHub/version&quot;, like any download.">
-                <Border Style="{StaticResource Chip}" VerticalAlignment="Center"><TextBlock Text="Public requests" Style="{StaticResource Text.Secondary}" /></Border>
+            </StackPanel></ContentControl>
+            <TextBlock Text="Questions you already answered" Style="{StaticResource HeadTight}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Ask me again" Tag="Some things are asked only once (sharing in the Atlas, hosting Classic data, joining the Cairn) and a few tips show only once. This brings them back. Your switches stay as they are.">
+                <Button x:Name="PvAskAgain" Style="{StaticResource Button.M}" Content="Ask me again" Click="PrivacyAskAgain_Click" />
               </HeaderedContentControl>
+              <TextBlock x:Name="PvAskAgainNote" Style="{StaticResource Note}" Margin="16,0,16,12" TextWrapping="Wrap" Visibility="Collapsed" />
             </StackPanel></ContentControl>
           </StackPanel>
 
