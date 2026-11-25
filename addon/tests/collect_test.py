@@ -92,6 +92,9 @@ EHUB.Version = function() return "1.12.0" end
 data_src = open(os.path.join(ADDON, "Data.lua"), encoding="utf-8").read()
 src = open(os.path.join(ADDON, "Collect.lua"), encoding="utf-8").read()
 load = L.eval("function(src, name) local f, e = loadstring(src, name) if not f then error(e) end return f('ElansHub', EHUB) end")
+# Data.lua reads the realm through ElansLib (Hub 1.20.4)
+for f in ("ElansLib.lua", "Secret.lua", "Names.lua", "Realm.lua"):
+    load(open(os.path.join(ADDON, "Libs", "ElansLib", f), encoding="utf-8").read(), f)
 load(data_src, "Data.lua")
 L.execute("Fire('ADDON_LOADED', 'ElansHub')")
 L.execute("EVENTS = {}; SCRIPTS = {}")  # Data.lua's own frame is not under test
@@ -201,6 +204,19 @@ check("after closing, the stored bank is left alone", lua("return ElansHub.Get('
 L.execute("CLOCK = CLOCK + 10; BANK_OPEN = true; Fire('PLAYER_INTERACTION_MANAGER_FRAME_SHOW', 8) RunTimers()")
 check("Banker interaction opens the bank as well", lua("return ElansHub.Get('bank').cont[-1].s[8].i == 3375"))
 L.execute("Fire('PLAYER_INTERACTION_MANAGER_FRAME_HIDE', 8) BANK_OPEN = false")
+# WoW Forever as it really is (1.20.6): bank tabs 6-14, container -1 is the keyring (readable with the bank closed too)
+L.execute("""
+OLD_BI = Enum.BagIndex
+Enum.BagIndex = { Keyring = -1, ReagentBag = 5 }
+for i = 1, 9 do Enum.BagIndex["CharacterBankTab_" .. i] = 5 + i end
+BANK[14] = { size = 8, items = { [2] = { 3376, 2, 1, 134803, '|cffffffff|Hitem:3376::::::|h[Z]|h|r' } } }
+CLOCK = CLOCK + 10; BANK_OPEN = true; Fire('BANKFRAME_OPENED') RunTimers()
+""")
+check("forever: the keyring (-1) is not in the bank", lua("return ElansHub.Get('bank').cont[-1] == nil"))
+check("forever: tab 1 is the main bank, the others bank bags, the ninth tab included", lua("local c = ElansHub.Get('bank').cont return c[6].k == 'bank' and c[14].k == 'bankbag' and c[14].s[2].i == 3376"))
+L.execute("CLOCK = CLOCK + 10; BAGS[-1] = BANK[-1]; BANK_OPEN = false; Fire('BANKFRAME_CLOSED') RunTimers()")
+check("forever: a last look that only finds the keyring keeps the stored bank", lua("local c = ElansHub.Get('bank').cont return c[-1] == nil and c[6] ~= nil"))
+L.execute("BAGS[-1] = nil; BANK[14] = nil; Enum.BagIndex = OLD_BI")
 
 # ---------------------------------------------------------------- guild bank
 L.execute(r'''

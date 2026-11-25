@@ -251,7 +251,8 @@ combat after `BAG_UPDATE_DELAYED`, throttled to once per 2 s.
 *Hub, per character.*
 
 `{ at, cont = { [containerIndex] = Container }, links }` — only rescanned while the bank is open
-(`BANKFRAME_OPENED` until closed); `at` tells how old it is.
+(`BANKFRAME_OPENED` until closed); `at` tells how old it is. On WoW Forever the bank is the tabs 6-14: the built-in
+first one has kind `bank`, the others `bankbag`. Container -1 is the keyring there and is never saved (Hub 1.20.6).
 
 ### `guildbank` v1
 

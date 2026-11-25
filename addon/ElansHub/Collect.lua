@@ -60,12 +60,23 @@ local function bagIds()
   return out, r
 end
 
+-- -> container numbers, the number of the main bank. With bank tabs (WoW Forever) the client names every tab (6-14), the first
+-- one is the built-in main bank, and container -1 is the KEYRING: never part of the bank.
 local function bankIds()
+  local tab1 = enumBag("CharacterBankTab_1")
+  if tab1 and enumBag("Keyring") then
+    local tabs, i = {}, 1
+    while enumBag("CharacterBankTab_" .. i) do
+      tabs[i] = enumBag("CharacterBankTab_" .. i)
+      i = i + 1
+    end
+    return tabs, tab1
+  end
   local out = { -1 }
   local _, r = bagIds()
   local first = enumBag("BankBag_1") or ((NUM_BAG_SLOTS or 4) + (r and (NUM_REAGENTBAG_SLOTS or 1) or 0) + 1)
   for i = 0, (NUM_BANKBAGSLOTS or 7) - 1 do out[#out + 1] = first + i end
-  return out
+  return out, -1
 end
 
 local function numSlots(bag)
@@ -136,7 +147,8 @@ end
 
 local bankOpen = false
 local function scanBank()
-  local cont, links = scanContainers(bankIds(), function(bag) return bag == -1 and "bank" or "bankbag" end)
+  local ids, main = bankIds()
+  local cont, links = scanContainers(ids, function(bag) return bag == main and "bank" or "bankbag" end)
   if next(cont) == nil then return end
   publish("bank", { at = now(), cont = cont, links = links })
 end
