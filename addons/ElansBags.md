@@ -13,7 +13,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   match; "junk" finds grey items). The title counts new items, and the footer shows free slots and your money.
   Hover the money for every character's gold and the total.
 - **Your other characters**: the **Alts** button (or a click on the money) shows any character's bags and bank as they
-  were last saved, with a search.
+  were last saved, with a search. **All / Bags / Bank** pick what to show.
+- **Your bank anywhere**: the chest icon shows your bank as it was last saved; at a banker it opens or closes the bank window.
 - **Categories view**: New, Equipment, Consumables, Pet food (with Elan's Hunter Helper: what your pet eats), Trade goods,
   Quest, Ammo and quiver, Junk and Other. Click a heading to fold it.
 - **Special bags** (quiver, ammo pouch, soul pouch, profession bags, key ring, reagent bag) get their own block and
