@@ -21,8 +21,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   can use instead of casting.
 - **A louder splash and auto loot** while you fish: sound effects up, music and ambience off, auto loot on. Your own
   settings come back 3 minutes after your last cast, when a fight starts or when you put the pole away.
-- **The fishing card**: your catches, escapes, catches an hour and streak, your skill, your line, your last catch and a lure
-  timer. With [Elan's Toolkit](ElansToolkit.md) it sits on the activity card under the Camp Boss's bar; without it, it is a
+- **The fishing card**: this session's catches as icons with how many, escapes, catches an hour and streak, your skill, your
+  line, a lure timer, and what this water needs against what you have (approximate until measured, `/angler water`). With [Elan's Toolkit](ElansToolkit.md) it sits on the activity card under the Camp Boss's bar; without it, it is a
   window of its own you can drag.
 - **The Camp Boss** (Elan's Toolkit, when she is on) has something to say about a good catch, a catch milestone, a long
   streak and the first of a kind. Without her, the big ones get a chat line.
@@ -31,8 +31,8 @@ Works on its own, or get it with [Elan's Outpost](../README.md) to keep it up to
   button for each. It opens by itself once if you have no fishing key yet.
 - **Fishing guide**: pick what you fish for on the Fishing tab (`/angler for level / food / money`). It tells you
   where to fish for your skill, your next rank (a trainer up to 150, the Expert book in Booty Bay, Nat Pagle), which
-  fish to catch for your class's food (Attack Power or Spell Damage) and what to cook, with waypoints. The fishing card
-  shows the next step. Zone skill values are approximate. Fishing supplier pins on the world map (`/angler pins`).
+  fish to catch for your class's food (Attack Power or Spell Damage) and what to cook, with waypoints.
+  Zone skill values are approximate. Fishing supplier pins on the world map (`/angler pins`).
 
 ### Cooking
 
